@@ -1,0 +1,2 @@
+com.chinatelecom.aigc.evaluate.web.config.WebConfigurer
+com.chinatelecom.aigc.evaluate.web.config.SwaggerConfig

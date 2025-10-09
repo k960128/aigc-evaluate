@@ -1,0 +1,28 @@
+version: '3.8'
+
+networks:
+  aigcsec:
+
+services:
+  evaluate:
+    image: 'ctueba/base:1.0'
+    command: "bash -c 'cd /opt/aigcsec-evaluate;java -jar lib/telecom-aigc-evaluate.jar'"
+    restart: always
+    networks:
+      aigcsec:
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 65535
+        hard: 65535
+    ports:
+      - "9010:9010"
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ${INSTALL_HOME}/:/opt/aigcsec-evaluate
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -s http://localhost:9010 || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5

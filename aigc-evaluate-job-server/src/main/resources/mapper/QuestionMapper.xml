@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chinatelecom.aigc.evaluate.mapper.QuestionMapper">
+
+    <update id="updateByQuestionId" parameterType="com.chinatelecom.aigc.evaluate.domain.QuestionDO">
+        update `question_info` set version = version + 1
+        <if test="title != null">
+            ,title = #{title}
+        </if>
+        <if test="category != null">
+            ,category = #{category}
+        </if>
+        <if test="tags != null">
+            ,tags = #{tags}
+        </if>
+        <if test="contentHash != null">
+            ,content_hash = #{contentHash}
+        </if>
+        <if test="difficulty != null">
+            ,difficulty = #{difficulty}
+        </if>
+        <if test="attackMethod !=null">
+            ,attack_method = #{attackMethod}
+        </if>
+        <if test="dataSource !=null">
+            ,data_source = #{dataSource}
+        </if>
+        <if test="desc !=null">
+            ,`desc` = #{desc}
+        </if>
+        where question_id = #{questionId} and deleted = 0 and version = #{version}
+    </update>
+
+    <delete id="deleteByQuestionId" parameterType="com.chinatelecom.aigc.evaluate.domain.QuestionDO">
+        delete from `question_info`
+        where question_id = #{questionId}
+          and version = #{version}
+    </delete>
+
+    <delete id="deleteBatchByQuestionId" parameterType="list">
+        delete from `question_info`
+        where question_id in
+        <foreach collection="list" item="questionId" open="(" separator="," close=")">
+            #{questionId}
+        </foreach>
+    </delete>
+
+    <select id="selectLatestVersions" resultType="com.chinatelecom.aigc.evaluate.domain.QuestionDO">
+        SELECT question_id, version
+        FROM question_info
+        WHERE question_id IN
+        <foreach collection="collection" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <select id="selectLatestQuestionBatch" resultType="com.chinatelecom.aigc.evaluate.domain.QuestionDO">
+        SELECT *
+        FROM question_info
+        WHERE (question_id, version) IN
+        <foreach collection="keyList" item="key" separator="," open="(" close=")">
+            (#{key.questionId}, #{key.version})
+        </foreach>
+    </select>
+
+    <select id="selectSnapshotQuestionBatch" resultType="com.chinatelecom.aigc.evaluate.domain.QuestionDO">
+        SELECT *
+        FROM question_snapshot
+        WHERE (question_id, version) IN
+        <foreach collection="keyList" item="key" separator="," open="(" close=")">
+            (#{key.questionId}, #{key.version})
+        </foreach>
+    </select>
+
+</mapper>

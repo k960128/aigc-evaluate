@@ -1,0 +1,3 @@
+com.chinatelecom.aigc.evaluate.framework.datasource.config.AigcEvaluateDataSourceAutoConfiguration
+com.chinatelecom.aigc.evaluate.framework.mybatis.config.AigcEvaluateMybatisAutoConfiguration
+com.chinatelecom.aigc.evaluate.framework.translate.config.AigcEvaluateTranslateAutoConfiguration
