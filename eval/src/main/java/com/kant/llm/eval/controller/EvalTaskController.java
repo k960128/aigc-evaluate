@@ -1,0 +1,38 @@
+package com.kant.llm.eval.controller;
+
+import com.kant.llm.eval.dto.req.CreateEvalTaskRequest;
+import com.kant.llm.eval.service.EvalTaskService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/eval-task")
+public class EvalTaskController {
+
+    @Autowired
+    private EvalTaskService evalTaskService;
+
+    /**
+     * 创建评测任务
+     */
+    @PostMapping("/create")
+    public void createEvalTask(@RequestBody CreateEvalTaskRequest request) {
+        evalTaskService.createEvalTask(request);
+    }
+
+    /**
+     * 发起评测任务
+     */
+    @GetMapping("/submit")
+    public void submitEvalTask(@RequestParam("taskId") Long taskId) {
+        evalTaskService.submitEvalTask(taskId);
+    }
+
+    /**
+     * 获取评测任务进度
+     */
+    @GetMapping("/progress")
+    public void getEvalTaskProgress(@RequestParam("taskId") Long taskId) {
+//        evalTaskService.getEvalTaskProgress(taskId);
+    }
+}
