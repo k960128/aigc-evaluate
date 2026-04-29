@@ -54,5 +54,4 @@ application-my.yaml
 
 .vscode/*
 
-./front/node_modules
-./front/node_modules/*
+front/node_modules
