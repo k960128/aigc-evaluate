@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Skill(antfu)",
+      "Bash(pnpm init)",
+      "Bash(pnpm add vue@latest ant-design-vue@latest pinia@latest @vueuse/core)",
+      "Bash(pnpm add -D vite@latest @vitejs/plugin-vue typescript vue-tsc unplugin-auto-import unplugin-vue-components @antfu/eslint-config eslint)",
+      "Bash(npx vite build)",
+      "Bash(npx eslint .)"
     ]
   }
 }
