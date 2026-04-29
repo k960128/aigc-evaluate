@@ -2,6 +2,7 @@ package com.kant.llm.eval.service.impl;
 
 import cn.hutool.core.util.IdUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.kant.llm.eval.common.enums.TaskStatusEnums;
 import com.kant.llm.eval.dao.entity.DataSetSampleDO;
 import com.kant.llm.eval.dao.entity.EvalTaskDO;
 import com.kant.llm.eval.dao.entity.EvalTaskDetailDO;
