@@ -102,6 +102,20 @@
             <version>1.1.0.0</version>
             <scope>compile</scope>
         </dependency>
+
+        <!-- AC 自动机 - hankcs/AhoCorasickDoubleArrayTrie 高性能实现 -->
+        <dependency>
+            <groupId>com.hankcs</groupId>
+            <artifactId>hanlp</artifactId>
+            <version>portable-1.8.4</version>
+        </dependency>
+
+        <!-- 快速 JSON 序列化 -->
+        <dependency>
+            <groupId>com.alibaba.fastjson2</groupId>
+            <artifactId>fastjson2</artifactId>
+            <version>${fastjson.version}</version>
+        </dependency>
     </dependencies>
 
     <build>
