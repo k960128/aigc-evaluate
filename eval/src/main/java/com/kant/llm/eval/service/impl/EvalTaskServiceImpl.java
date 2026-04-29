@@ -60,7 +60,7 @@ public class EvalTaskServiceImpl implements EvalTaskService {
                 .taskName(task.getTaskName())
                 .modelId(task.getModelId())
                 .datasetId(task.getDatasetId())
-                .status(1)
+                .status(TaskStatusEnums.CREATING.getCode())
                 .totalCount(Math.toIntExact(sampleCount))
                 .createTime(LocalDateTime.now())
                 .updateTime(LocalDateTime.now())
