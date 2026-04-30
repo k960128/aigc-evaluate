@@ -3,7 +3,7 @@ import { message } from 'ant-design-vue'
 import axios from 'axios'
 
 const request = axios.create({
-  baseURL: '/api',
+  baseURL: '/api/aigc-eval',
   timeout: 30000,
 })
 

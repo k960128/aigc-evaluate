@@ -15,8 +15,8 @@ const menuItems = [
   { key: 'task-create', icon: PlusOutlined, label: '创建任务', path: '/task/create' },
 ]
 
-function handleMenuClick({ key }: { key: string }) {
-  const item = menuItems.find(m => m.key === key)
+function handleMenuClick({ key }: { key: string | number }) {
+  const item = menuItems.find(m => m.key === String(key))
   if (item)
     router.push(item.path)
 }

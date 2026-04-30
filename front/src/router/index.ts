@@ -1,40 +1,36 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import DefaultLayout from '../layouts/default.vue'
+
+const routes = [
+  {
+    path: '/',
+    component: () => import('../views/Layout.vue'),
+    redirect: '/home',
+    children: [
+      {
+        path: 'home',
+        name: 'Home',
+        component: () => import('../views/Home.vue'),
+        meta: { title: '首页' },
+      },
+      {
+        path: 'resource/vendor',
+        name: 'VendorConfig',
+        component: () => import('../views/resource/VendorConfig.vue'),
+        meta: { title: '厂商基础配置' },
+      },
+      {
+        path: 'resource/model',
+        name: 'ModelManage',
+        component: () => import('../views/resource/ModelManage.vue'),
+        meta: { title: '模型管理' },
+      },
+    ],
+  },
+]
 
 const router = createRouter({
   history: createWebHistory(),
-  routes: [
-    {
-      path: '/',
-      component: DefaultLayout,
-      redirect: '/task',
-      children: [
-        {
-          path: 'task',
-          name: 'TaskList',
-          component: () => import('../pages/task/index.vue'),
-          meta: { title: '任务管理' },
-        },
-        {
-          path: 'task/create',
-          name: 'TaskCreate',
-          component: () => import('../pages/task/create.vue'),
-          meta: { title: '创建任务' },
-        },
-        {
-          path: 'task/:id',
-          name: 'TaskDetail',
-          component: () => import('../pages/task/[id].vue'),
-          meta: { title: '任务进度' },
-        },
-      ],
-    },
-  ],
-})
-
-router.beforeEach((to) => {
-  if (to.meta.title)
-    document.title = `${to.meta.title} - AIGC Eval`
+  routes,
 })
 
 export default router

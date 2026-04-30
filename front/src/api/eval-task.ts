@@ -1,5 +1,5 @@
 import type { PageResult, Result } from '../types/api'
-import type { CreateEvalTaskRequest, EvalTaskDetail } from '../types/eval-task'
+import type { CreateEvalTaskRequest, EvalTask, EvalTaskDetail } from '../types/eval-task'
 import request from './request'
 
 export function createEvalTask(data: CreateEvalTaskRequest) {
