@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"D:\\\\llmProject\\\\产品\\\\project\\\\frontend\\\\src\" /s /b)",
+      "Bash(dir \"D:\\\\llmProject\\\\aigc-evaluate\\\\front\\\\src\" /s /b)",
+      "Skill(antfu)",
+      "Bash(node -e \"try { require\\(''D:/llmProject/aigc-evaluate/front/node_modules/unplugin-vue-components/resolvers''\\); console.log\\(''has resolvers''\\); } catch\\(e\\) { try { const m = require\\(''D:/llmProject/aigc-evaluate/front/node_modules/unplugin-vue-components/dist''\\); console.log\\(Object.keys\\(m\\).filter\\(k => k.includes\\(''Ant''\\)\\)\\); } catch\\(e2\\) { console.log\\(''not found'', e2.message\\); } }\")",
+      "Bash(npx vite build)",
+      "Bash(npx vue-tsc --noEmit)",
+      "Bash(node -e \"\nconst http = require\\(''http''\\);\nconst req = http.request\\({\n  hostname: ''127.0.0.1'',\n  port: 5174,\n  path: ''/api/llm/manufacturer/list'',\n  method: ''GET'',\n  headers: { ''Accept'': ''application/json'' }\n}, \\(res\\) => {\n  let data = '''';\n  res.on\\(''data'', chunk => data += chunk\\);\n  res.on\\(''end'', \\(\\) => {\n    console.log\\(''Status:'', res.statusCode\\);\n    console.log\\(''Headers:'', JSON.stringify\\(res.headers, null, 2\\)\\);\n    console.log\\(''Body:'', data.substring\\(0, 500\\)\\);\n  }\\);\n}\\);\nreq.on\\(''error'', \\(e\\) => console.log\\(''Error:'', e.message\\)\\);\nreq.setTimeout\\(5000, \\(\\) => { req.destroy\\(\\); console.log\\(''Timeout''\\); }\\);\nreq.end\\(\\);\n\")"
+    ]
+  }
+}
