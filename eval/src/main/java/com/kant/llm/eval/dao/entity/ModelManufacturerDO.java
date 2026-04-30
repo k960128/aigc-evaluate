@@ -34,12 +34,14 @@ public class ModelManufacturerDO {
     private String defaultBaseUrl;
 
     /** 厂商信息描述 */
+    @TableField("`describe`")
     private String describe;
 
     /** 图标 */
     private String icon;
 
     /** 是否启用 0-禁用 1-启用 */
+    @TableField("`enable`")
     private Boolean enable;
 
     /** 创建时间 */

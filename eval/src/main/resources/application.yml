@@ -1,8 +1,10 @@
 server:
   port: 8800
+  servlet:
+    context-path: /api/aigc-eval
 spring:
   application:
-    name: llm-eval
+    name: aigc-eval
   servlet:
     multipart:
       max-file-size: 50MB
