@@ -33,11 +33,11 @@ public class ModelInfoVO {
     /** 模型描述 */
     private String modelDescribe;
 
+    /** 模型厂商标识 */
+    private String manufacturerCode;
+
     /** 最大并发数 */
     private Long maxThreadSize;
-
-    /** 环境参数 */
-    private String originName;
 
     /** 生成词元数量 */
     private Long maxCompletionTokens;
