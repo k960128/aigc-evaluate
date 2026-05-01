@@ -129,7 +129,6 @@ public class SourceController {
                 .manufacturerCode(request.getManufacturerCode())
                 .modelDescribe(request.getModelDescribe())
                 .maxThreadSize(request.getMaxThreadSize())
-                .originName(request.getOriginName())
                 .maxCompletionTokens(request.getMaxCompletionTokens())
                 .stream(request.getStream())
                 .config(request.getConfig())
