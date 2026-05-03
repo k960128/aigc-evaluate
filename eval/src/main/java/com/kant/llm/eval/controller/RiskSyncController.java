@@ -2,7 +2,6 @@ package com.kant.llm.eval.controller;
 
 import com.kant.llm.eval.service.RiskSyncService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -12,8 +11,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/risk")
 public class RiskSyncController {
 
-    @Autowired
-    private RiskSyncService riskSyncService;
+    private final RiskSyncService riskSyncService;
+
+    public RiskSyncController(RiskSyncService riskSyncService) {
+        this.riskSyncService = riskSyncService;
+    }
 
     /**
      * 手动同步风险词库

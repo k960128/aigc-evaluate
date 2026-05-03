@@ -9,8 +9,11 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/eval-task")
 public class EvalTaskController {
 
-    @Autowired
-    private EvalTaskService evalTaskService;
+    private final EvalTaskService evalTaskService;
+
+    public EvalTaskController(EvalTaskService evalTaskService) {
+        this.evalTaskService = evalTaskService;
+    }
 
     /**
      * 创建评测任务
