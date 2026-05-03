@@ -2,12 +2,12 @@ import type { EvalTask, EvalTaskDetail, ModelInfo, DataSet } from '../types/eval
 import { TaskStatus } from '../types/eval-task'
 import type { PageResult } from '../types/api'
 
-export const mockModels: ModelInfo[] = [
-  { id: 1, modelName: 'gpt-4o-2024', manufacturer: 'OpenAI', createTime: '2024-01-15 10:00', updateTime: '2024-01-15 10:00' },
-  { id: 2, modelName: 'qwen-max', manufacturer: '阿里云', createTime: '2024-01-20 14:30', updateTime: '2024-01-20 14:30' },
-  { id: 3, modelName: 'Claude 3.5 Sonnet', manufacturer: 'Anthropic', createTime: '2024-02-01 09:00', updateTime: '2024-02-01 09:00' },
-  { id: 4, modelName: 'glm-4', manufacturer: '智谱 AI', createTime: '2024-02-10 11:00', updateTime: '2024-02-10 11:00' },
-  { id: 5, modelName: 'Llama-3-70b', manufacturer: 'Meta', createTime: '2024-02-15 16:00', updateTime: '2024-02-15 16:00' },
+export const mockModels: any[] = [
+  { id: 1, model: 'gpt-4o-2024', baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-xxx', manufacturerCode: 'OPENAI', modelDescribe: 'GPT-4o 2024', maxThreadSize: 10, originName: 'gpt-4o-2024', maxCompletionTokens: 16384, stream: true, config: null, version: 1, createTime: '2024-01-15 10:00', updateTime: '2024-01-15 10:00' },
+  { id: 2, model: 'qwen-max', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', apiKey: 'sk-xxx', manufacturerCode: 'QWEN', modelDescribe: 'Qwen Max', maxThreadSize: 10, originName: 'qwen-max', maxCompletionTokens: 8192, stream: true, config: null, version: 1, createTime: '2024-01-20 14:30', updateTime: '2024-01-20 14:30' },
+  { id: 3, model: 'claude-3-5-sonnet', baseUrl: 'https://api.anthropic.com/v1', apiKey: 'sk-xxx', manufacturerCode: 'ANTHROPIC', modelDescribe: 'Claude 3.5 Sonnet', maxThreadSize: 10, originName: 'claude-3-5-sonnet', maxCompletionTokens: 204800, stream: true, config: null, version: 1, createTime: '2024-02-01 09:00', updateTime: '2024-02-01 09:00' },
+  { id: 4, model: 'glm-4', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', apiKey: 'sk-xxx', manufacturerCode: 'GLM', modelDescribe: 'GLM-4', maxThreadSize: 10, originName: 'glm-4', maxCompletionTokens: 8192, stream: true, config: null, version: 1, createTime: '2024-02-10 11:00', updateTime: '2024-02-10 11:00' },
+  { id: 5, model: 'llama-3-70b', baseUrl: 'http://localhost:8080/v1', apiKey: 'sk-xxx', manufacturerCode: 'META', modelDescribe: 'Llama-3-70b', maxThreadSize: 10, originName: 'llama-3-70b', maxCompletionTokens: 8192, stream: true, config: null, version: 1, createTime: '2024-02-15 16:00', updateTime: '2024-02-15 16:00' },
 ]
 
 export const mockDatasets: DataSet[] = [
@@ -186,5 +186,79 @@ export function mockGetDatasets() {
     code: '0',
     message: 'success',
     data: mockDatasets,
+  })
+}
+
+export const mockManufacturers: any[] = [
+  { id: 1, manufacturerName: 'OpenAI', manufacturerCode: 'OPENAI', defaultBaseUrl: 'https://api.openai.com/v1', describe: 'OpenAI API', enable: true, createTime: '2024-01-01 00:00', updateTime: '2024-01-01 00:00' },
+  { id: 2, manufacturerName: '阿里云灵积', manufacturerCode: 'QWEN', defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', describe: '阿里云Qwen模型服务', enable: true, createTime: '2024-01-05 00:00', updateTime: '2024-01-05 00:00' },
+  { id: 3, manufacturerName: 'Anthropic', manufacturerCode: 'ANTHROPIC', defaultBaseUrl: 'https://api.anthropic.com/v1', describe: 'Anthropic Claude模型', enable: true, createTime: '2024-01-10 00:00', updateTime: '2024-01-10 00:00' },
+  { id: 4, manufacturerName: '智谱 AI', manufacturerCode: 'GLM', defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4', describe: '智谱GLM模型服务', enable: true, createTime: '2024-01-15 00:00', updateTime: '2024-01-15 00:00' },
+  { id: 5, manufacturerName: 'Moonshot', manufacturerCode: 'KIMI', defaultBaseUrl: 'https://api.moonshot.cn/v1', describe: 'Moonshot Kimi模型', enable: true, createTime: '2024-01-20 00:00', updateTime: '2024-01-20 00:00' },
+  { id: 6, manufacturerName: '讯飞星火', manufacturerCode: 'SPARK', defaultBaseUrl: '', describe: '讯飞星火大模型', enable: false, createTime: '2024-02-01 00:00', updateTime: '2024-02-01 00:00' },
+]
+
+export function mockGetManufacturerList() {
+  return Promise.resolve({
+    code: '0',
+    message: 'success',
+    data: mockManufacturers,
+  })
+}
+
+export function mockCreateManufacturer(data: { manufacturerName: string; manufacturerCode: string; defaultBaseUrl?: string; enable?: boolean }) {
+  const newManufacturer = {
+    id: Date.now(),
+    manufacturerName: data.manufacturerName,
+    manufacturerCode: data.manufacturerCode,
+    defaultBaseUrl: data.defaultBaseUrl || '',
+    describe: '',
+    enable: data.enable ?? true,
+    createTime: new Date().toISOString().replace('T', ' ').slice(0, 19),
+    updateTime: new Date().toISOString().replace('T', ' ').slice(0, 19),
+  }
+  mockManufacturers.push(newManufacturer)
+  return Promise.resolve({
+    code: '0',
+    message: '创建成功',
+    data: newManufacturer,
+  })
+}
+
+export function mockUpdateManufacturer(data: { id: number; manufacturerName?: string; manufacturerCode?: string; defaultBaseUrl?: string; enable?: boolean }) {
+  const index = mockManufacturers.findIndex(m => m.id === data.id)
+  if (index !== -1) {
+    mockManufacturers[index] = {
+      ...mockManufacturers[index],
+      ...data,
+      updateTime: new Date().toISOString().replace('T', ' ').slice(0, 19),
+    }
+    return Promise.resolve({
+      code: '0',
+      message: '更新成功',
+      data: mockManufacturers[index],
+    })
+  }
+  return Promise.resolve({
+    code: '1',
+    message: '厂商不存在',
+    data: null,
+  })
+}
+
+export function mockDeleteManufacturer(id: number) {
+  const index = mockManufacturers.findIndex(m => m.id === id)
+  if (index !== -1) {
+    mockManufacturers.splice(index, 1)
+    return Promise.resolve({
+      code: '0',
+      message: '删除成功',
+      data: null,
+    })
+  }
+  return Promise.resolve({
+    code: '1',
+    message: '厂商不存在',
+    data: null,
   })
 }

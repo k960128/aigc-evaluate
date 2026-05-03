@@ -6,6 +6,7 @@
   "packageManager": "pnpm@10.26.2",
   "scripts": {
     "dev": "vite",
+    "mock": "powershell -Command $env:VITE_APP_ENV='mock'; vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "lint": "eslint .",

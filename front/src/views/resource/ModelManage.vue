@@ -262,7 +262,8 @@ import {
   LinkOutlined,
 } from '@ant-design/icons-vue'
 import type { ModelInfo } from '../../types/model'
-import { getModelList, createModel, updateModel, deleteModel, testConnectivity } from '../../api/model'
+import { getModelList } from '../../api'
+import { createModel, updateModel, deleteModel, testConnectivity } from '../../api/model'
 
 // 厂商选项（与后端枚举 ModelManufacturerEnum 对齐）
 const vendorOptions = [

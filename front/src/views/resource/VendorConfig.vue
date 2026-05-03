@@ -142,7 +142,7 @@ import {
   createManufacturer,
   updateManufacturer,
   deleteManufacturer,
-} from '../../api/manufacturer'
+} from '../../api'
 
 const pagination = {
   pageSize: 10,

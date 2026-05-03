@@ -3,7 +3,7 @@ import { message } from 'ant-design-vue'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-import { createEvalTask, getEvalTaskList, getEvalTaskProgress, submitEvalTask } from '../api/eval-task'
+import { createEvalTask, getEvalTaskList, getEvalTaskProgress, submitEvalTask } from '../api'
 
 export const useEvalTaskStore = defineStore('eval-task', () => {
   const taskList = ref<EvalTask[]>([])
