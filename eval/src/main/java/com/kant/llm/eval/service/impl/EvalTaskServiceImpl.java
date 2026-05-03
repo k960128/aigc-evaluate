@@ -43,7 +43,7 @@ public class EvalTaskServiceImpl implements EvalTaskService {
     }
 
     @Override
-    public void submitEvalTask(Long taskId) {
+    public Boolean submitEvalTask(Long taskId) {
         String evalSerial = IdUtil.getSnowflake().nextIdStr();
         // 1. 获取任务详情
         EvalTaskDO task = evalTaskMapper.selectById(taskId);
@@ -56,6 +56,7 @@ public class EvalTaskServiceImpl implements EvalTaskService {
         // 3. 创建任务表详细信息
         EvalTaskDetailDO evalTaskDetailDO = EvalTaskDetailDO.builder()
                 .id(IdUtil.getSnowflake().nextId())
+                .taskId(taskId)
                 .serialNo(IdUtil.getSnowflake().nextId())
                 .taskName(task.getTaskName())
                 .modelId(task.getModelId())
@@ -66,6 +67,7 @@ public class EvalTaskServiceImpl implements EvalTaskService {
                 .updateTime(LocalDateTime.now())
                 .build();
         evalTaskDetailMapper.insert(evalTaskDetailDO);
+        return true;
     }
 
 

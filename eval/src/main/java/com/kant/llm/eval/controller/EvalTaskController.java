@@ -1,5 +1,7 @@
 package com.kant.llm.eval.controller;
 
+import com.kant.llm.eval.common.convention.Result;
+import com.kant.llm.eval.common.web.Results;
 import com.kant.llm.eval.dto.req.CreateEvalTaskRequest;
 import com.kant.llm.eval.service.EvalTaskService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,9 +32,10 @@ public class EvalTaskController {
      * @param taskId 评测任务ID
      * @return 无返回数据
      */
-    @GetMapping("/submit")
-    public void submitEvalTask(@RequestParam("taskId") Long taskId) {
-        evalTaskService.submitEvalTask(taskId);
+    @PostMapping("/submit")
+    public Result<Boolean> submitEvalTask(@RequestParam("taskId") Long taskId) {
+        Boolean b = evalTaskService.submitEvalTask(taskId);
+        return Results.success(b);
     }
 
     /**

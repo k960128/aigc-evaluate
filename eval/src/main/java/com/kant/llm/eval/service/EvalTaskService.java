@@ -9,7 +9,7 @@ import java.util.List;
 public interface EvalTaskService {
     void createEvalTask(CreateEvalTaskRequest request);
 
-    void submitEvalTask(Long taskId);
+    Boolean submitEvalTask(Long taskId);
 
     List<EvalTaskDetailDO> selectPendingTasks();
 }
