@@ -14,6 +14,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/evaluate")
 public class EvaluateController {
 
+    /**
+     * 测试聊天接口
+     * @return 测试响应字符串
+     */
     @GetMapping("/chat")
     public Result<String> chat() {
         return Results.success("🛸🛸🛸🛸");

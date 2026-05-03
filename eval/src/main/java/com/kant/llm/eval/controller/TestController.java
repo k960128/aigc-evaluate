@@ -43,6 +43,10 @@ public class TestController {
         }};
     }
 
+    /**
+     * 测试模型客户端策略
+     * @return 模型厂商名称
+     */
     @GetMapping("/testModelClient")
     public Result<String> testModelClientStrategy() {
         ModelInfo modelInfo = new ModelInfo();
@@ -52,6 +56,10 @@ public class TestController {
         return Results.success(strategy.getManufacturer().name());
     }
 
+    /**
+     * 测试模型调用
+     * @return 模型响应内容
+     */
     @GetMapping("/test")
     public Result<String> test() {
         ModelInfo modelInfo = modelInfoMap.get(ModelManufacturerEnum.QWEN);

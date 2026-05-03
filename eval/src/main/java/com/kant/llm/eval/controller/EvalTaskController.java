@@ -14,6 +14,8 @@ public class EvalTaskController {
 
     /**
      * 创建评测任务
+     * @param request 创建评测任务请求参数
+     * @return 无返回数据
      */
     @PostMapping("/create")
     public void createEvalTask(@RequestBody CreateEvalTaskRequest request) {
@@ -22,6 +24,8 @@ public class EvalTaskController {
 
     /**
      * 发起评测任务
+     * @param taskId 评测任务ID
+     * @return 无返回数据
      */
     @GetMapping("/submit")
     public void submitEvalTask(@RequestParam("taskId") Long taskId) {
@@ -30,6 +34,8 @@ public class EvalTaskController {
 
     /**
      * 获取评测任务进度
+     * @param taskId 评测任务ID
+     * @return 无返回数据
      */
     @GetMapping("/progress")
     public void getEvalTaskProgress(@RequestParam("taskId") Long taskId) {

@@ -15,6 +15,10 @@ public class RiskSyncController {
     @Autowired
     private RiskSyncService riskSyncService;
 
+    /**
+     * 手动同步风险词库
+     * @return 同步成功提示信息
+     */
     @PostMapping("/sync")
     public String syncRiskVocabulary() {
         log.info("收到手动同步请求");
