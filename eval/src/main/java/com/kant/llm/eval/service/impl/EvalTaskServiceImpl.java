@@ -67,4 +67,14 @@ public class EvalTaskServiceImpl implements EvalTaskService {
                 .build();
         evalTaskDetailMapper.insert(evalTaskDetailDO);
     }
+
+
+    /**
+     * 查询待处理任务
+     */
+    @Override
+    public List<EvalTaskDetailDO> selectPendingTasks() {
+        return evalTaskDetailMapper.selectList(new LambdaQueryWrapper<>(EvalTaskDetailDO.class)
+                .eq(EvalTaskDetailDO::getStatus, TaskStatusEnums.CREATING.getCode()));
+    }
 }
