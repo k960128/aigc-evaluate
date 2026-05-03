@@ -45,9 +45,6 @@ public class ModelInfoDO {
     /** 最大并发数 */
     private Long maxThreadSize;
 
-    /** 环境参数 */
-    private String originName;
-
     /** 生成词元数量 */
     private Long maxCompletionTokens;
 

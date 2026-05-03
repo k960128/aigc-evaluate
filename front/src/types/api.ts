@@ -1,6 +1,7 @@
 export interface Result<T = any> {
   code: string
   message?: string
+  requestId?: string
   data: T
 }
 

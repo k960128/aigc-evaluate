@@ -1,107 +1,94 @@
-<script setup>
-import {
-  DashboardOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  SettingOutlined,
-} from '@ant-design/icons-vue'
-import { computed, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-
-const router = useRouter()
-const route = useRoute()
-const collapsed = ref(false)
-
-const selectedKeys = computed(() => {
-  const path = route.path
-  if (path.includes('/resource/vendor'))
-    return ['resource-vendor']
-  if (path.includes('/resource/model'))
-    return ['resource-model']
-  return ['home']
-})
-
-const openKeys = computed(() => {
-  const path = route.path
-  if (path.includes('/resource'))
-    return ['resource']
-  return []
-})
-
-function handleMenuClick({ key }) {
-  const map = {
-    home: '/',
-    'resource-vendor': '/resource/vendor',
-    'resource-model': '/resource/model',
-  }
-  if (map[key])
-    router.push(map[key])
-}
-
-function toggleCollapsed() {
-  collapsed.value = !collapsed.value
-}
-</script>
-
 <template>
   <a-layout class="app-layout">
-    <a-layout-sider
-      v-model:collapsed="collapsed"
-      :width="220"
-      :collapsed-width="80"
-      :trigger="null"
-      collapsible
-      class="app-sider"
-    >
-      <div class="sider-logo">
-        <div class="logo-icon">
-          <DashboardOutlined />
+    <!-- 顶部导航 -->
+    <a-layout-header class="app-header">
+      <div class="header-left">
+        <div class="logo-area" @click="router.push('/home')">
+          <SafetyCertificateOutlined class="logo-icon" />
+          <span v-show="!collapsed" class="logo-text">大模型安全评测平台</span>
         </div>
-        <span v-show="!collapsed" class="logo-text">大模型安全评测平台</span>
       </div>
-      <a-menu
-        v-model:selectedKeys="selectedKeys"
-        v-model:openKeys="openKeys"
-        mode="inline"
-        :inline-collapsed="collapsed"
-        class="sider-menu"
-        @click="handleMenuClick"
+      <div class="header-right">
+        <a-tooltip title="文档">
+          <a-button type="text" class="header-action-btn">
+            <QuestionCircleOutlined />
+          </a-button>
+        </a-tooltip>
+        <a-tooltip title="通知">
+          <a-badge :count="3" size="small">
+            <a-button type="text" class="header-action-btn">
+              <BellOutlined />
+            </a-button>
+          </a-badge>
+        </a-tooltip>
+        <a-dropdown>
+          <div class="user-area">
+            <a-avatar :size="30" class="user-avatar">A</a-avatar>
+            <span class="user-name">Admin</span>
+            <DownOutlined class="user-arrow" />
+          </div>
+          <template #overlay>
+            <a-menu>
+              <a-menu-item key="profile">
+                <UserOutlined />
+                <span style="margin-left: 8px">个人设置</span>
+              </a-menu-item>
+              <a-menu-divider />
+              <a-menu-item key="logout">
+                <LogoutOutlined />
+                <span style="margin-left: 8px">退出登录</span>
+              </a-menu-item>
+            </a-menu>
+          </template>
+        </a-dropdown>
+      </div>
+    </a-layout-header>
+
+    <a-layout class="app-body">
+      <!-- 左侧侧边栏 -->
+      <a-layout-sider
+        v-model:collapsed="collapsed"
+        :trigger="null"
+        collapsible
+        :width="220"
+        :collapsed-width="72"
+        class="app-sidebar"
+        theme="light"
       >
-        <a-menu-item key="home">
-          <DashboardOutlined />
-          <span>首页</span>
-        </a-menu-item>
-        <a-sub-menu key="resource">
-          <template #icon>
-            <SettingOutlined />
-          </template>
-          <template #title>
-            <span>资源中心</span>
-          </template>
-          <a-menu-item key="resource-vendor">
-            <span>厂商基础配置</span>
+        <a-menu
+          v-model:selectedKeys="selectedKeys"
+          v-model:openKeys="openKeys"
+          mode="inline"
+          :style="{ border: 'none' }"
+          @click="handleMenuClick"
+        >
+          <a-menu-item key="/home">
+            <template #icon><HomeOutlined /></template>
+            <span>首页</span>
           </a-menu-item>
-          <a-menu-item key="resource-model">
-            <span>模型管理</span>
-          </a-menu-item>
-        </a-sub-menu>
-      </a-menu>
-    </a-layout-sider>
 
-    <a-layout>
-      <a-layout-header class="app-header">
-        <div class="header-left">
-          <span class="trigger" @click="toggleCollapsed">
-            <MenuUnfoldOutlined v-if="collapsed" />
-            <MenuFoldOutlined v-else />
-          </span>
-          <span class="header-title">{{ route.meta?.title || '首页' }}</span>
-        </div>
-        <div class="header-right">
-          <span class="header-user">管理员</span>
-        </div>
-      </a-layout-header>
+          <a-sub-menu key="resource">
+            <template #icon><AppstoreOutlined /></template>
+            <template #title>资源中心</template>
+            <a-menu-item key="/resource/vendor">
+              <template #icon><SettingOutlined /></template>
+              <span>厂商基础配置</span>
+            </a-menu-item>
+            <a-menu-item key="/resource/model">
+              <template #icon><RobotOutlined /></template>
+              <span>模型管理</span>
+            </a-menu-item>
+          </a-sub-menu>
+        </a-menu>
 
+        <!-- 折叠按钮 -->
+        <div class="sidebar-trigger" @click="toggleSidebar">
+          <MenuFoldOutlined v-if="!collapsed" />
+          <MenuUnfoldOutlined v-else />
+        </div>
+      </a-layout-sider>
+
+      <!-- 主内容区 -->
       <a-layout-content class="app-content">
         <router-view />
       </a-layout-content>
@@ -109,120 +96,236 @@ function toggleCollapsed() {
   </a-layout>
 </template>
 
+<script setup lang="ts">
+import { ref, watch, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { useAppStore } from '../stores/app'
+import {
+  HomeOutlined,
+  AppstoreOutlined,
+  SettingOutlined,
+  RobotOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  SafetyCertificateOutlined,
+  QuestionCircleOutlined,
+  BellOutlined,
+  UserOutlined,
+  LogoutOutlined,
+  DownOutlined,
+} from '@ant-design/icons-vue'
+
+const router = useRouter()
+const route = useRoute()
+const appStore = useAppStore()
+
+const collapsed = computed({
+  get: () => appStore.collapsed,
+  set: (val) => { appStore.collapsed = val },
+})
+
+const selectedKeys = ref([route.path])
+const openKeys = ref(['resource'])
+
+// 路由变化时同步选中状态
+watch(() => route.path, (path) => {
+  selectedKeys.value = [path]
+  if (path.startsWith('/resource')) {
+    openKeys.value = ['resource']
+  }
+}, { immediate: true })
+
+const toggleSidebar = () => {
+  appStore.toggleSidebar()
+}
+
+const handleMenuClick = ({ key }: { key: string | number }) => {
+  router.push(String(key))
+}
+</script>
+
 <style scoped>
 .app-layout {
   min-height: 100vh;
 }
 
-.app-sider {
-  background: #fff !important;
-  border-right: 1px solid var(--gray-200);
-  box-shadow: 2px 0 6px rgba(0, 0, 0, 0.02);
-}
-
-.app-sider :deep(.ant-layout-sider-children) {
-  display: flex;
-  flex-direction: column;
-}
-
-.sider-logo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 56px;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--gray-200);
-  gap: 10px;
-  flex-shrink: 0;
-}
-
-.logo-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  background: linear-gradient(135deg, var(--primary-blue), var(--primary-blue-active));
-  border-radius: 8px;
-  color: #fff;
-  font-size: 18px;
-  flex-shrink: 0;
-}
-
-.logo-text {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--gray-800);
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-.sider-menu {
-  border-right: none !important;
-  flex: 1;
-  padding-top: 8px;
-}
-
-.sider-menu :deep(.ant-menu-item-selected) {
-  background: var(--primary-blue-light) !important;
-  color: var(--primary-blue) !important;
-}
-
-.sider-menu :deep(.ant-menu-item-selected::after) {
-  border-right-color: var(--primary-blue) !important;
-}
-
+/* 顶部导航 */
 .app-header {
-  background: #fff !important;
-  height: 56px;
-  line-height: 56px;
-  padding: 0 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--gray-200);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  padding: 0 24px 0 0;
+  height: 56px;
+  line-height: 56px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  z-index: 100;
+  position: sticky;
+  top: 0;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 12px;
 }
 
-.trigger {
-  font-size: 18px;
-  cursor: pointer;
-  color: var(--gray-600);
-  transition: color 0.2s;
+.logo-area {
   display: flex;
   align-items: center;
+  gap: 10px;
+  padding: 0 20px;
+  height: 56px;
+  cursor: pointer;
+  transition: background 0.2s;
 }
 
-.trigger:hover {
-  color: var(--primary-blue);
+.logo-area:hover {
+  background: #f5f5f5;
 }
 
-.header-title {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--gray-800);
+.logo-icon {
+  font-size: 22px;
+  color: #1677ff;
+}
+
+.logo-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: #262626;
+  white-space: nowrap;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 4px;
 }
 
-.header-user {
+.header-action-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #595959;
+  border-radius: 8px;
+}
+
+.header-action-btn:hover {
+  background: #f5f5f5;
+  color: #1677ff;
+}
+
+.user-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 8px;
+  margin-left: 8px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.user-area:hover {
+  background: #f5f5f5;
+}
+
+.user-avatar {
+  background: #1677ff;
+  font-size: 13px;
+}
+
+.user-name {
   font-size: 14px;
-  color: var(--gray-600);
+  color: #262626;
 }
 
+.user-arrow {
+  font-size: 10px;
+  color: #8c8c8c;
+}
+
+/* 侧边栏 */
+.app-sidebar {
+  background: #fff !important;
+  border-right: 1px solid #f0f0f0;
+  position: relative;
+}
+
+.app-sidebar :deep(.ant-menu) {
+  background: transparent;
+}
+
+.app-sidebar :deep(.ant-menu-item-selected) {
+  background: #e6f4ff;
+  color: #1677ff;
+}
+
+.app-sidebar :deep(.ant-menu-item-selected .anticon) {
+  color: #1677ff;
+}
+
+.app-sidebar :deep(.ant-menu-item:hover) {
+  color: #1677ff;
+}
+
+.app-sidebar :deep(.ant-menu-submenu-selected) {
+  color: #1677ff;
+}
+
+.app-sidebar :deep(.ant-menu-submenu-title:hover) {
+  color: #1677ff;
+}
+
+.sidebar-trigger {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #8c8c8c;
+  transition: all 0.2s;
+}
+
+.sidebar-trigger:hover {
+  background: #f5f5f5;
+  color: #1677ff;
+}
+
+/* 主内容区 */
 .app-content {
-  padding: 24px;
-  background: var(--gray-50);
+  background: #f5f5f5;
+  overflow-y: auto;
+}
+
+.app-body {
   min-height: calc(100vh - 56px);
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .app-sidebar {
+    position: fixed !important;
+    left: 0;
+    top: 56px;
+    bottom: 0;
+    z-index: 99;
+    box-shadow: 4px 0 12px rgba(0, 0, 0, 0.08);
+  }
+
+  .user-name {
+    display: none;
+  }
+
+  .logo-text {
+    display: none;
+  }
 }
 </style>

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import {
   CloudServerOutlined,
   RocketOutlined,
@@ -45,7 +45,7 @@ const quickActions = [
   { title: '模型管理', desc: '管理大模型实例与参数配置', path: '/resource/model' },
 ]
 
-function goPage(path) {
+function goPage(path: string) {
   router.push(path)
 }
 </script>
@@ -58,7 +58,7 @@ function goPage(path) {
     </div>
 
     <div class="stats-grid">
-      <div v-for="card in statsCards" :key="card.title" class="stat-card card-hover-transition">
+      <div v-for="card in statsCards" :key="card.title" class="stat-card">
         <div class="stat-icon" :style="{ background: card.bgColor, color: card.color }">
           <component :is="card.icon" />
         </div>
@@ -75,7 +75,7 @@ function goPage(path) {
         <div
           v-for="action in quickActions"
           :key="action.title"
-          class="quick-card card-hover-transition"
+          class="quick-card"
           @click="goPage(action.path)"
         >
           <div class="quick-card-title">{{ action.title }}</div>
@@ -88,6 +88,7 @@ function goPage(path) {
 
 <style scoped>
 .home-page {
+  padding: 24px;
   max-width: 1200px;
 }
 
@@ -98,13 +99,13 @@ function goPage(path) {
 .welcome-section h2 {
   font-size: 24px;
   font-weight: 600;
-  color: var(--gray-800);
+  color: #262626;
   margin-bottom: 8px;
 }
 
 .welcome-section p {
   font-size: 14px;
-  color: var(--gray-500);
+  color: #8c8c8c;
 }
 
 .stats-grid {
@@ -116,13 +117,17 @@ function goPage(path) {
 
 .stat-card {
   background: #fff;
-  border-radius: var(--radius-lg);
+  border-radius: 12px;
   padding: 24px;
   display: flex;
   align-items: center;
   gap: 16px;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--gray-200);
+  border: 1px solid #f0f0f0;
+  transition: box-shadow 0.3s;
+}
+
+.stat-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
 .stat-icon {
@@ -139,20 +144,20 @@ function goPage(path) {
 .stat-value {
   font-size: 28px;
   font-weight: 700;
-  color: var(--gray-800);
+  color: #262626;
   line-height: 1.2;
 }
 
 .stat-title {
   font-size: 14px;
-  color: var(--gray-500);
+  color: #8c8c8c;
   margin-top: 4px;
 }
 
 .section-title {
   font-size: 18px;
   font-weight: 600;
-  color: var(--gray-800);
+  color: #262626;
   margin-bottom: 16px;
 }
 
@@ -164,26 +169,37 @@ function goPage(path) {
 
 .quick-card {
   background: #fff;
-  border-radius: var(--radius-lg);
+  border-radius: 12px;
   padding: 24px;
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--gray-200);
+  border: 1px solid #f0f0f0;
+  transition: border-color 0.2s, box-shadow 0.3s;
 }
 
 .quick-card:hover {
-  border-color: var(--primary-blue);
+  border-color: #1677ff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
 .quick-card-title {
   font-size: 16px;
   font-weight: 500;
-  color: var(--gray-800);
+  color: #262626;
   margin-bottom: 8px;
 }
 
 .quick-card-desc {
   font-size: 14px;
-  color: var(--gray-500);
+  color: #8c8c8c;
+}
+
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .quick-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
