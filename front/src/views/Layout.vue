@@ -67,6 +67,24 @@
             <span>首页</span>
           </a-menu-item>
 
+          <a-menu-item key="/dashboard">
+            <template #icon><DashboardOutlined /></template>
+            <span>评测大盘</span>
+          </a-menu-item>
+
+          <a-sub-menu key="evaluation">
+            <template #icon><SafetyCertificateOutlined /></template>
+            <template #title>安全评测</template>
+            <a-menu-item key="/task">
+              <template #icon><ExperimentOutlined /></template>
+              <span>评测任务</span>
+            </a-menu-item>
+            <a-menu-item key="/report">
+              <template #icon><FileTextOutlined /></template>
+              <span>报告中心</span>
+            </a-menu-item>
+          </a-sub-menu>
+
           <a-sub-menu key="resource">
             <template #icon><AppstoreOutlined /></template>
             <template #title>资源中心</template>
@@ -113,6 +131,9 @@ import {
   UserOutlined,
   LogoutOutlined,
   DownOutlined,
+  DashboardOutlined,
+  ExperimentOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons-vue'
 
 const router = useRouter()
@@ -132,6 +153,9 @@ watch(() => route.path, (path) => {
   selectedKeys.value = [path]
   if (path.startsWith('/resource')) {
     openKeys.value = ['resource']
+  }
+  if (path.startsWith('/task') || path.startsWith('/report')) {
+    openKeys.value = ['evaluation']
   }
 }, { immediate: true })
 

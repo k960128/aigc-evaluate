@@ -15,6 +15,21 @@ const router = createRouter({
           component: () => import('../views/Home.vue'),
         },
         {
+          path: 'dashboard',
+          name: 'Dashboard',
+          component: () => import('../views/Dashboard.vue'),
+        },
+        {
+          path: 'task',
+          name: 'Task',
+          component: () => import('../views/Task.vue'),
+        },
+        {
+          path: 'report',
+          name: 'Report',
+          component: () => import('../views/Report.vue'),
+        },
+        {
           path: 'resource/vendor',
           name: 'VendorConfig',
           component: () => import('../views/resource/VendorConfig.vue'),

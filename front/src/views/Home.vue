@@ -1,205 +1,280 @@
-<script setup lang="ts">
-import {
-  CloudServerOutlined,
-  RocketOutlined,
-  SafetyCertificateOutlined,
-  SettingOutlined,
-} from '@ant-design/icons-vue'
-import { useRouter } from 'vue-router'
-
-const router = useRouter()
-
-const statsCards = [
-  {
-    title: '模型厂商',
-    value: '-',
-    icon: CloudServerOutlined,
-    color: '#1677ff',
-    bgColor: '#e6f4ff',
-  },
-  {
-    title: '模型数量',
-    value: '-',
-    icon: RocketOutlined,
-    color: '#52c41a',
-    bgColor: '#f6ffed',
-  },
-  {
-    title: '评测任务',
-    value: '-',
-    icon: SafetyCertificateOutlined,
-    color: '#722ed1',
-    bgColor: '#f9f0ff',
-  },
-  {
-    title: '拦截规则',
-    value: '-',
-    icon: SettingOutlined,
-    color: '#fa8c16',
-    bgColor: '#fff7e6',
-  },
-]
-
-const quickActions = [
-  { title: '厂商基础配置', desc: '配置大模型服务商的网络与启用状态', path: '/resource/vendor' },
-  { title: '模型管理', desc: '管理大模型实例与参数配置', path: '/resource/model' },
-]
-
-function goPage(path: string) {
-  router.push(path)
-}
-</script>
-
 <template>
   <div class="home-page">
-    <div class="welcome-section">
-      <h2>欢迎使用大模型安全评测平台</h2>
-      <p>一站式大模型安全风险评估与评测管理平台</p>
+    <!-- 面包屑 -->
+    <div class="page-breadcrumb">
+      <a-breadcrumb>
+        <a-breadcrumb-item>首页</a-breadcrumb-item>
+      </a-breadcrumb>
     </div>
 
-    <div class="stats-grid">
-      <div v-for="card in statsCards" :key="card.title" class="stat-card">
-        <div class="stat-icon" :style="{ background: card.bgColor, color: card.color }">
-          <component :is="card.icon" />
-        </div>
-        <div class="stat-info">
-          <div class="stat-value">{{ card.value }}</div>
-          <div class="stat-title">{{ card.title }}</div>
+    <div class="page-content">
+      <!-- 核心指标 -->
+      <div class="section-header">
+        <h3 class="section-title">核心指标</h3>
+        <span class="section-desc">平台运营关键数据概览</span>
+      </div>
+      <div class="metric-grid">
+        <div v-for="item in coreMetrics" :key="item.key" class="metric-card card-hover-transition">
+          <div class="metric-icon-wrap" :style="{ background: item.bgColor }">
+            <component :is="item.icon" class="metric-icon" :style="{ color: item.iconColor }" />
+          </div>
+          <div class="metric-info">
+            <div class="metric-value">{{ item.value }}</div>
+            <div class="metric-label">{{ item.label }}</div>
+          </div>
+          <div class="metric-trend" :class="item.trendUp ? 'trend-up' : 'trend-down'">
+            <ArrowUpOutlined v-if="item.trendUp" />
+            <ArrowDownOutlined v-else />
+            <span>{{ item.trend }}</span>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="quick-section">
-      <h3 class="section-title">快捷入口</h3>
-      <div class="quick-grid">
-        <div
-          v-for="action in quickActions"
-          :key="action.title"
-          class="quick-card"
-          @click="goPage(action.path)"
-        >
-          <div class="quick-card-title">{{ action.title }}</div>
-          <div class="quick-card-desc">{{ action.desc }}</div>
+      <!-- 评测指标 -->
+      <div class="section-header" style="margin-top: 28px">
+        <h3 class="section-title">评测指标</h3>
+        <span class="section-desc">模型安全评测运行统计</span>
+      </div>
+      <div class="metric-grid">
+        <div v-for="item in evalMetrics" :key="item.key" class="metric-card card-hover-transition">
+          <div class="metric-icon-wrap" :style="{ background: item.bgColor }">
+            <component :is="item.icon" class="metric-icon" :style="{ color: item.iconColor }" />
+          </div>
+          <div class="metric-info">
+            <div class="metric-value">{{ item.value }}</div>
+            <div class="metric-label">{{ item.label }}</div>
+          </div>
+          <div class="metric-trend" :class="item.trendUp ? 'trend-up' : 'trend-down'">
+            <ArrowUpOutlined v-if="item.trendUp" />
+            <ArrowDownOutlined v-else />
+            <span>{{ item.trend }}</span>
+          </div>
         </div>
       </div>
     </div>
   </div>
 </template>
 
+<script setup lang="ts">
+import {
+  TeamOutlined,
+  MessageOutlined,
+  CommentOutlined,
+  BranchesOutlined,
+  RobotOutlined,
+  ThunderboltOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  ArrowUpOutlined,
+  ArrowDownOutlined,
+} from '@ant-design/icons-vue'
+
+const coreMetrics = [
+  {
+    key: 'active',
+    label: '活跃数',
+    value: '2847',
+    icon: TeamOutlined,
+    iconColor: '#1677ff',
+    bgColor: '#e6f4ff',
+    trend: '12.5%',
+    trendUp: true,
+  },
+  {
+    key: 'sessions',
+    label: '会话数',
+    value: '18432',
+    icon: MessageOutlined,
+    iconColor: '#722ed1',
+    bgColor: '#f9f0ff',
+    trend: '8.3%',
+    trendUp: true,
+  },
+  {
+    key: 'messages',
+    label: '消息数',
+    value: '156789',
+    icon: CommentOutlined,
+    iconColor: '#13c2c2',
+    bgColor: '#e6fffb',
+    trend: '15.2%',
+    trendUp: true,
+  },
+  {
+    key: 'depth',
+    label: '会话深度',
+    value: '8.5',
+    icon: BranchesOutlined,
+    iconColor: '#fa8c16',
+    bgColor: '#fff7e6',
+    trend: '2.1%',
+    trendUp: false,
+  },
+]
+
+const evalMetrics = [
+  {
+    key: 'models',
+    label: '模型数量',
+    value: '24',
+    icon: RobotOutlined,
+    iconColor: '#1677ff',
+    bgColor: '#e6f4ff',
+    trend: '4 新增',
+    trendUp: true,
+  },
+  {
+    key: 'evalCount',
+    label: '评测次数',
+    value: '3672',
+    icon: ThunderboltOutlined,
+    iconColor: '#722ed1',
+    bgColor: '#f9f0ff',
+    trend: '23.6%',
+    trendUp: true,
+  },
+  {
+    key: 'evalSuccess',
+    label: '评测成功次数',
+    value: '3421',
+    icon: CheckCircleOutlined,
+    iconColor: '#52c41a',
+    bgColor: '#f6ffed',
+    trend: '93.2%',
+    trendUp: true,
+  },
+  {
+    key: 'evalFail',
+    label: '评测失败次数',
+    value: '251',
+    icon: CloseCircleOutlined,
+    iconColor: '#ff4d4f',
+    bgColor: '#fff2f0',
+    trend: '6.8%',
+    trendUp: false,
+  },
+]
+</script>
+
 <style scoped>
 .home-page {
   padding: 24px;
+}
+
+.page-breadcrumb {
+  margin-bottom: 20px;
+}
+
+.page-breadcrumb :deep(.ant-breadcrumb-link) {
+  color: #8c8c8c;
+  font-size: 13px;
+}
+
+.page-content {
   max-width: 1200px;
 }
 
-.welcome-section {
-  margin-bottom: 32px;
+.section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
-.welcome-section h2 {
-  font-size: 24px;
+.section-title {
+  font-size: 16px;
   font-weight: 600;
   color: #262626;
-  margin-bottom: 8px;
 }
 
-.welcome-section p {
-  font-size: 14px;
+.section-desc {
+  font-size: 13px;
   color: #8c8c8c;
 }
 
-.stats-grid {
+.metric-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
-  margin-bottom: 32px;
+  gap: 16px;
 }
 
-.stat-card {
+.metric-card {
   background: #fff;
   border-radius: 12px;
-  padding: 24px;
+  padding: 20px;
   display: flex;
   align-items: center;
   gap: 16px;
+  position: relative;
   border: 1px solid #f0f0f0;
-  transition: box-shadow 0.3s;
 }
 
-.stat-card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-}
-
-.stat-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+.metric-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
   flex-shrink: 0;
 }
 
-.stat-value {
-  font-size: 28px;
+.metric-icon {
+  font-size: 20px;
+}
+
+.metric-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.metric-value {
+  font-size: 24px;
   font-weight: 700;
   color: #262626;
   line-height: 1.2;
+  letter-spacing: -0.5px;
 }
 
-.stat-title {
-  font-size: 14px;
+.metric-label {
+  font-size: 13px;
   color: #8c8c8c;
   margin-top: 4px;
 }
 
-.section-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #262626;
-  margin-bottom: 16px;
+.metric-trend {
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
 }
 
-.quick-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
+.trend-up {
+  color: #52c41a;
 }
 
-.quick-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 24px;
-  cursor: pointer;
-  border: 1px solid #f0f0f0;
-  transition: border-color 0.2s, box-shadow 0.3s;
+.trend-down {
+  color: #ff4d4f;
 }
 
-.quick-card:hover {
-  border-color: #1677ff;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-}
-
-.quick-card-title {
-  font-size: 16px;
-  font-weight: 500;
-  color: #262626;
-  margin-bottom: 8px;
-}
-
-.quick-card-desc {
-  font-size: 14px;
-  color: #8c8c8c;
-}
-
-@media (max-width: 768px) {
-  .stats-grid {
+@media (max-width: 1200px) {
+  .metric-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+}
 
-  .quick-grid {
+@media (max-width: 576px) {
+  .home-page {
+    padding: 16px;
+  }
+
+  .metric-grid {
     grid-template-columns: 1fr;
+  }
+
+  .metric-value {
+    font-size: 20px;
   }
 }
 </style>
