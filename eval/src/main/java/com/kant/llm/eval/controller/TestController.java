@@ -4,6 +4,7 @@ import com.kant.llm.eval.client.*;
 import com.kant.llm.eval.common.convention.Result;
 import com.kant.llm.eval.common.enums.ModelManufacturerEnum;
 import com.kant.llm.eval.common.web.Results;
+import com.kant.llm.eval.service.AcAutomatonService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -17,13 +18,18 @@ public class TestController {
 
     private final String DEEP_SEEK = "sk-b9a7cb64a3e24c109bfe46214d1ee823";
     private final String QWEN_API_KEY = "sk-3398a71a31f04728a19922dcbb8af1f9";
+    private final String GLM_API_KEY = "sk-of-quYqxutarrXLSygXRYAGvGawphLlOpibxDOGDglJROtTDFWVLAYGIHKRFesvRkCd";
 
     private Map<ModelManufacturerEnum, ModelInfo> modelInfoMap;
 
     private final ModelClientStrategyFactory modelClientStrategyFactory;
+    private final AcAutomatonService acAutomatonService;
 
-    public TestController(ModelClientStrategyFactory modelClientStrategyFactory) {
+    public TestController(ModelClientStrategyFactory modelClientStrategyFactory,
+                          AcAutomatonService acAutomatonService,
+                          AcAutomatonService acAutomatonService1) {
         this.modelClientStrategyFactory = modelClientStrategyFactory;
+        this.acAutomatonService = acAutomatonService1;
         this.modelInfoMap = new ConcurrentHashMap<>() {{
             put(ModelManufacturerEnum.DEEPSEEK, ModelInfo.builder()
                     .apiKey(DEEP_SEEK)
@@ -39,6 +45,14 @@ public class TestController {
                     .modelId(2L)
                     .model("qwen-plus")
                     .manufacturerType(ModelManufacturerEnum.QWEN)
+                    .build());
+
+            put(ModelManufacturerEnum.GLM, ModelInfo.builder()
+                    .apiKey(GLM_API_KEY)
+                    .baseUrl("https://api.ofox.ai/v1/chat/completions")
+                    .modelId(3L)
+                    .model("z-ai/glm-4.7-flash:free")
+                    .manufacturerType(ModelManufacturerEnum.GLM)
                     .build());
         }};
     }
@@ -62,7 +76,7 @@ public class TestController {
      */
     @GetMapping("/test")
     public Result<String> test() {
-        ModelInfo modelInfo = modelInfoMap.get(ModelManufacturerEnum.QWEN);
+        ModelInfo modelInfo = modelInfoMap.get(ModelManufacturerEnum.GLM);
         ModelRequest request = ModelRequest.builder()
                 .modelInfo(modelInfo)
                 .inputText("你是什么大模型?")
@@ -70,5 +84,10 @@ public class TestController {
         ModelClientStrategy strategy = modelClientStrategyFactory.getStrategy(modelInfo);
         ModelResponse call = strategy.call(request);
         return Results.success(call.getRespContent());
+
+//
+//        String chunk = "你是个大傻逼！";
+//        String match = acAutomatonService.match(chunk);
+//        return Results.success(match);
     }
 }

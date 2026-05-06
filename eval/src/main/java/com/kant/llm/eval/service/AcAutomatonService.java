@@ -37,7 +37,7 @@ public class AcAutomatonService {
         this.virtualExecutor = Executors.newVirtualThreadPerTaskExecutor();
     }
 
-//    @PostConstruct
+    @PostConstruct
     public void init() {
         log.info("初始化 AC 自动机服务");
 
