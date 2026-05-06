@@ -21,6 +21,8 @@
         <hutool-all.version>5.8.37</hutool-all.version>
         <transmittable-thread-local.version>2.14.5</transmittable-thread-local.version>
         <dashscope.version>2.13.0</dashscope.version>
+        <commons-lang3.version>3.12.0</commons-lang3.version>
+        <commons-compress.version>1.26.1</commons-compress.version>
     </properties>
 
     <dependencies>
@@ -120,6 +122,24 @@
             <groupId>com.alibaba.fastjson2</groupId>
             <artifactId>fastjson2</artifactId>
             <version>${fastjson.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+            <version>${commons-lang3.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-compress</artifactId>
+            <version>${commons-compress.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-collections4</artifactId>
+            <version>4.5.0</version>
         </dependency>
     </dependencies>
 
