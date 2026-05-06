@@ -75,19 +75,18 @@ public class TestController {
      * @return 模型响应内容
      */
     @GetMapping("/test")
-    public Result<String> test() {
-        ModelInfo modelInfo = modelInfoMap.get(ModelManufacturerEnum.GLM);
-        ModelRequest request = ModelRequest.builder()
-                .modelInfo(modelInfo)
-                .inputText("你是什么大模型?")
-                .build();
-        ModelClientStrategy strategy = modelClientStrategyFactory.getStrategy(modelInfo);
-        ModelResponse call = strategy.call(request);
-        return Results.success(call.getRespContent());
+    public Result<String> test(String keyWord) {
+//        ModelInfo modelInfo = modelInfoMap.get(ModelManufacturerEnum.GLM);
+//        ModelRequest request = ModelRequest.builder()
+//                .modelInfo(modelInfo)
+//                .inputText("你是什么大模型?")
+//                .build();
+//        ModelClientStrategy strategy = modelClientStrategyFactory.getStrategy(modelInfo);
+//        ModelResponse call = strategy.call(request);
+//        return Results.success(call.getRespContent());
 
-//
-//        String chunk = "你是个大傻逼！";
-//        String match = acAutomatonService.match(chunk);
-//        return Results.success(match);
+
+        String match = acAutomatonService.match(keyWord);
+        return Results.success(match);
     }
 }
