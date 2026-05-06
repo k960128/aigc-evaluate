@@ -110,6 +110,12 @@
             <artifactId>spring-ai-zhipuai</artifactId>
         </dependency>
 
+        <!-- 向量 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-vector-store-elasticsearch</artifactId>
+        </dependency>
+
         <!-- AC 自动机 - hankcs/AhoCorasickDoubleArrayTrie 高性能实现 -->
         <dependency>
             <groupId>com.hankcs</groupId>
