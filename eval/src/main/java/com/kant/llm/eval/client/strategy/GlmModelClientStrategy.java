@@ -21,7 +21,6 @@ public class GlmModelClientStrategy implements ModelClientStrategy {
         long startTime = System.currentTimeMillis();
         ChatModel chatModel = new ZhiPuAiChatModel(ZhiPuAiApi.builder()
                 .apiKey(modelRequest.getModelInfo().getApiKey())
-                .baseUrl(modelRequest.getModelInfo().getBaseUrl())
                 .build(),
                 ZhiPuAiChatOptions.builder()
                         .model(modelRequest.getModelInfo().getModel())
