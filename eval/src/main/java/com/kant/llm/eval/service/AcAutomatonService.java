@@ -42,7 +42,7 @@ public class AcAutomatonService {
         this.virtualExecutor = Executors.newVirtualThreadPerTaskExecutor();
     }
 
-    @PostConstruct
+//    @PostConstruct
     public void init() {
         log.info("Initialize AC automaton service");
 

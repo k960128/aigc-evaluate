@@ -1,9 +1,5 @@
 package com.kant.llm.eval.client;
-import com.kant.llm.eval.client.strategy.DeepSeekModelClientStrategy;
-import com.kant.llm.eval.client.strategy.GlmModelClientStrategy;
-import com.kant.llm.eval.client.strategy.OpenAiModelClientStrategy;
-import com.kant.llm.eval.client.strategy.QwenModelClientStrategy;
-import com.kant.llm.eval.client.strategy.SparkModelClientStrategy;
+import com.kant.llm.eval.client.strategy.*;
 import com.kant.llm.eval.common.exception.ServiceException;
 import org.springframework.stereotype.Service;
 
@@ -33,6 +29,7 @@ public class ModelClientStrategyFactory {
             case QWEN -> new QwenModelClientStrategy();
             case SPARK -> new SparkModelClientStrategy();
             case GLM -> new GlmModelClientStrategy();
+            case GPT -> new GptModelClientStrategy();
             default -> throw new ServiceException("不支持的大模型厂商标识：" + modelInfo.getManufacturerType());
         };
     }
