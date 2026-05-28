@@ -4,6 +4,10 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.prompt.PromptTemplate;
+
+import java.util.List;
 
 @Data
 @Builder
@@ -20,4 +24,11 @@ public class ModelRequest {
      * 输入内容
      */
     private String inputText;
+
+    List<Message> userMessages;
+
+    List<Message> systemMessages;
+
+    PromptTemplate promptTemplate;
+
 }

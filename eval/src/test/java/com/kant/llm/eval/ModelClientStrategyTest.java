@@ -22,7 +22,7 @@ public class ModelClientStrategyTest {
 
     @Test
     void testModelCall() {
-        ModelInfoDO modelInfoDO = modelInfoService.getById(4L);
+        ModelInfoDO modelInfoDO = modelInfoService.getById(3L);
         ModelInfo modelInfo = ModelInfo.builder()
                 .modelId(modelInfoDO.getId())
                 .model(modelInfoDO.getModel())
@@ -38,10 +38,5 @@ public class ModelClientStrategyTest {
         ModelClientStrategy strategy = modelClientStrategyFactory.getStrategy(modelInfo);
         ModelResponse call = strategy.call(request);
         log.info("call: {}", call);
-    }
-
-    @Test
-    void test(){
-        System.out.println("1111111111111");
     }
 }
