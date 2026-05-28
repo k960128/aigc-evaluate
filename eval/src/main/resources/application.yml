@@ -13,8 +13,8 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     type: com.zaxxer.hikari.HikariDataSource
     username: root
-    password: G3a5tB7nD9f1
-    url: jdbc:mysql://47.103.193.177:3305/data_free_eval_dev?client_encoding=UTF8
+    password: root
+    url: jdbc:mysql://127.0.0.1:3305/data_free_eval_dev?client_encoding=UTF8
     hikari:
       connection-timeout: 5000
       idle-timeout: 600000
@@ -25,10 +25,10 @@ spring:
 
   data:
     redis:
-      host: 47.103.193.177
+      host: 127.0.0.1
       port: 6379
-      password: Lxk960128.
-      database: 4
+#      password: password
+      database: 0
   web:
     resources:
       add-mappings: false
