@@ -70,4 +70,47 @@ public class RagQuestionRewriteTest {
         String text = chatClient.prompt(promptTemplate.create()).call().chatResponse().getResult().getOutput().getText();
         System.out.println(text);
     }
+
+    @Test
+    void testRagQuestionRewriteEnrich(){
+        String ENRICH_PROMPT = "# 角色\n" +
+                "你是一个专业的问题重写优化器。\n" +
+                "\n" +
+                "# 任务\n" +
+                "根据提供的\"对话历史\"和\"用户原始问题\"，重写一个独立、完整、且包含所有背景信息的新查询，用于RAG检索。\n" +
+                "\n" +
+                "## 对话历史\n" +
+                "{CHAT_HISTORY}\n" +
+                "\n" +
+                "## 原始问题\n" +
+                "{QUESTION}\n" +
+                "\n" +
+                "# 输出\n" +
+                "输出富化后的新问题，不要包含过多的解释性内容。";
+
+        String historyQuestion = "我想买一个iphone 17 Pro Max";
+        String userQuestion = "他的性能怎么样？";
+
+        ModelInfoDO modelInfoDO = modelInfoService.getById(3L);
+
+        PromptTemplate promptTemplate = new PromptTemplate(ENRICH_PROMPT);
+        promptTemplate.add("CHAT_HISTORY", historyQuestion);
+        promptTemplate.add("QUESTION", userQuestion);
+
+        // 构建ChatModel
+        ZhiPuAiChatModel zhiPuAiChatModel = new ZhiPuAiChatModel(ZhiPuAiApi.builder()
+                .apiKey(modelInfoDO.getApiKey())
+                .build(),
+                ZhiPuAiChatOptions.builder()
+                        .model(modelInfoDO.getModel())
+                        .build());
+
+        // 构建ChatClient
+        ChatClient chatClient = ChatClient.builder(zhiPuAiChatModel).build();
+        // 调用ChatClient
+        String text = chatClient.prompt(promptTemplate.create()).call().chatResponse().getResult().getOutput().getText();
+        System.out.println("用户原始问题:" + userQuestion);
+        System.out.println("对话历史:" + historyQuestion);
+        System.out.println("富化后的新问题:" + text);
+    }
 }
