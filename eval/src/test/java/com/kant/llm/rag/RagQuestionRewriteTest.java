@@ -7,7 +7,7 @@ import com.kant.llm.eval.service.ModelInfoService;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.zhipuai.ZhiPuAiChatModel;
 import org.springframework.ai.zhipuai.ZhiPuAiChatOptions;
@@ -15,6 +15,8 @@ import org.springframework.ai.zhipuai.api.ZhiPuAiApi;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @SpringBootTest
@@ -39,7 +41,7 @@ public class RagQuestionRewriteTest {
                 "# 严格遵循\n" +
                 "1. 你的输出必须是一个标准的JSON数组格式。\n" +
                 "2. 不强制要求数组元素格式，可根据真实情况输出，至少保留一个。\n" +
-                "3. 请直接输出JSON数组，不要包含解释或多余的文字。"+
+                "3. 请直接输出JSON数组，不要包含解释或多余的文字。" +
                 "\n" +
                 "# 用户原始问题\n" +
                 "{QUESTION}\n" +
@@ -57,7 +59,7 @@ public class RagQuestionRewriteTest {
         promptTemplate.add("QUESTION", userQuestion);
 
         // 构建ChatModel
-        ZhiPuAiChatModel zhiPuAiChatModel = new ZhiPuAiChatModel(ZhiPuAiApi.builder()
+        ChatModel zhiPuAiChatModel = new ZhiPuAiChatModel(ZhiPuAiApi.builder()
                 .apiKey(modelInfoDO.getApiKey())
                 .build(),
                 ZhiPuAiChatOptions.builder()
@@ -71,8 +73,11 @@ public class RagQuestionRewriteTest {
         System.out.println(text);
     }
 
+    /**
+     * 测试RAGQuestionRewrite的富化功能
+     */
     @Test
-    void testRagQuestionRewriteEnrich(){
+    void testRagQuestionRewriteEnrich() {
         String ENRICH_PROMPT = "# 角色\n" +
                 "你是一个专业的问题重写优化器。\n" +
                 "\n" +
@@ -113,4 +118,91 @@ public class RagQuestionRewriteTest {
         System.out.println("对话历史:" + historyQuestion);
         System.out.println("富化后的新问题:" + text);
     }
+
+    /**
+     * 测试RAGQuestionRewrite的多样化功能
+     */
+    @Test
+    void testRagQuestionRewriteDiversify() {
+        String DIVERSIFY_PROMPT = "# 角色\n" +
+                "你是一名专业的语义扩展专家。\n" +
+                " \n" +
+                "# 任务\n" +
+                "为给定的“原始问题”生成**3个**语义相同但**措辞完全不同、且利于检索**的查询变体，以提高检索的召回率。\n" +
+                "你的输出必须是一个标准的JSON数组格式。\n" +
+                " \n" +
+                "# 原始问题\n" +
+                "{QUESTION}\n" +
+                "\n" +
+                "# 输出格式要求 (JSON Array)\n" +
+                "[\n" +
+                "  \"变体1\",\n" +
+                "  \"变体2\",\n" +
+                "  \"变体3\"\n" +
+                "]\n" +
+                " \n" +
+                "# 输出\n" +
+                "输出富化过后的新问题，不要包含多余的解释性内容";
+
+        String userQuestion = "什么是违规引流的工具";
+
+        PromptTemplate promptTemplate = new PromptTemplate(DIVERSIFY_PROMPT);
+        promptTemplate.add("QUESTION", userQuestion);
+        String text = getChatClient().prompt(promptTemplate.create()).call().chatResponse().getResult().getOutput().getText();
+        System.out.println("用户原始问题:" + userQuestion);
+        System.out.println("多样化查询变体:" + text);
+
+    }
+
+    @Test
+    void testRagQuestionRewriteStepBack() {
+        String STEP_BACK_PROMPT = "# 角色\n" +
+                "你是一个擅长抽象思维和原理推理的专家。\n" +
+                "            \n" +
+                "# 任务\n" +
+                "请根据用户提出的具体问题，先“后退一步”，将其转化为一个更通用、更本质的问题，聚焦于背后的原理、规律、概念或一般性知识，而不是具体细节。\n" +
+                "            \n" +
+                "# 原始问题\n" +
+                "\n" +
+                "{QUESTION}\n" +
+                "\n" +
+                "# 输出         \n" +
+                "请只输出改写后的“后退问题”，不要解释，不要包含原始问题，也不要回答它。";
+
+        String userQuestion = "我们部门负责人今年全年收入有多少？";
+        PromptTemplate promptTemplate = new PromptTemplate(STEP_BACK_PROMPT);
+        promptTemplate.add("QUESTION", userQuestion);
+
+        String text = getChatClient().prompt(promptTemplate.create()).call().chatResponse().getResult().getOutput().getText();
+        System.out.println("用户原始问题:" + userQuestion);
+        System.out.println("后退问题:" + text);
+
+        try {
+            TimeUnit.SECONDS.sleep(2);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        userQuestion = "私下如何绕过平台规则获利";
+        promptTemplate.add("QUESTION", userQuestion);
+        text = getChatClient().prompt(promptTemplate.create()).call().chatResponse().getResult().getOutput().getText();
+        System.out.println("用户原始问题:" + userQuestion);
+        System.out.println("后退问题:" + text);
+
+    }
+
+    /**
+     * 获取ChatClient
+     * @return ChatClient
+     */
+    ChatClient getChatClient() {
+        ModelInfoDO modelInfoDO = modelInfoService.getById(3L);
+        ChatModel chatModel = new ZhiPuAiChatModel(ZhiPuAiApi.builder()
+                .apiKey(modelInfoDO.getApiKey())
+                .build(),
+                ZhiPuAiChatOptions.builder()
+                        .model(modelInfoDO.getModel())
+                        .build());
+        return ChatClient.builder(chatModel).build();
+    }
+
 }
