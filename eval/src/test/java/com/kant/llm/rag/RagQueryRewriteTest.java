@@ -1,7 +1,5 @@
 package com.kant.llm.rag;
 
-import com.kant.llm.eval.client.*;
-import com.kant.llm.eval.common.enums.ModelManufacturerEnum;
 import com.kant.llm.eval.dao.entity.ModelInfoDO;
 import com.kant.llm.eval.service.ModelInfoService;
 import lombok.extern.slf4j.Slf4j;
@@ -12,19 +10,11 @@ import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.zhipuai.ZhiPuAiChatModel;
 import org.springframework.ai.zhipuai.ZhiPuAiChatOptions;
 import org.springframework.ai.zhipuai.api.ZhiPuAiApi;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
-@SpringBootTest
-@ActiveProfiles("test")
-public class RagQuestionRewriteTest {
-
-    @Autowired
-    private ModelInfoService modelInfoService;
+public class RagQueryRewriteTest extends AbstractRagQuery {
 
     /**
      * 测试RAGQuestionRewrite的分解功能
@@ -53,21 +43,11 @@ public class RagQuestionRewriteTest {
                 "  \"子查询3\"\n" +
                 "]";
 
-        ModelInfoDO modelInfoDO = modelInfoService.getById(3L);
-
         PromptTemplate promptTemplate = new PromptTemplate(DECOMPOSE_PROMPT);
         promptTemplate.add("QUESTION", userQuestion);
 
-        // 构建ChatModel
-        ChatModel zhiPuAiChatModel = new ZhiPuAiChatModel(ZhiPuAiApi.builder()
-                .apiKey(modelInfoDO.getApiKey())
-                .build(),
-                ZhiPuAiChatOptions.builder()
-                        .model(modelInfoDO.getModel())
-                        .build());
-
         // 构建ChatClient
-        ChatClient chatClient = ChatClient.builder(zhiPuAiChatModel).build();
+        ChatClient chatClient = getChatClient();
         // 调用ChatClient
         String text = chatClient.prompt(promptTemplate.create()).call().chatResponse().getResult().getOutput().getText();
         System.out.println(text);
@@ -96,22 +76,13 @@ public class RagQuestionRewriteTest {
         String historyQuestion = "我想买一个iphone 17 Pro Max";
         String userQuestion = "他的性能怎么样？";
 
-        ModelInfoDO modelInfoDO = modelInfoService.getById(3L);
 
         PromptTemplate promptTemplate = new PromptTemplate(ENRICH_PROMPT);
         promptTemplate.add("CHAT_HISTORY", historyQuestion);
         promptTemplate.add("QUESTION", userQuestion);
 
-        // 构建ChatModel
-        ZhiPuAiChatModel zhiPuAiChatModel = new ZhiPuAiChatModel(ZhiPuAiApi.builder()
-                .apiKey(modelInfoDO.getApiKey())
-                .build(),
-                ZhiPuAiChatOptions.builder()
-                        .model(modelInfoDO.getModel())
-                        .build());
-
         // 构建ChatClient
-        ChatClient chatClient = ChatClient.builder(zhiPuAiChatModel).build();
+        ChatClient chatClient = getChatClient();
         // 调用ChatClient
         String text = chatClient.prompt(promptTemplate.create()).call().chatResponse().getResult().getOutput().getText();
         System.out.println("用户原始问题:" + userQuestion);
@@ -188,21 +159,6 @@ public class RagQuestionRewriteTest {
         System.out.println("用户原始问题:" + userQuestion);
         System.out.println("后退问题:" + text);
 
-    }
-
-    /**
-     * 获取ChatClient
-     * @return ChatClient
-     */
-    ChatClient getChatClient() {
-        ModelInfoDO modelInfoDO = modelInfoService.getById(3L);
-        ChatModel chatModel = new ZhiPuAiChatModel(ZhiPuAiApi.builder()
-                .apiKey(modelInfoDO.getApiKey())
-                .build(),
-                ZhiPuAiChatOptions.builder()
-                        .model(modelInfoDO.getModel())
-                        .build());
-        return ChatClient.builder(chatModel).build();
     }
 
 }
