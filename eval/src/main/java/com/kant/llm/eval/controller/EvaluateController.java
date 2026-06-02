@@ -10,7 +10,6 @@ import com.kant.llm.eval.dao.entity.ModelInfoDO;
 import com.kant.llm.eval.dao.mapper.EvalTaskDetailMapper;
 import com.kant.llm.eval.service.EvalResultDetailService;
 import com.kant.llm.eval.service.ModelInfoService;
-import com.kant.llm.eval.work.EvalWorker;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;

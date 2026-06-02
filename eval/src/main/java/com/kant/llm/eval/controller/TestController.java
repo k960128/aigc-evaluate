@@ -4,7 +4,6 @@ import com.kant.llm.eval.client.*;
 import com.kant.llm.eval.common.convention.Result;
 import com.kant.llm.eval.common.enums.ModelManufacturerEnum;
 import com.kant.llm.eval.common.web.Results;
-import com.kant.llm.eval.service.AcAutomatonService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
