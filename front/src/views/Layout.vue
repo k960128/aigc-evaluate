@@ -96,6 +96,10 @@
               <template #icon><RobotOutlined /></template>
               <span>模型管理</span>
             </a-menu-item>
+            <a-menu-item key="/resource/knowledge">
+              <template #icon><BookOutlined /></template>
+              <span>知识库管理</span>
+            </a-menu-item>
           </a-sub-menu>
         </a-menu>
 
@@ -123,6 +127,7 @@ import {
   AppstoreOutlined,
   SettingOutlined,
   RobotOutlined,
+  BookOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   SafetyCertificateOutlined,

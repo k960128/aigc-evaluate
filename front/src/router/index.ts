@@ -39,6 +39,11 @@ const router = createRouter({
           name: 'ModelManage',
           component: () => import('../views/resource/ModelManage.vue'),
         },
+        {
+          path: 'resource/knowledge',
+          name: 'KnowledgeManage',
+          component: () => import('../views/resource/KnowledgeManage.vue'),
+        },
       ],
     },
   ],
