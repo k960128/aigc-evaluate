@@ -299,12 +299,16 @@ const handleMenuClick = ({ key }: { key: string | number }) => {
   color: #1677ff;
 }
 
-.app-sidebar :deep(.ant-menu-submenu-selected) {
+.app-sidebar :deep(.ant-menu-submenu-title:hover) {
   color: #1677ff;
 }
 
-.app-sidebar :deep(.ant-menu-submenu-title:hover) {
-  color: #1677ff;
+.app-sidebar :deep(.ant-menu-submenu-selected > .ant-menu-submenu-title) {
+  color: #262626;
+}
+
+.app-sidebar :deep(.ant-menu-submenu-selected > .ant-menu-submenu-title .anticon) {
+  color: #595959;
 }
 
 .sidebar-trigger {
