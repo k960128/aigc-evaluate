@@ -96,11 +96,12 @@
               <template #icon><RobotOutlined /></template>
               <span>模型管理</span>
             </a-menu-item>
-            <a-menu-item key="/resource/knowledge">
-              <template #icon><BookOutlined /></template>
-              <span>知识库管理</span>
-            </a-menu-item>
           </a-sub-menu>
+
+          <a-menu-item key="/resource/knowledge">
+            <template #icon><BookOutlined /></template>
+            <span>知识库管理</span>
+          </a-menu-item>
         </a-menu>
 
         <!-- 折叠按钮 -->
@@ -156,11 +157,14 @@ const openKeys = ref(['resource'])
 // 路由变化时同步选中状态
 watch(() => route.path, (path) => {
   selectedKeys.value = [path]
-  if (path.startsWith('/resource')) {
+  if (path.startsWith('/resource') && path !== '/resource/knowledge') {
     openKeys.value = ['resource']
   }
-  if (path.startsWith('/task') || path.startsWith('/report')) {
+  else if (path.startsWith('/task') || path.startsWith('/report')) {
     openKeys.value = ['evaluation']
+  }
+  else {
+    openKeys.value = []
   }
 }, { immediate: true })
 

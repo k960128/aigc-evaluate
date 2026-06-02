@@ -345,7 +345,7 @@ function handleResetFilters() {
     <div class="page-breadcrumb">
       <a-breadcrumb>
         <a-breadcrumb-item>
-          <router-link to="/home">资源中心</router-link>
+          <router-link to="/home">首页</router-link>
         </a-breadcrumb-item>
         <a-breadcrumb-item>知识库管理</a-breadcrumb-item>
       </a-breadcrumb>
