@@ -30,6 +30,16 @@ const router = createRouter({
           component: () => import('../views/Report.vue'),
         },
         {
+          path: 'dataset',
+          name: 'DatasetManage',
+          component: () => import('../views/DatasetManage.vue'),
+        },
+        {
+          path: 'user',
+          name: 'UserManage',
+          component: () => import('../views/UserManage.vue'),
+        },
+        {
           path: 'resource/vendor',
           name: 'VendorConfig',
           component: () => import('../views/resource/VendorConfig.vue'),

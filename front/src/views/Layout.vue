@@ -98,6 +98,16 @@
             </a-menu-item>
           </a-sub-menu>
 
+          <a-menu-item key="/dataset">
+            <template #icon><DatabaseOutlined /></template>
+            <span>数据集管理</span>
+          </a-menu-item>
+
+          <a-menu-item key="/user">
+            <template #icon><TeamOutlined /></template>
+            <span>用户管理</span>
+          </a-menu-item>
+
           <a-menu-item key="/resource/knowledge">
             <template #icon><BookOutlined /></template>
             <span>知识库管理</span>
@@ -129,6 +139,7 @@ import {
   SettingOutlined,
   RobotOutlined,
   BookOutlined,
+  DatabaseOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   SafetyCertificateOutlined,
@@ -140,6 +151,7 @@ import {
   DashboardOutlined,
   ExperimentOutlined,
   FileTextOutlined,
+  TeamOutlined,
 } from '@ant-design/icons-vue'
 
 const router = useRouter()
