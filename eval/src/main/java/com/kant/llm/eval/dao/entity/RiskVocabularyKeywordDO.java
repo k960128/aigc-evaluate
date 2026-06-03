@@ -19,6 +19,9 @@ public class RiskVocabularyKeywordDO {
     /** 所属分组ID (关联 ac_dict_group.id) */
     private Long groupId;
 
+    /** 所属风险词库详情ID (关联 risk_vocabulary_details.id) */
+    private Long riskDetailsId;
+
     /** 字面量特征词 */
     private String keyword;
 
