@@ -261,6 +261,7 @@ import {
   ApiOutlined,
   LinkOutlined,
 } from '@ant-design/icons-vue'
+import type { Rule } from 'ant-design-vue/es/form'
 import type { ModelInfo } from '../../types/model'
 import { getModelList } from '../../api'
 import { createModel, updateModel, deleteModel, testConnectivity } from '../../api/model'
@@ -358,7 +359,7 @@ const validateJson = (_rule: any, value: string) => {
   }
 }
 
-const formRules = {
+const formRules: Record<string, Rule[]> = {
   model: [{ required: true, message: '请输入模型名称', trigger: 'blur' }],
   manufacturerCode: [{ required: true, message: '请选择厂商', trigger: 'change' }],
   apiKey: [{ required: true, message: '请输入 API Key', trigger: 'blur' }],

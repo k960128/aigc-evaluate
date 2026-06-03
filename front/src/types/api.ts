@@ -1,7 +1,8 @@
 export interface Result<T = any> {
   code: string
-  message?: string
-  requestId?: string
+  message?: string | null
+  requestId?: string | null
+  success?: boolean
   data: T
 }
 

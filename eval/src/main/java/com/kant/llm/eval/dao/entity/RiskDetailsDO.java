@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
  * 安全评测-风险明细项表
  */
 @Data
-@TableName("risk_item")
+@TableName("risk_details")
 public class RiskDetailsDO {
 
     /** 主键ID */
@@ -20,7 +20,7 @@ public class RiskDetailsDO {
     private Long categoryId;
 
     /** 具体风险项名称 (如：煽动颠覆/分裂国家) */
-    private String itemName;
+    private String detailsName;
 
     /** 类目内排序权重 */
     private Integer sortOrder;

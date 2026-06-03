@@ -345,20 +345,29 @@ function handleResetFilters() {
     <div class="page-breadcrumb">
       <a-breadcrumb>
         <a-breadcrumb-item>
-          <router-link to="/home">首页</router-link>
+          <router-link to="/home">
+            首页
+          </router-link>
         </a-breadcrumb-item>
         <a-breadcrumb-item>知识库管理</a-breadcrumb-item>
+        <a-breadcrumb-item>语义知识库</a-breadcrumb-item>
       </a-breadcrumb>
     </div>
 
     <div class="page-content">
       <div class="page-header">
         <div class="header-info">
-          <h2 class="page-title">评测知识库管理</h2>
-          <p class="page-desc">维护评测题库、风险维度和样本规模，用于模型安全评测任务创建</p>
+          <h2 class="page-title">
+            语义知识库
+          </h2>
+          <p class="page-desc">
+            维护评测题库、风险维度和样本规模，用于模型安全评测任务创建
+          </p>
         </div>
         <a-button type="primary" @click="showModal()">
-          <template #icon><PlusOutlined /></template>
+          <template #icon>
+            <PlusOutlined />
+          </template>
           新增知识库
         </a-button>
       </div>
@@ -369,9 +378,15 @@ function handleResetFilters() {
             <component :is="item.icon" class="metric-icon" :style="{ color: item.iconColor }" />
           </div>
           <div class="metric-info">
-            <div class="metric-label">{{ item.label }}</div>
-            <div class="metric-value">{{ item.value }}</div>
-            <div class="metric-desc">{{ item.desc }}</div>
+            <div class="metric-label">
+              {{ item.label }}
+            </div>
+            <div class="metric-value">
+              {{ item.value }}
+            </div>
+            <div class="metric-desc">
+              {{ item.desc }}
+            </div>
           </div>
         </div>
       </div>
@@ -383,7 +398,9 @@ function handleResetFilters() {
           class="search-input"
           allow-clear
         >
-          <template #prefix><SearchOutlined /></template>
+          <template #prefix>
+            <SearchOutlined />
+          </template>
         </a-input-search>
 
         <a-select
@@ -398,12 +415,20 @@ function handleResetFilters() {
         </a-select>
 
         <a-select v-model:value="statusFilter" class="filter-select">
-          <a-select-option value="all">全部状态</a-select-option>
-          <a-select-option value="enabled">已启用</a-select-option>
-          <a-select-option value="disabled">已停用</a-select-option>
+          <a-select-option value="all">
+            全部状态
+          </a-select-option>
+          <a-select-option value="enabled">
+            已启用
+          </a-select-option>
+          <a-select-option value="disabled">
+            已停用
+          </a-select-option>
         </a-select>
 
-        <a-button @click="handleResetFilters">重置</a-button>
+        <a-button @click="handleResetFilters">
+          重置
+        </a-button>
       </div>
 
       <div class="table-card">
@@ -473,7 +498,9 @@ function handleResetFilters() {
             <template v-if="column.key === 'action'">
               <a-space>
                 <a-button type="link" size="small" @click="showModal(record as KnowledgeBase)">
-                  <template #icon><EditOutlined /></template>
+                  <template #icon>
+                    <EditOutlined />
+                  </template>
                   编辑
                 </a-button>
                 <a-popconfirm
@@ -483,7 +510,9 @@ function handleResetFilters() {
                   @confirm="handleDelete(record as KnowledgeBase)"
                 >
                   <a-button type="link" size="small" danger>
-                    <template #icon><DeleteOutlined /></template>
+                    <template #icon>
+                      <DeleteOutlined />
+                    </template>
                     删除
                   </a-button>
                 </a-popconfirm>
@@ -499,7 +528,7 @@ function handleResetFilters() {
       :title="editingRecord ? '编辑知识库' : '新增知识库'"
       width="560px"
       :confirm-loading="modalLoading"
-      :destroyOnClose="true"
+      :destroy-on-close="true"
       ok-text="确定"
       cancel-text="取消"
       @ok="handleModalOk"

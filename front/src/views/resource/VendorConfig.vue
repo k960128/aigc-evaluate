@@ -30,14 +30,22 @@
           :data-source="vendors"
           :pagination="pagination"
           row-key="id"
+          :scroll="{ x: 1120 }"
           :row-class-name="() => 'table-row'"
           :loading="loading"
+          :locale="{ emptyText: '暂无厂商数据' }"
         >
           <!-- 厂商信息列 -->
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'vendor'">
               <div class="vendor-cell">
                 <a-avatar
+                  v-if="record.icon"
+                  :size="36"
+                  :src="record.icon"
+                />
+                <a-avatar
+                  v-else
                   :size="36"
                   :style="{ backgroundColor: record.avatarBg, fontWeight: 600, fontSize: '14px' }"
                 >
@@ -53,21 +61,42 @@
             <!-- Base URL列 -->
             <template v-if="column.key === 'baseUrl'">
               <a-typography-text
-                :copyable="{ text: record.defaultBaseUrl, tooltips: ['复制', '已复制'] }"
+                v-if="record.defaultBaseUrl"
+                :copyable="{ text: record.defaultBaseUrl, tooltip: true }"
                 class="base-url-text"
               >
-                {{ record.defaultBaseUrl || '-' }}
+                {{ record.defaultBaseUrl }}
+              </a-typography-text>
+              <span v-else class="empty-text">-</span>
+            </template>
+
+            <!-- 描述列 -->
+            <template v-if="column.key === 'describe'">
+              <a-typography-text
+                class="desc-text"
+                :ellipsis="{ tooltip: record.describe || '-' }"
+              >
+                {{ record.describe || '-' }}
               </a-typography-text>
             </template>
 
             <!-- 启用状态列 -->
             <template v-if="column.key === 'status'">
               <a-switch
-                :checked="record.enable"
-                @change="(checked: boolean) => handleStatusChange(record, checked)"
+                :checked="record.enable === true"
+                @change="checked => handleStatusChange(record, checked)"
                 checked-children="开"
                 un-checked-children="关"
               />
+            </template>
+
+            <!-- 时间列 -->
+            <template v-if="column.key === 'createTime'">
+              <span class="time-text">{{ formatDateTime(record.createTime) }}</span>
+            </template>
+
+            <template v-if="column.key === 'updateTime'">
+              <span class="time-text">{{ formatDateTime(record.updateTime) }}</span>
             </template>
 
             <!-- 操作列 -->
@@ -120,6 +149,18 @@
           <a-input v-model:value="formState.defaultBaseUrl" placeholder="例如：https://api.openai.com/v1" />
         </a-form-item>
 
+        <a-form-item name="describe" label="描述">
+          <a-textarea
+            v-model:value="formState.describe"
+            placeholder="请输入厂商描述"
+            :rows="3"
+          />
+        </a-form-item>
+
+        <a-form-item name="icon" label="图标地址">
+          <a-input v-model:value="formState.icon" placeholder="请输入厂商图标 URL" />
+        </a-form-item>
+
         <a-form-item name="enable" label="启用状态">
           <a-switch
             v-model:checked="formState.enable"
@@ -136,6 +177,8 @@
 import { ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
+import type { FormInstance, Rule } from 'ant-design-vue/es/form'
+import type { ColumnsType } from 'ant-design-vue/es/table'
 import type { Manufacturer } from '../../api/manufacturer'
 import {
   getManufacturerList,
@@ -150,22 +193,29 @@ const pagination = {
   showSizeChanger: true,
 }
 
-const columns = [
-  { title: '厂商信息', key: 'vendor', width: 240 },
-  { title: 'Base URL', key: 'baseUrl', ellipsis: true },
-  { title: '启用状态', key: 'status', width: 120, align: 'center' },
-  { title: '操作', key: 'action', width: 150, align: 'center' },
-]
-
 interface DisplayVendor extends Manufacturer {
   avatarText: string
   avatarBg: string
 }
 
+type VendorTableRecord = DisplayVendor | Record<string, any>
+
+const columns: ColumnsType<DisplayVendor> = [
+  { title: 'ID', dataIndex: 'id', key: 'id', width: 80 },
+  { title: '厂商信息', key: 'vendor', width: 240 },
+  { title: 'Base URL', key: 'baseUrl', ellipsis: true, width: 280 },
+  { title: '描述', key: 'describe', ellipsis: true, width: 180 },
+  { title: '启用状态', key: 'status', width: 120, align: 'center' },
+  { title: '创建时间', key: 'createTime', width: 170 },
+  { title: '更新时间', key: 'updateTime', width: 170 },
+  { title: '操作', key: 'action', width: 150, align: 'center' },
+]
+
 const vendors = ref<DisplayVendor[]>([])
 const loading = ref(false)
 
 function getAvatarStyle(code: string) {
+  const normalizedCode = code.toUpperCase()
   const map: Record<string, { text: string; bg: string }> = {
     OPENAI: { text: 'O', bg: '#10a37f' },
     DEEPSEEK: { text: 'D', bg: '#4d6bfe' },
@@ -176,18 +226,46 @@ function getAvatarStyle(code: string) {
     KIMI: { text: 'M', bg: '#eb2f96' },
     TELE: { text: 'T', bg: '#722ed1' },
   }
-  return map[code] || { text: code.charAt(0).toUpperCase(), bg: '#1677ff' }
+  return map[normalizedCode] || { text: normalizedCode.charAt(0) || '?', bg: '#1677ff' }
+}
+
+function formatDateTime(value?: string) {
+  return value ? value.replace('T', ' ') : '-'
+}
+
+function toDisplayVendor(vendor: Manufacturer): DisplayVendor {
+  const manufacturerCode = vendor.manufacturerCode || ''
+  const style = getAvatarStyle(manufacturerCode)
+
+  return {
+    ...vendor,
+    manufacturerCode,
+    defaultBaseUrl: vendor.defaultBaseUrl || '',
+    describe: vendor.describe || '',
+    icon: vendor.icon || '',
+    enable: vendor.enable === true,
+    avatarText: style.text,
+    avatarBg: style.bg,
+  }
+}
+
+function isSuccessResponse(res: { code: string; success?: boolean }) {
+  return res.code === '0' || res.code === '200' || res.success === true
+}
+
+function asDisplayVendor(record: VendorTableRecord): DisplayVendor {
+  return record as DisplayVendor
 }
 
 async function fetchVendors() {
   loading.value = true
   try {
     const { data: res } = await getManufacturerList()
-    if (res.code === '0' && res.data) {
-      vendors.value = res.data.map(v => {
-        const style = getAvatarStyle(v.manufacturerCode)
-        return { ...v, avatarText: style.text, avatarBg: style.bg }
-      })
+    if (isSuccessResponse(res) && Array.isArray(res.data)) {
+      vendors.value = res.data.map(toDisplayVendor)
+    } else {
+      vendors.value = []
+      message.error(res.message || '获取厂商列表失败')
     }
   } catch {
     message.error('获取厂商列表失败')
@@ -203,39 +281,44 @@ onMounted(() => {
 const modalVisible = ref(false)
 const modalLoading = ref(false)
 const editingVendor = ref<DisplayVendor | null>(null)
-const formRef = ref()
+const formRef = ref<FormInstance>()
 
 const formState = reactive({
   manufacturerName: '',
   manufacturerCode: '',
   defaultBaseUrl: '',
+  describe: '',
+  icon: '',
   enable: true,
 })
 
-const formRules = {
+const formRules: Record<string, Rule[]> = {
   manufacturerName: [{ required: true, message: '请输入厂商名称', trigger: 'blur' }],
   manufacturerCode: [{ required: true, message: '请输入厂商标识', trigger: 'blur' }],
   defaultBaseUrl: [{ required: true, message: '请输入 Base URL', trigger: 'blur' }],
 }
 
-const showModal = (record: DisplayVendor | null = null) => {
-  editingVendor.value = record
-  if (record) {
+const showModal = (record: VendorTableRecord | null = null) => {
+  const vendor = record ? asDisplayVendor(record) : null
+  editingVendor.value = vendor
+  if (vendor) {
     Object.assign(formState, {
-      manufacturerName: record.manufacturerName,
-      manufacturerCode: record.manufacturerCode,
-      defaultBaseUrl: record.defaultBaseUrl || '',
-      enable: record.enable ?? true,
+      manufacturerName: vendor.manufacturerName,
+      manufacturerCode: vendor.manufacturerCode,
+      defaultBaseUrl: vendor.defaultBaseUrl || '',
+      describe: vendor.describe || '',
+      icon: vendor.icon || '',
+      enable: vendor.enable ?? true,
     })
   } else {
-    Object.assign(formState, { manufacturerName: '', manufacturerCode: '', defaultBaseUrl: '', enable: true })
+    Object.assign(formState, { manufacturerName: '', manufacturerCode: '', defaultBaseUrl: '', describe: '', icon: '', enable: true })
   }
   modalVisible.value = true
 }
 
 const handleModalOk = async () => {
   try {
-    await formRef.value.validate()
+    await formRef.value?.validate()
     modalLoading.value = true
 
     if (editingVendor.value) {
@@ -244,6 +327,8 @@ const handleModalOk = async () => {
         manufacturerName: formState.manufacturerName,
         manufacturerCode: formState.manufacturerCode,
         defaultBaseUrl: formState.defaultBaseUrl,
+        describe: formState.describe,
+        icon: formState.icon,
         enable: formState.enable,
       })
       if (res.code === '0') {
@@ -257,6 +342,8 @@ const handleModalOk = async () => {
         manufacturerName: formState.manufacturerName,
         manufacturerCode: formState.manufacturerCode,
         defaultBaseUrl: formState.defaultBaseUrl,
+        describe: formState.describe,
+        icon: formState.icon,
         enable: formState.enable,
       })
       if (res.code === '0') {
@@ -275,15 +362,17 @@ const handleModalOk = async () => {
   }
 }
 
-const handleStatusChange = async (record: DisplayVendor, checked: boolean) => {
+const handleStatusChange = async (record: VendorTableRecord, checked: string | number | boolean) => {
+  const vendor = asDisplayVendor(record)
+  const enable = checked === true
   try {
     const { data: res } = await updateManufacturer({
-      id: record.id!,
-      enable: checked,
+      id: vendor.id!,
+      enable,
     })
     if (res.code === '0') {
-      record.enable = checked
-      message.success(`${record.manufacturerName} 已${checked ? '启用' : '停用'}`)
+      vendor.enable = enable
+      message.success(`${vendor.manufacturerName} 已${enable ? '启用' : '停用'}`)
     } else {
       message.error(res.message || '操作失败')
     }
@@ -292,11 +381,12 @@ const handleStatusChange = async (record: DisplayVendor, checked: boolean) => {
   }
 }
 
-const handleDelete = async (record: DisplayVendor) => {
+const handleDelete = async (record: VendorTableRecord) => {
+  const vendor = asDisplayVendor(record)
   try {
-    const { data: res } = await deleteManufacturer(record.id!)
+    const { data: res } = await deleteManufacturer(vendor.id!)
     if (res.code === '0') {
-      vendors.value = vendors.value.filter(v => v.id !== record.id)
+      vendors.value = vendors.value.filter(v => v.id !== vendor.id)
       message.success('删除成功')
     } else {
       message.error(res.message || '删除失败')

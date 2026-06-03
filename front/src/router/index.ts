@@ -40,9 +40,24 @@ const router = createRouter({
           component: () => import('../views/DatasetManage.vue'),
         },
         {
+          path: 'risk-tags',
+          name: 'RiskTagManage',
+          component: () => import('../views/RiskTagManage.vue'),
+        },
+        {
           path: 'user',
           name: 'UserManage',
           component: () => import('../views/UserManage.vue'),
+        },
+        {
+          path: 'knowledge/semantic',
+          name: 'SemanticKnowledge',
+          component: () => import('../views/resource/KnowledgeManage.vue'),
+        },
+        {
+          path: 'knowledge/risk-features',
+          name: 'RiskFeatureLibrary',
+          component: () => import('../views/resource/RiskFeatureLibrary.vue'),
         },
         {
           path: 'resource/vendor',
@@ -57,7 +72,7 @@ const router = createRouter({
         {
           path: 'resource/knowledge',
           name: 'KnowledgeManage',
-          component: () => import('../views/resource/KnowledgeManage.vue'),
+          redirect: '/knowledge/semantic',
         },
       ],
     },
