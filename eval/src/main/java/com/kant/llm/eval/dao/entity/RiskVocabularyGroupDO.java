@@ -6,11 +6,11 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * AC极速字典分组表
+ * 安全评测-风险词库分组表
  */
 @Data
-@TableName("ac_dict_group")
-public class AcDictGroupDO {
+@TableName("risk_vocabulary_group")
+public class RiskVocabularyGroupDO {
 
     /** 主键ID */
     @TableId(type = IdType.AUTO)
