@@ -45,6 +45,11 @@ const router = createRouter({
           component: () => import('../views/UserManage.vue'),
         },
         {
+          path: 'knowledge/semantic',
+          name: 'SemanticKnowledge',
+          component: () => import('../views/resource/KnowledgeManage.vue'),
+        },
+        {
           path: 'resource/vendor',
           name: 'VendorConfig',
           component: () => import('../views/resource/VendorConfig.vue'),
@@ -57,7 +62,7 @@ const router = createRouter({
         {
           path: 'resource/knowledge',
           name: 'KnowledgeManage',
-          component: () => import('../views/resource/KnowledgeManage.vue'),
+          redirect: '/knowledge/semantic',
         },
       ],
     },

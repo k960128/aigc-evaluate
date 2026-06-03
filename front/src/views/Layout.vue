@@ -1,3 +1,66 @@
+<script setup lang="ts">
+import {
+  AppstoreOutlined,
+  BellOutlined,
+  BookOutlined,
+  DashboardOutlined,
+  DatabaseOutlined,
+  DownOutlined,
+  ExperimentOutlined,
+  FileTextOutlined,
+  HomeOutlined,
+  LogoutOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  QuestionCircleOutlined,
+  RobotOutlined,
+  SafetyCertificateOutlined,
+  SettingOutlined,
+  TeamOutlined,
+  UserOutlined,
+} from '@ant-design/icons-vue'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useAppStore } from '../stores/app'
+
+const router = useRouter()
+const route = useRoute()
+const appStore = useAppStore()
+
+const collapsed = computed({
+  get: () => appStore.collapsed,
+  set: (val) => { appStore.collapsed = val },
+})
+
+const selectedKeys = ref([route.path])
+const openKeys = ref(['resource'])
+
+// 路由变化时同步选中状态
+watch(() => route.path, (path) => {
+  selectedKeys.value = [path]
+  if (path.startsWith('/resource')) {
+    openKeys.value = ['resource']
+  }
+  else if (path.startsWith('/knowledge')) {
+    openKeys.value = ['knowledge']
+  }
+  else if (path.startsWith('/task') || path.startsWith('/report')) {
+    openKeys.value = ['evaluation']
+  }
+  else {
+    openKeys.value = []
+  }
+}, { immediate: true })
+
+function toggleSidebar() {
+  appStore.toggleSidebar()
+}
+
+function handleMenuClick({ key }: { key: string | number }) {
+  router.push(String(key))
+}
+</script>
+
 <template>
   <a-layout class="app-layout">
     <!-- 顶部导航 -->
@@ -23,7 +86,9 @@
         </a-tooltip>
         <a-dropdown>
           <div class="user-area">
-            <a-avatar :size="30" class="user-avatar">A</a-avatar>
+            <a-avatar :size="30" class="user-avatar">
+              A
+            </a-avatar>
             <span class="user-name">Admin</span>
             <DownOutlined class="user-arrow" />
           </div>
@@ -56,62 +121,96 @@
         theme="light"
       >
         <a-menu
-          v-model:selectedKeys="selectedKeys"
-          v-model:openKeys="openKeys"
+          v-model:selected-keys="selectedKeys"
+          v-model:open-keys="openKeys"
           mode="inline"
           :style="{ border: 'none' }"
           @click="handleMenuClick"
         >
           <a-menu-item key="/home">
-            <template #icon><HomeOutlined /></template>
+            <template #icon>
+              <HomeOutlined />
+            </template>
             <span>首页</span>
           </a-menu-item>
 
           <a-menu-item key="/dashboard">
-            <template #icon><DashboardOutlined /></template>
+            <template #icon>
+              <DashboardOutlined />
+            </template>
             <span>评测大盘</span>
           </a-menu-item>
 
           <a-sub-menu key="evaluation">
-            <template #icon><SafetyCertificateOutlined /></template>
-            <template #title>安全评测</template>
+            <template #icon>
+              <SafetyCertificateOutlined />
+            </template>
+            <template #title>
+              安全评测
+            </template>
             <a-menu-item key="/task">
-              <template #icon><ExperimentOutlined /></template>
+              <template #icon>
+                <ExperimentOutlined />
+              </template>
               <span>评测任务</span>
             </a-menu-item>
             <a-menu-item key="/report">
-              <template #icon><FileTextOutlined /></template>
+              <template #icon>
+                <FileTextOutlined />
+              </template>
               <span>报告中心</span>
             </a-menu-item>
           </a-sub-menu>
 
           <a-sub-menu key="resource">
-            <template #icon><AppstoreOutlined /></template>
-            <template #title>资源中心</template>
+            <template #icon>
+              <AppstoreOutlined />
+            </template>
+            <template #title>
+              资源中心
+            </template>
             <a-menu-item key="/resource/vendor">
-              <template #icon><SettingOutlined /></template>
+              <template #icon>
+                <SettingOutlined />
+              </template>
               <span>厂商基础配置</span>
             </a-menu-item>
             <a-menu-item key="/resource/model">
-              <template #icon><RobotOutlined /></template>
+              <template #icon>
+                <RobotOutlined />
+              </template>
               <span>模型管理</span>
             </a-menu-item>
           </a-sub-menu>
 
           <a-menu-item key="/dataset">
-            <template #icon><DatabaseOutlined /></template>
+            <template #icon>
+              <DatabaseOutlined />
+            </template>
             <span>数据集管理</span>
           </a-menu-item>
 
           <a-menu-item key="/user">
-            <template #icon><TeamOutlined /></template>
+            <template #icon>
+              <TeamOutlined />
+            </template>
             <span>用户管理</span>
           </a-menu-item>
 
-          <a-menu-item key="/resource/knowledge">
-            <template #icon><BookOutlined /></template>
-            <span>知识库管理</span>
-          </a-menu-item>
+          <a-sub-menu key="knowledge">
+            <template #icon>
+              <BookOutlined />
+            </template>
+            <template #title>
+              知识库管理
+            </template>
+            <a-menu-item key="/knowledge/semantic">
+              <template #icon>
+                <BookOutlined />
+              </template>
+              <span>语义知识库</span>
+            </a-menu-item>
+          </a-sub-menu>
         </a-menu>
 
         <!-- 折叠按钮 -->
@@ -128,66 +227,6 @@
     </a-layout>
   </a-layout>
 </template>
-
-<script setup lang="ts">
-import { ref, watch, computed } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { useAppStore } from '../stores/app'
-import {
-  HomeOutlined,
-  AppstoreOutlined,
-  SettingOutlined,
-  RobotOutlined,
-  BookOutlined,
-  DatabaseOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  SafetyCertificateOutlined,
-  QuestionCircleOutlined,
-  BellOutlined,
-  UserOutlined,
-  LogoutOutlined,
-  DownOutlined,
-  DashboardOutlined,
-  ExperimentOutlined,
-  FileTextOutlined,
-  TeamOutlined,
-} from '@ant-design/icons-vue'
-
-const router = useRouter()
-const route = useRoute()
-const appStore = useAppStore()
-
-const collapsed = computed({
-  get: () => appStore.collapsed,
-  set: (val) => { appStore.collapsed = val },
-})
-
-const selectedKeys = ref([route.path])
-const openKeys = ref(['resource'])
-
-// 路由变化时同步选中状态
-watch(() => route.path, (path) => {
-  selectedKeys.value = [path]
-  if (path.startsWith('/resource') && path !== '/resource/knowledge') {
-    openKeys.value = ['resource']
-  }
-  else if (path.startsWith('/task') || path.startsWith('/report')) {
-    openKeys.value = ['evaluation']
-  }
-  else {
-    openKeys.value = []
-  }
-}, { immediate: true })
-
-const toggleSidebar = () => {
-  appStore.toggleSidebar()
-}
-
-const handleMenuClick = ({ key }: { key: string | number }) => {
-  router.push(String(key))
-}
-</script>
 
 <style scoped>
 .app-layout {
