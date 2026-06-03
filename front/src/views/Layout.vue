@@ -218,6 +218,12 @@ function handleMenuClick({ key }: { key: string | number }) {
               </template>
               <span>语义知识库</span>
             </a-menu-item>
+            <a-menu-item key="/knowledge/risk-features">
+              <template #icon>
+                <TagsOutlined />
+              </template>
+              <span>风险特征库</span>
+            </a-menu-item>
           </a-sub-menu>
         </a-menu>
 
