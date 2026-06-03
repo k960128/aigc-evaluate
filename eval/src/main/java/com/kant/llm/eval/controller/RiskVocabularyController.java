@@ -28,12 +28,12 @@ public class RiskVocabularyController {
     public Result<Page<RiskVocabularyKeywordDO>> page(
             @RequestParam(defaultValue = "1") Integer current,
             @RequestParam(defaultValue = "10") Integer size,
-            @RequestParam(required = false) Long groupId,
+            @RequestParam(required = false) Long riskDetailsId,
             @RequestParam(required = false) String keyword) {
 
         LambdaQueryWrapper<RiskVocabularyKeywordDO> queryWrapper = new LambdaQueryWrapper<>();
-        if (groupId != null) {
-            queryWrapper.eq(RiskVocabularyKeywordDO::getGroupId, groupId);
+        if (riskDetailsId != null) {
+            queryWrapper.eq(RiskVocabularyKeywordDO::getRiskDetailsId, riskDetailsId);
         }
         if (StringUtils.hasText(keyword)) {
             queryWrapper.like(RiskVocabularyKeywordDO::getKeyword, keyword);

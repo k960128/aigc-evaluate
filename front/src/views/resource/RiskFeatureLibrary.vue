@@ -1,174 +1,265 @@
 <script setup lang="ts">
+import type { FormInstance, Rule } from 'ant-design-vue/es/form'
+import type { RiskDetail } from '../../api/risk-category'
+import type {
+  RiskVocabularyKeyword,
+  RiskVocabularyMatchType,
+  RiskVocabularyRiskLevel,
+  RiskVocabularySyncStatus,
+} from '../../api/risk-vocabulary'
 import {
   CheckCircleOutlined,
   DeleteOutlined,
   EditOutlined,
+  ExclamationCircleOutlined,
   PlusOutlined,
   SearchOutlined,
   SyncOutlined,
   WarningOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { computed, reactive, ref, shallowRef, useTemplateRef } from 'vue'
+import { computed, onMounted, reactive, ref, shallowRef, useTemplateRef } from 'vue'
+import { getRiskDetailList } from '../../api/risk-category'
+import {
+  createRiskVocabulary,
+  deleteRiskVocabulary,
+  getRiskVocabularyPage,
+  syncRiskVocabularyToRedis,
+} from '../../api/risk-vocabulary'
 
-type RiskLevel = 1 | 2
-type MatchType = 1 | 2
-type SyncStatus = 0 | 1
-
-interface FeatureGroup {
-  id: string
-  name: string
-  description: string
+interface RiskDetailDisplay extends RiskDetail {
+  itemCount: number
+  pendingCount: number
 }
 
-interface RiskFeatureKeyword {
-  id: number
-  groupId: string
+interface FeatureFormState {
   keyword: string
-  risk_details_id: number
-  riskLevel: RiskLevel
-  matchType: MatchType
-  syncStatus: SyncStatus
-  updateTime: string
+  riskDetailsId?: number
+  riskLevel: RiskVocabularyRiskLevel
+  matchType: RiskVocabularyMatchType
+  syncStatus: RiskVocabularySyncStatus
 }
-
-const featureGroups: FeatureGroup[] = [
-  {
-    id: 'vulnerability_exploit',
-    name: '漏洞利用特征',
-    description: '覆盖 CVE、RCE、未授权访问、反序列化等高危漏洞利用词条。',
-  },
-  {
-    id: 'injection_attack',
-    name: '注入攻击特征',
-    description: '覆盖 SQL 注入、XSS、命令注入、模板注入等输入型攻击特征。',
-  },
-  {
-    id: 'violent_extremism',
-    name: '暴恐极端特征',
-    description: '覆盖暴恐极端、危险组织、攻击煽动与规避审查表达。',
-  },
-  {
-    id: 'data_leakage',
-    name: '数据泄露特征',
-    description: '覆盖凭据、密钥、隐私数据、内部系统信息泄露风险。',
-  },
-  {
-    id: 'gray_industry_tools',
-    name: '黑灰产工具特征',
-    description: '覆盖扫描、爆破、撞库、WebShell、代理池等黑灰产工具链。',
-  },
-]
 
 const columns = [
   { title: 'ID', key: 'id', width: 110, fixed: 'left' as const },
-  { title: '特征词', key: 'keyword', width: 240 },
-  { title: '所属小类 ID', key: 'risk_details_id', width: 140 },
-  { title: '风险等级', key: 'riskLevel', width: 140, align: 'center' as const },
-  { title: '匹配模式', key: 'matchType', width: 120, align: 'center' as const },
-  { title: '同步状态', key: 'syncStatus', width: 150, align: 'center' as const },
+  { title: '特征词 keyword', key: 'keyword', width: 240 },
+  { title: '所属小类 ID risk_details_id', key: 'riskDetailsId', width: 180 },
+  { title: '风险等级 riskLevel', key: 'riskLevel', width: 150, align: 'center' as const },
+  { title: '匹配模式 matchType', key: 'matchType', width: 150, align: 'center' as const },
+  { title: '同步状态 syncStatus', key: 'syncStatus', width: 160, align: 'center' as const },
   { title: '操作', key: 'action', width: 150, align: 'center' as const, fixed: 'right' as const },
 ]
 
-const pagination = {
-  pageSize: 10,
-  showTotal: (total: number) => `共 ${total} 条`,
-  showSizeChanger: true,
-}
+const riskDetails = ref<RiskDetail[]>([])
+const keywords = ref<RiskVocabularyKeyword[]>([])
 
-const keywords = ref<RiskFeatureKeyword[]>([
-  { id: 10001, groupId: 'vulnerability_exploit', keyword: 'CVE-2021-44228', risk_details_id: 4101, riskLevel: 1, matchType: 1, syncStatus: 0, updateTime: '2026-06-01 10:20' },
-  { id: 10002, groupId: 'vulnerability_exploit', keyword: 'Log4Shell JNDI ldap', risk_details_id: 4101, riskLevel: 1, matchType: 2, syncStatus: 0, updateTime: '2026-06-01 10:24' },
-  { id: 10003, groupId: 'vulnerability_exploit', keyword: 'Redis 未授权访问', risk_details_id: 4102, riskLevel: 1, matchType: 2, syncStatus: 1, updateTime: '2026-06-01 10:31' },
-  { id: 10004, groupId: 'vulnerability_exploit', keyword: 'Shiro rememberMe 反序列化', risk_details_id: 4103, riskLevel: 1, matchType: 2, syncStatus: 1, updateTime: '2026-06-01 10:36' },
-  { id: 10005, groupId: 'vulnerability_exploit', keyword: 'Spring4Shell RCE', risk_details_id: 4104, riskLevel: 1, matchType: 2, syncStatus: 0, updateTime: '2026-06-01 10:42' },
-  { id: 10006, groupId: 'injection_attack', keyword: '\' or 1=1 --', risk_details_id: 4201, riskLevel: 1, matchType: 1, syncStatus: 0, updateTime: '2026-06-01 11:10' },
-  { id: 10007, groupId: 'injection_attack', keyword: 'UNION SELECT password', risk_details_id: 4201, riskLevel: 1, matchType: 2, syncStatus: 1, updateTime: '2026-06-01 11:14' },
-  { id: 10008, groupId: 'injection_attack', keyword: '<script>alert(1)<\/script>', risk_details_id: 4202, riskLevel: 2, matchType: 1, syncStatus: 0, updateTime: '2026-06-01 11:18' },
-  { id: 10009, groupId: 'injection_attack', keyword: 'Runtime.getRuntime().exec', risk_details_id: 4203, riskLevel: 1, matchType: 2, syncStatus: 1, updateTime: '2026-06-01 11:26' },
-  { id: 10010, groupId: 'injection_attack', keyword: '{{7*7}} 模板注入', risk_details_id: 4204, riskLevel: 2, matchType: 2, syncStatus: 0, updateTime: '2026-06-01 11:34' },
-  { id: 10011, groupId: 'violent_extremism', keyword: '暴恐袭击策划', risk_details_id: 4301, riskLevel: 1, matchType: 2, syncStatus: 1, updateTime: '2026-06-01 13:10' },
-  { id: 10012, groupId: 'violent_extremism', keyword: '极端组织招募话术', risk_details_id: 4302, riskLevel: 1, matchType: 2, syncStatus: 0, updateTime: '2026-06-01 13:18' },
-  { id: 10013, groupId: 'violent_extremism', keyword: '爆炸物制作步骤', risk_details_id: 4303, riskLevel: 1, matchType: 2, syncStatus: 1, updateTime: '2026-06-01 13:22' },
-  { id: 10014, groupId: 'violent_extremism', keyword: '规避平台审查暗语', risk_details_id: 4304, riskLevel: 2, matchType: 2, syncStatus: 0, updateTime: '2026-06-01 13:30' },
-  { id: 10015, groupId: 'data_leakage', keyword: 'AKIA[0-9A-Z]{16}', risk_details_id: 4401, riskLevel: 1, matchType: 2, syncStatus: 0, updateTime: '2026-06-01 14:08' },
-  { id: 10016, groupId: 'data_leakage', keyword: 'BEGIN RSA PRIVATE KEY', risk_details_id: 4401, riskLevel: 1, matchType: 1, syncStatus: 1, updateTime: '2026-06-01 14:13' },
-  { id: 10017, groupId: 'data_leakage', keyword: '数据库连接串 jdbc:mysql', risk_details_id: 4402, riskLevel: 2, matchType: 2, syncStatus: 0, updateTime: '2026-06-01 14:21' },
-  { id: 10018, groupId: 'data_leakage', keyword: '身份证号 批量导出', risk_details_id: 4403, riskLevel: 1, matchType: 2, syncStatus: 1, updateTime: '2026-06-01 14:36' },
-  { id: 10019, groupId: 'gray_industry_tools', keyword: 'nmap -p 6379 --open', risk_details_id: 4501, riskLevel: 2, matchType: 2, syncStatus: 0, updateTime: '2026-06-01 15:02' },
-  { id: 10020, groupId: 'gray_industry_tools', keyword: 'hydra -L users -P pass', risk_details_id: 4502, riskLevel: 1, matchType: 2, syncStatus: 0, updateTime: '2026-06-01 15:08' },
-  { id: 10021, groupId: 'gray_industry_tools', keyword: '冰蝎 WebShell 连接', risk_details_id: 4503, riskLevel: 1, matchType: 2, syncStatus: 1, updateTime: '2026-06-01 15:16' },
-  { id: 10022, groupId: 'gray_industry_tools', keyword: '撞库脚本 验证码绕过', risk_details_id: 4504, riskLevel: 1, matchType: 2, syncStatus: 0, updateTime: '2026-06-01 15:28' },
-])
-
-const selectedGroup = shallowRef<string | undefined>()
-const searchKeyword = shallowRef('')
+const riskDetailsLoading = shallowRef(false)
+const tableLoading = shallowRef(false)
 const modalVisible = shallowRef(false)
 const modalLoading = shallowRef(false)
-const editingRecord = shallowRef<RiskFeatureKeyword | null>(null)
-const formRef = useTemplateRef<any>('featureForm')
+const syncLoading = shallowRef(false)
+const deletingId = shallowRef<number | null>(null)
+const editingRecord = shallowRef<RiskVocabularyKeyword | null>(null)
 
-const formState = reactive({
+const selectedRiskDetailId = shallowRef<number | null>(null)
+const searchKeyword = shallowRef('')
+const currentPage = shallowRef(1)
+const pageSize = shallowRef(10)
+const total = shallowRef(0)
+const formRef = useTemplateRef<FormInstance>('featureForm')
+
+const formState = reactive<FeatureFormState>({
   keyword: '',
-  groupId: undefined as string | undefined,
-  risk_details_id: undefined as number | undefined,
-  riskLevel: 1 as RiskLevel,
-  matchType: 1 as MatchType,
-  syncStatus: 0 as SyncStatus,
+  riskDetailsId: undefined,
+  riskLevel: 1,
+  matchType: 1,
+  syncStatus: 0,
 })
 
-const formRules: Record<string, any[]> = {
+const formRules: Record<string, Rule[]> = {
   keyword: [{ required: true, message: '请输入特征词', trigger: 'blur' }],
-  groupId: [{ required: true, message: '请选择词库分组', trigger: 'change' }],
-  risk_details_id: [{ required: true, type: 'number', message: '请输入所属小类 ID', trigger: 'change' }],
+  riskDetailsId: [{ required: true, type: 'number', message: '请选择所属小类 ID', trigger: 'change' }],
   riskLevel: [{ required: true, type: 'number', message: '请选择风险等级', trigger: 'change' }],
   matchType: [{ required: true, type: 'number', message: '请选择匹配模式', trigger: 'change' }],
 }
 
-const filteredKeywords = computed(() => {
-  const text = searchKeyword.value.trim().toLowerCase()
+const selectedRiskDetail = computed(() =>
+  riskDetails.value.find(item => item.id === selectedRiskDetailId.value) || null,
+)
 
-  return keywords.value.filter((item) => {
-    const matchesGroup = !selectedGroup.value || item.groupId === selectedGroup.value
-    const matchesKeyword = !text
-      || item.keyword.toLowerCase().includes(text)
-      || String(item.risk_details_id).includes(text)
+const selectedRiskDetailName = computed(() => selectedRiskDetail.value?.detailsName || '暂无风险小类')
+const selectedRiskDetailMeta = computed(() => {
+  if (!selectedRiskDetail.value)
+    return '请选择左侧风险小类'
 
-    return matchesGroup && matchesKeyword
-  })
+  return `大类 ID ${selectedRiskDetail.value.categoryId} / 小类 ID ${selectedRiskDetail.value.id}`
 })
 
-const pendingSyncCount = computed(() => filteredKeywords.value.filter(item => item.syncStatus === 0).length)
-const syncedCount = computed(() => filteredKeywords.value.filter(item => item.syncStatus === 1).length)
+const currentPageItemCount = computed(() => keywords.value.length)
+const pendingSyncCount = computed(() => keywords.value.filter(item => item.syncStatus === 0).length)
+const syncedCount = computed(() => keywords.value.filter(item => item.syncStatus === 1).length)
+
+const displayRiskDetails = computed<RiskDetailDisplay[]>(() =>
+  riskDetails.value.map((detail) => {
+    const isSelected = detail.id === selectedRiskDetailId.value
+
+    return {
+      ...detail,
+      itemCount: isSelected ? currentPageItemCount.value : 0,
+      pendingCount: isSelected ? pendingSyncCount.value : 0,
+    }
+  }),
+)
+
+const tablePagination = computed(() => ({
+  current: currentPage.value,
+  pageSize: pageSize.value,
+  total: total.value,
+  showSizeChanger: true,
+  showTotal: (totalNumber: number) => `共 ${totalNumber} 条`,
+}))
+
+function isSuccessResponse(res: { code: string | number, success?: boolean }) {
+  return String(res.code) === '0' || String(res.code) === '200' || res.success === true
+}
+
+function sortRiskDetails(items: RiskDetail[]) {
+  return [...items]
+    .filter(item => !item.deleted)
+    .sort((first, second) => {
+      const firstOrder = first.sortOrder ?? Number.MAX_SAFE_INTEGER
+      const secondOrder = second.sortOrder ?? Number.MAX_SAFE_INTEGER
+
+      return firstOrder - secondOrder || first.id - second.id
+    })
+}
 
 function getCurrentTime() {
   const now = new Date()
   const pad = (value: number) => String(value).padStart(2, '0')
+
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`
 }
 
-function getGroupName(groupId: string) {
-  return featureGroups.find(item => item.id === groupId)?.name || '未分组'
+function resetVocabularyPage() {
+  keywords.value = []
+  total.value = 0
+  currentPage.value = 1
+}
+
+async function fetchVocabularyPage() {
+  if (!selectedRiskDetailId.value) {
+    resetVocabularyPage()
+    return
+  }
+
+  tableLoading.value = true
+  try {
+    const keyword = searchKeyword.value.trim()
+    const { data: res } = await getRiskVocabularyPage({
+      current: currentPage.value,
+      size: pageSize.value,
+      riskDetailsId: selectedRiskDetailId.value,
+      keyword: keyword || undefined,
+    })
+
+    if (!isSuccessResponse(res) || !res.data) {
+      throw new Error(res.message || '获取风险特征词失败')
+    }
+
+    keywords.value = Array.isArray(res.data.records) ? res.data.records : []
+    total.value = Number(res.data.total || 0)
+    currentPage.value = Number(res.data.current || currentPage.value)
+    pageSize.value = Number(res.data.size || pageSize.value)
+  }
+  catch (error) {
+    keywords.value = []
+    total.value = 0
+    message.error(error instanceof Error ? error.message : '获取风险特征词失败')
+  }
+  finally {
+    tableLoading.value = false
+  }
+}
+
+async function fetchRiskDetails() {
+  riskDetailsLoading.value = true
+  try {
+    const { data: res } = await getRiskDetailList()
+
+    if (!isSuccessResponse(res) || !Array.isArray(res.data)) {
+      throw new Error(res.message || '获取风险小类失败')
+    }
+
+    riskDetails.value = sortRiskDetails(res.data)
+
+    const selectedStillExists = riskDetails.value.some(item => item.id === selectedRiskDetailId.value)
+    selectedRiskDetailId.value = selectedStillExists
+      ? selectedRiskDetailId.value
+      : riskDetails.value[0]?.id || null
+
+    if (selectedRiskDetailId.value) {
+      currentPage.value = 1
+      await fetchVocabularyPage()
+    }
+    else {
+      resetVocabularyPage()
+    }
+  }
+  catch (error) {
+    riskDetails.value = []
+    selectedRiskDetailId.value = null
+    resetVocabularyPage()
+    message.error(error instanceof Error ? error.message : '获取风险小类失败')
+  }
+  finally {
+    riskDetailsLoading.value = false
+  }
+}
+
+async function handleRiskDetailSelect(id: number) {
+  if (id === selectedRiskDetailId.value)
+    return
+
+  selectedRiskDetailId.value = id
+  currentPage.value = 1
+  await fetchVocabularyPage()
+}
+
+async function handleSearch() {
+  currentPage.value = 1
+  await fetchVocabularyPage()
+}
+
+async function handleResetSearch() {
+  searchKeyword.value = ''
+  currentPage.value = 1
+  await fetchVocabularyPage()
+}
+
+async function handleTableChange(pagination: { current?: number, pageSize?: number }) {
+  currentPage.value = pagination.current || 1
+  pageSize.value = pagination.pageSize || pageSize.value
+  await fetchVocabularyPage()
 }
 
 function resetForm() {
   Object.assign(formState, {
     keyword: '',
-    groupId: selectedGroup.value,
-    risk_details_id: undefined,
+    riskDetailsId: selectedRiskDetailId.value || riskDetails.value[0]?.id,
     riskLevel: 1,
     matchType: 1,
     syncStatus: 0,
   })
 }
 
-function showModal(record?: RiskFeatureKeyword) {
+function showModal(record?: RiskVocabularyKeyword) {
   editingRecord.value = record || null
+
   if (record) {
     Object.assign(formState, {
       keyword: record.keyword,
-      groupId: record.groupId,
-      risk_details_id: record.risk_details_id,
+      riskDetailsId: record.riskDetailsId,
       riskLevel: record.riskLevel,
       matchType: record.matchType,
       syncStatus: record.syncStatus,
@@ -177,91 +268,138 @@ function showModal(record?: RiskFeatureKeyword) {
   else {
     resetForm()
   }
+
   modalVisible.value = true
+}
+
+function closeModal() {
+  modalVisible.value = false
 }
 
 async function handleModalOk() {
   try {
     await formRef.value?.validate()
+
+    if (!formState.riskDetailsId) {
+      message.warning('请选择所属小类 ID')
+      return
+    }
+
     modalLoading.value = true
 
     if (editingRecord.value) {
       const current = editingRecord.value
       const coreChanged = current.keyword !== formState.keyword
-        || current.groupId !== formState.groupId
-        || current.risk_details_id !== formState.risk_details_id
+        || current.riskDetailsId !== formState.riskDetailsId
         || current.riskLevel !== formState.riskLevel
         || current.matchType !== formState.matchType
 
-      Object.assign(current, {
+      const updatedRecord: RiskVocabularyKeyword = {
+        ...current,
         keyword: formState.keyword,
-        groupId: formState.groupId!,
-        risk_details_id: formState.risk_details_id!,
+        riskDetailsId: formState.riskDetailsId,
         riskLevel: formState.riskLevel,
         matchType: formState.matchType,
         syncStatus: coreChanged ? 0 : formState.syncStatus,
         updateTime: getCurrentTime(),
-      })
-      message.success('特征词更新成功')
-    }
-    else {
-      const maxId = Math.max(...keywords.value.map(item => item.id), 10000)
-      keywords.value.unshift({
-        id: maxId + 1,
-        keyword: formState.keyword,
-        groupId: formState.groupId!,
-        risk_details_id: formState.risk_details_id!,
-        riskLevel: formState.riskLevel,
-        matchType: formState.matchType,
-        syncStatus: 0,
-        updateTime: getCurrentTime(),
-      })
-      message.success('特征词新增成功')
+      }
+
+      keywords.value = keywords.value.map(item => item.id === current.id ? updatedRecord : item)
+      editingRecord.value = updatedRecord
+      modalVisible.value = false
+      message.warning('后端暂未提供编辑接口，本次修改仅前端临时生效')
+      return
     }
 
+    const { data: res } = await createRiskVocabulary({
+      groupId: 1,
+      riskDetailsId: formState.riskDetailsId,
+      keyword: formState.keyword,
+      riskLevel: formState.riskLevel,
+      matchType: formState.matchType,
+    })
+
+    if (!isSuccessResponse(res) || res.data !== true) {
+      throw new Error(res.message || '新增特征词失败')
+    }
+
+    selectedRiskDetailId.value = formState.riskDetailsId
+    currentPage.value = 1
     modalVisible.value = false
+    message.success('特征词新增成功')
+    await fetchVocabularyPage()
   }
-  catch {
-    // form validation error
+  catch (error) {
+    if (error instanceof Error)
+      message.error(error.message)
   }
   finally {
     modalLoading.value = false
   }
 }
 
-function handleDelete(record: RiskFeatureKeyword) {
+function handleDelete(record: RiskVocabularyKeyword) {
   Modal.confirm({
     title: '确认删除特征词',
-    content: `确定删除「${record.keyword}」吗？删除后仅影响当前 mock 数据。`,
+    content: `确定删除“${record.keyword}”吗？删除后将同步后端风险词库数据。`,
     okText: '确认删除',
     okType: 'danger',
     cancelText: '取消',
-    onOk: () => {
-      keywords.value = keywords.value.filter(item => item.id !== record.id)
-      message.success('特征词删除成功')
+    async onOk() {
+      deletingId.value = record.id
+      try {
+        const shouldMovePrevPage = keywords.value.length === 1 && currentPage.value > 1
+        const { data: res } = await deleteRiskVocabulary(record.id)
+
+        if (!isSuccessResponse(res) || res.data !== true) {
+          throw new Error(res.message || '删除特征词失败')
+        }
+
+        if (shouldMovePrevPage)
+          currentPage.value -= 1
+
+        message.success('特征词删除成功')
+        await fetchVocabularyPage()
+      }
+      catch (error) {
+        message.error(error instanceof Error ? error.message : '删除特征词失败')
+      }
+      finally {
+        deletingId.value = null
+      }
     },
   })
 }
 
-function handlePushToRedis() {
-  const pendingIds = new Set(filteredKeywords.value.filter(item => item.syncStatus === 0).map(item => item.id))
-  if (!pendingIds.size) {
-    message.info('当前筛选范围内没有待同步特征词')
-    return
+async function handlePushToRedis() {
+  syncLoading.value = true
+  try {
+    const { data: res } = await syncRiskVocabularyToRedis()
+
+    if (!isSuccessResponse(res)) {
+      throw new Error(res.message || '推送 Redis 失败')
+    }
+
+    message.success(res.data || res.message || '推送 Redis 成功')
+    await fetchVocabularyPage()
   }
-
-  keywords.value = keywords.value.map(item =>
-    pendingIds.has(item.id)
-      ? { ...item, syncStatus: 1, updateTime: getCurrentTime() }
-      : item,
-  )
-  message.success(`已推送 ${pendingIds.size} 个特征词到 Redis 热更字典树`)
+  catch (error) {
+    message.error(error instanceof Error ? error.message : '推送 Redis 失败')
+  }
+  finally {
+    syncLoading.value = false
+  }
 }
 
-function handleResetFilters() {
-  selectedGroup.value = undefined
-  searchKeyword.value = ''
+function getRiskLevelLabel(value: RiskVocabularyRiskLevel) {
+  return value === 1 ? '致命级别' : '疑似级别'
 }
+
+function getMatchTypeLabel(value: RiskVocabularyMatchType) {
+  return value === 1 ? '精确匹配' : '模糊包含'
+}
+
+onMounted(fetchRiskDetails)
 </script>
 
 <template>
@@ -285,134 +423,166 @@ function handleResetFilters() {
             风险特征库
           </h2>
           <p class="page-desc">
-            维护 AC 自动机与热更字典树使用的高危特征词，覆盖漏洞利用、注入攻击、暴恐极端与黑灰产工具链。
+            维护 AC 自动机与热更字典树使用的高危特征词，按风险小类组织拦截与打标规则。
           </p>
         </div>
       </div>
 
       <div class="toolbar-card">
         <div class="toolbar-left">
-          <a-select
-            v-model:value="selectedGroup"
-            class="group-select"
-            allow-clear
-            placeholder="全部分组"
-          >
-            <a-select-option v-for="item in featureGroups" :key="item.id" :value="item.id">
-              {{ item.name }}
-            </a-select-option>
-          </a-select>
-
           <a-input-search
             v-model:value="searchKeyword"
             class="search-input"
             allow-clear
-            placeholder="搜索特征词或小类 ID"
+            placeholder="搜索当前小类下的特征词"
+            @search="handleSearch"
           >
             <template #prefix>
               <SearchOutlined />
             </template>
           </a-input-search>
 
-          <a-button @click="handleResetFilters">
+          <a-button :disabled="tableLoading" @click="handleResetSearch">
             重置
           </a-button>
         </div>
 
         <div class="toolbar-actions">
-          <a-button @click="showModal()">
+          <a-button :disabled="!selectedRiskDetailId" @click="showModal()">
             <template #icon>
               <PlusOutlined />
             </template>
             新增特征词
           </a-button>
-          <a-button type="primary" danger class="redis-button" @click="handlePushToRedis">
+          <a-button
+            type="primary"
+            danger
+            class="redis-button"
+            :disabled="!riskDetails.length"
+            :loading="syncLoading"
+            @click="handlePushToRedis"
+          >
             <template #icon>
               <SyncOutlined />
             </template>
-            推送到 Redis (热更字典树)
+            推送到 Redis
           </a-button>
         </div>
       </div>
 
-      <div class="table-card">
-        <div class="table-header">
-          <div>
-            <h3 class="table-title">
-              特征词列表
-            </h3>
-            <p class="table-desc">
-              当前筛选 {{ filteredKeywords.length }} 条，待同步 {{ pendingSyncCount }} 条，已同步 {{ syncedCount }} 条
-            </p>
+      <div class="risk-layout">
+        <aside class="detail-panel-list">
+          <div class="panel-title">
+            <ExclamationCircleOutlined />
+            风险小类
           </div>
-        </div>
+          <a-spin :spinning="riskDetailsLoading">
+            <div v-if="displayRiskDetails.length" class="detail-list">
+              <button
+                v-for="detail in displayRiskDetails"
+                :key="detail.id"
+                type="button"
+                class="detail-item"
+                :class="{ active: detail.id === selectedRiskDetailId }"
+                @click="handleRiskDetailSelect(detail.id)"
+              >
+                <span class="detail-name">{{ detail.detailsName }}</span>
+                <span class="detail-meta">大类 ID {{ detail.categoryId }} / 小类 ID {{ detail.id }}</span>
+                <span class="detail-count">
+                  当前页 {{ detail.itemCount }} 词条 / {{ detail.pendingCount }} 待同步
+                </span>
+              </button>
+            </div>
+            <a-empty v-else class="detail-empty" description="暂无风险小类" />
+          </a-spin>
+        </aside>
 
-        <a-table
-          :columns="columns"
-          :data-source="filteredKeywords"
-          :pagination="pagination"
-          :scroll="{ x: 1120 }"
-          row-key="id"
-          :locale="{ emptyText: '暂无风险特征词数据' }"
-        >
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'id'">
-              <span class="keyword-id">{{ record.id }}</span>
-            </template>
+        <section class="table-card">
+          <div class="table-header">
+            <div>
+              <h3 class="table-title">
+                {{ selectedRiskDetailName }}
+              </h3>
+              <p class="table-desc">
+                {{ selectedRiskDetailMeta }}
+              </p>
+            </div>
+            <div class="table-stats">
+              <span>当前页 {{ currentPageItemCount }}</span>
+              <span>待同步 {{ pendingSyncCount }}</span>
+              <span>已同步 {{ syncedCount }}</span>
+            </div>
+          </div>
 
-            <template v-if="column.key === 'keyword'">
-              <div class="keyword-cell">
+          <a-table
+            :columns="columns"
+            :data-source="keywords"
+            :loading="tableLoading"
+            :pagination="tablePagination"
+            :scroll="{ x: 1120 }"
+            row-key="id"
+            :locale="{ emptyText: '暂无风险特征词数据' }"
+            @change="handleTableChange"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'id'">
+                <span class="keyword-id">{{ record.id }}</span>
+              </template>
+
+              <template v-if="column.key === 'keyword'">
                 <span class="keyword-text">{{ record.keyword }}</span>
-                <span class="group-name">{{ getGroupName(record.groupId) }}</span>
-              </div>
-            </template>
+              </template>
 
-            <template v-if="column.key === 'risk_details_id'">
-              <span class="details-id">{{ record.risk_details_id }}</span>
-            </template>
+              <template v-if="column.key === 'riskDetailsId'">
+                <span class="details-id">{{ record.riskDetailsId }}</span>
+              </template>
 
-            <template v-if="column.key === 'riskLevel'">
-              <a-tag v-if="record.riskLevel === 1" color="red">
-                硬阻断
-              </a-tag>
-              <a-tag v-else color="orange">
-                疑似打标
-              </a-tag>
-            </template>
+              <template v-if="column.key === 'riskLevel'">
+                <a-tag :color="record.riskLevel === 1 ? 'red' : 'orange'">
+                  {{ getRiskLevelLabel(record.riskLevel) }}
+                </a-tag>
+              </template>
 
-            <template v-if="column.key === 'matchType'">
-              <a-tag color="blue">
-                {{ record.matchType === 1 ? '精确' : '模糊' }}
-              </a-tag>
-            </template>
+              <template v-if="column.key === 'matchType'">
+                <a-tag color="blue">
+                  {{ getMatchTypeLabel(record.matchType) }}
+                </a-tag>
+              </template>
 
-            <template v-if="column.key === 'syncStatus'">
-              <span v-if="record.syncStatus === 0" class="sync-status pending">
-                <WarningOutlined />
-                待同步
-              </span>
-              <span v-else class="sync-status synced">
-                <CheckCircleOutlined />
-                已同步
-              </span>
-            </template>
+              <template v-if="column.key === 'syncStatus'">
+                <span v-if="record.syncStatus === 0" class="sync-status pending">
+                  <WarningOutlined />
+                  待同步
+                </span>
+                <span v-else class="sync-status synced">
+                  <CheckCircleOutlined />
+                  已同步
+                </span>
+              </template>
 
-            <template v-if="column.key === 'action'">
-              <a-button size="small" type="link" @click="showModal(record as RiskFeatureKeyword)">
-                <template #icon>
-                  <EditOutlined />
-                </template>
-                编辑
-              </a-button>
-              <a-button size="small" type="link" danger @click="handleDelete(record as RiskFeatureKeyword)">
-                <template #icon>
-                  <DeleteOutlined />
-                </template>
-                删除
-              </a-button>
+              <template v-if="column.key === 'action'">
+                <a-button size="small" type="link" @click="showModal(record as RiskVocabularyKeyword)">
+                  <template #icon>
+                    <EditOutlined />
+                  </template>
+                  编辑
+                </a-button>
+                <a-button
+                  size="small"
+                  type="link"
+                  danger
+                  :loading="deletingId === record.id"
+                  @click="handleDelete(record as RiskVocabularyKeyword)"
+                >
+                  <template #icon>
+                    <DeleteOutlined />
+                  </template>
+                  删除
+                </a-button>
+              </template>
             </template>
-          </template>
-        </a-table>
+          </a-table>
+        </section>
       </div>
     </div>
 
@@ -422,39 +592,43 @@ function handleResetFilters() {
       width="620px"
       :confirm-loading="modalLoading"
       :destroy-on-close="true"
+      ok-text="确定"
+      cancel-text="取消"
       @ok="handleModalOk"
+      @cancel="closeModal"
     >
       <a-form ref="featureForm" :model="formState" :rules="formRules" layout="vertical">
         <a-form-item name="keyword" label="特征词">
           <a-input v-model:value="formState.keyword" placeholder="请输入特征词，例如 CVE-2021-44228" />
         </a-form-item>
 
-        <a-form-item name="groupId" label="词库分组">
-          <a-select v-model:value="formState.groupId" placeholder="请选择词库分组">
-            <a-select-option v-for="item in featureGroups" :key="item.id" :value="item.id">
-              {{ item.name }}
+        <a-form-item name="riskDetailsId" label="所属小类 ID">
+          <a-select
+            v-model:value="formState.riskDetailsId"
+            class="full-input"
+            placeholder="请选择所属小类"
+            show-search
+            option-filter-prop="label"
+          >
+            <a-select-option
+              v-for="detail in riskDetails"
+              :key="detail.id"
+              :value="detail.id"
+              :label="`${detail.detailsName} ${detail.id}`"
+            >
+              {{ detail.detailsName }} / ID {{ detail.id }}
             </a-select-option>
           </a-select>
-        </a-form-item>
-
-        <a-form-item name="risk_details_id" label="所属小类 ID">
-          <a-input-number
-            v-model:value="formState.risk_details_id"
-            :min="1"
-            :precision="0"
-            class="full-input"
-            placeholder="请输入所属小类 ID"
-          />
         </a-form-item>
 
         <div class="form-grid">
           <a-form-item name="riskLevel" label="风险等级">
             <a-select v-model:value="formState.riskLevel">
               <a-select-option :value="1">
-                硬阻断
+                致命级别
               </a-select-option>
               <a-select-option :value="2">
-                疑似打标
+                疑似级别
               </a-select-option>
             </a-select>
           </a-form-item>
@@ -462,16 +636,16 @@ function handleResetFilters() {
           <a-form-item name="matchType" label="匹配模式">
             <a-select v-model:value="formState.matchType">
               <a-select-option :value="1">
-                精确
+                精确匹配
               </a-select-option>
               <a-select-option :value="2">
-                模糊
+                模糊包含
               </a-select-option>
             </a-select>
           </a-form-item>
         </div>
 
-        <a-form-item label="同步状态">
+        <a-form-item v-if="editingRecord" label="同步状态">
           <a-select v-model:value="formState.syncStatus">
             <a-select-option :value="0">
               待同步
@@ -533,6 +707,7 @@ function handleResetFilters() {
 }
 
 .toolbar-card,
+.detail-panel-list,
 .table-card {
   background: #fff;
   border: 1px solid #f0f0f0;
@@ -556,16 +731,84 @@ function handleResetFilters() {
   flex-wrap: wrap;
 }
 
-.group-select {
-  width: 220px;
-}
-
 .search-input {
-  width: 280px;
+  width: 300px;
 }
 
 .redis-button {
   box-shadow: 0 6px 14px rgba(255, 77, 79, 0.18);
+}
+
+.risk-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.detail-panel-list {
+  padding: 14px;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #262626;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 720px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.detail-item {
+  width: 100%;
+  padding: 12px;
+  text-align: left;
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.detail-item:hover,
+.detail-item.active {
+  background: #f0f7ff;
+  border-color: #91caff;
+}
+
+.detail-name {
+  display: block;
+  color: #262626;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.detail-meta {
+  display: block;
+  color: #8c8c8c;
+  font-size: 12px;
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+
+.detail-count {
+  color: #1677ff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.detail-empty {
+  margin-top: 32px;
 }
 
 .table-card {
@@ -573,6 +816,10 @@ function handleResetFilters() {
 }
 
 .table-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
   padding: 16px;
   border-bottom: 1px solid #f0f0f0;
 }
@@ -589,6 +836,20 @@ function handleResetFilters() {
   font-size: 12px;
 }
 
+.table-stats {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.table-stats span {
+  padding: 4px 8px;
+  color: #1677ff;
+  background: #e6f4ff;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
 .keyword-id {
   color: #1677ff;
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
@@ -596,20 +857,9 @@ function handleResetFilters() {
   font-weight: 600;
 }
 
-.keyword-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
 .keyword-text {
   color: #262626;
   font-weight: 500;
-}
-
-.group-name {
-  color: #8c8c8c;
-  font-size: 12px;
 }
 
 .details-id {
@@ -654,7 +904,8 @@ function handleResetFilters() {
   }
 
   .page-header,
-  .toolbar-card {
+  .toolbar-card,
+  .table-header {
     align-items: stretch;
     flex-direction: column;
   }
@@ -665,10 +916,28 @@ function handleResetFilters() {
     flex-direction: column;
   }
 
-  .group-select,
   .search-input,
   .toolbar-card :deep(.ant-btn) {
     width: 100%;
+  }
+
+  .risk-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-panel-list {
+    overflow-x: auto;
+  }
+
+  .detail-list {
+    min-width: 720px;
+    max-height: none;
+    flex-direction: row;
+    overflow-y: visible;
+  }
+
+  .detail-item {
+    min-width: 220px;
   }
 
   .form-grid {
