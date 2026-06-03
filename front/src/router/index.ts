@@ -40,6 +40,11 @@ const router = createRouter({
           component: () => import('../views/DatasetManage.vue'),
         },
         {
+          path: 'risk-tags',
+          name: 'RiskTagManage',
+          component: () => import('../views/RiskTagManage.vue'),
+        },
+        {
           path: 'user',
           name: 'UserManage',
           component: () => import('../views/UserManage.vue'),

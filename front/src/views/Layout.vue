@@ -16,6 +16,7 @@ import {
   RobotOutlined,
   SafetyCertificateOutlined,
   SettingOutlined,
+  TagsOutlined,
   TeamOutlined,
   UserOutlined,
 } from '@ant-design/icons-vue'
@@ -188,6 +189,13 @@ function handleMenuClick({ key }: { key: string | number }) {
               <DatabaseOutlined />
             </template>
             <span>数据集管理</span>
+          </a-menu-item>
+
+          <a-menu-item key="/risk-tags">
+            <template #icon>
+              <TagsOutlined />
+            </template>
+            <span>风险标签</span>
           </a-menu-item>
 
           <a-menu-item key="/user">
