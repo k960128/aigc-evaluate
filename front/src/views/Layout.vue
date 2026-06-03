@@ -97,6 +97,21 @@
               <span>模型管理</span>
             </a-menu-item>
           </a-sub-menu>
+
+          <a-menu-item key="/dataset">
+            <template #icon><DatabaseOutlined /></template>
+            <span>数据集管理</span>
+          </a-menu-item>
+
+          <a-menu-item key="/user">
+            <template #icon><TeamOutlined /></template>
+            <span>用户管理</span>
+          </a-menu-item>
+
+          <a-menu-item key="/resource/knowledge">
+            <template #icon><BookOutlined /></template>
+            <span>知识库管理</span>
+          </a-menu-item>
         </a-menu>
 
         <!-- 折叠按钮 -->
@@ -123,6 +138,8 @@ import {
   AppstoreOutlined,
   SettingOutlined,
   RobotOutlined,
+  BookOutlined,
+  DatabaseOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   SafetyCertificateOutlined,
@@ -134,6 +151,7 @@ import {
   DashboardOutlined,
   ExperimentOutlined,
   FileTextOutlined,
+  TeamOutlined,
 } from '@ant-design/icons-vue'
 
 const router = useRouter()
@@ -151,11 +169,14 @@ const openKeys = ref(['resource'])
 // 路由变化时同步选中状态
 watch(() => route.path, (path) => {
   selectedKeys.value = [path]
-  if (path.startsWith('/resource')) {
+  if (path.startsWith('/resource') && path !== '/resource/knowledge') {
     openKeys.value = ['resource']
   }
-  if (path.startsWith('/task') || path.startsWith('/report')) {
+  else if (path.startsWith('/task') || path.startsWith('/report')) {
     openKeys.value = ['evaluation']
+  }
+  else {
+    openKeys.value = []
   }
 }, { immediate: true })
 
@@ -294,12 +315,16 @@ const handleMenuClick = ({ key }: { key: string | number }) => {
   color: #1677ff;
 }
 
-.app-sidebar :deep(.ant-menu-submenu-selected) {
+.app-sidebar :deep(.ant-menu-submenu-title:hover) {
   color: #1677ff;
 }
 
-.app-sidebar :deep(.ant-menu-submenu-title:hover) {
-  color: #1677ff;
+.app-sidebar :deep(.ant-menu-submenu-selected > .ant-menu-submenu-title) {
+  color: #262626;
+}
+
+.app-sidebar :deep(.ant-menu-submenu-selected > .ant-menu-submenu-title .anticon) {
+  color: #595959;
 }
 
 .sidebar-trigger {

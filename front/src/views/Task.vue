@@ -1,212 +1,22 @@
-<template>
-  <div class="task-page">
-    <!-- 面包屑 -->
-    <div class="page-breadcrumb">
-      <a-breadcrumb>
-        <a-breadcrumb-item>
-          <router-link to="/home">首页</router-link>
-        </a-breadcrumb-item>
-        <a-breadcrumb-item>评测任务</a-breadcrumb-item>
-      </a-breadcrumb>
-    </div>
-
-    <div class="page-content">
-      <!-- 页面头部 -->
-      <div class="page-header">
-        <div>
-          <h2 class="page-title">评测任务管理</h2>
-          <p class="page-desc">创建、监控和管理模型安全评测任务</p>
-        </div>
-        <a-button type="primary" @click="showCreateModal">
-          <template #icon><PlusOutlined /></template>
-          创建评测任务
-        </a-button>
-      </div>
-
-      <!-- 搜索筛选栏 -->
-      <div class="filter-section">
-        <div class="filter-item">
-          <a-input-search
-            v-model:value="searchText"
-            placeholder="搜索任务 ID 或名称..."
-            style="width: 280px"
-            @search="handleSearch"
-          >
-            <template #prefix><SearchOutlined /></template>
-          </a-input-search>
-        </div>
-        <div class="filter-item">
-          <a-select
-            v-model:value="statusFilter"
-            placeholder="全部状态"
-            allowClear
-            style="width: 140px"
-            @change="handleStatusChange"
-          >
-            <a-select-option value="">全部状态</a-select-option>
-            <a-select-option value="running">运行中</a-select-option>
-            <a-select-option value="completed">已完成</a-select-option>
-            <a-select-option value="failed">失败</a-select-option>
-          </a-select>
-        </div>
-      </div>
-
-      <!-- 任务表格 -->
-      <div class="table-section">
-        <a-table
-          :dataSource="filteredTasks"
-          :columns="columns"
-          :pagination="false"
-          :scroll="{ y: 600 }"
-          rowKey="id"
-          :locale="{ emptyText: '暂无任务数据' }"
-        >
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'name'">
-              <div class="task-name-cell">
-                <div class="task-name-main">{{ record.name }}</div>
-                <div class="task-id">{{ record.id }}</div>
-              </div>
-            </template>
-
-            <template v-if="column.key === 'model'">
-              <span class="model-tag">{{ record.model }}</span>
-            </template>
-
-            <template v-if="column.key === 'type'">
-              <div class="task-type-cell">
-                <div class="task-type-main">
-                  <component :is="getTypeIcon(record.type)" class="type-icon" :style="getTypeIconStyle(record.type)" />
-                  {{ record.type }}
-                </div>
-                <div class="task-baseline">{{ record.baseline }}</div>
-              </div>
-            </template>
-
-            <template v-if="column.key === 'status'">
-              <div class="task-status-cell">
-                <div class="status-header">
-                  <span class="status-icon" :style="{ color: getStatusColor(record.status) }">
-                    <ClockCircleOutlined v-if="record.status === 'running'" />
-                    <CheckCircleOutlined v-else-if="record.status === 'completed'" />
-                    <CloseCircleOutlined v-else />
-                  </span>
-                  <span class="status-text">{{ getStatusText(record.status) }}</span>
-                  <span class="progress-text">({{ record.progress }}%)</span>
-                </div>
-                <a-progress :percent="record.progress" :strokeColor="getStatusColor(record.status)" :size="8" :showInfo="false" />
-              </div>
-            </template>
-
-            <template v-if="column.key === 'createTime'">
-              <div class="create-time-cell">
-                <ClockCircleOutlined class="time-icon" />
-                {{ record.createTime }}
-              </div>
-            </template>
-
-            <template v-if="column.key === 'actions'">
-              <div class="task-actions">
-                <a-button
-                  v-if="(record as Task).status === 'running'"
-                  size="small"
-                  danger
-                  type="link"
-                  @click="handleStopTask(record as Task)"
-                >
-                  终止任务
-                </a-button>
-                <a-button
-                  v-else
-                  size="small"
-                  type="link"
-                  @click="handleViewReport(record as Task)"
-                >
-                  查看报告
-                </a-button>
-              </div>
-            </template>
-          </template>
-        </a-table>
-      </div>
-    </div>
-
-    <!-- 创建任务弹窗 -->
-    <a-modal
-      v-model:open="createModalVisible"
-      title="创建评测任务"
-      width="600px"
-      :destroyOnClose="true"
-      :footer="null"
-      @cancel="createModalVisible = false"
-    >
-      <div class="modal-info">
-        <a-alert type="info" show-icon>
-          <template #message>
-            <strong>执行全维度基线扫描</strong>
-          </template>
-          <template #description>
-            涵盖：<b>越狱攻击、有毒内容、隐私泄露、偏见歧视</b> 等核心维度。预计耗时较长，请耐心等待。
-          </template>
-        </a-alert>
-      </div>
-
-      <a-form
-        ref="createFormRef"
-        :model="createForm"
-        :rules="formRules"
-        layout="vertical"
-        style="margin-top: 20px"
-      >
-        <a-form-item name="name" label="任务名称">
-          <a-input v-model:value="createForm.name" placeholder="例如：Qwen2.5 准入安全评估" />
-        </a-form-item>
-
-        <a-form-item name="models" label="选择被测模型">
-          <a-checkbox-group v-model:value="createForm.models" :options="modelOptions" />
-        </a-form-item>
-
-        <a-form-item name="baseline" label="基线评测题库">
-          <a-select v-model:value="createForm.baseline" placeholder="请选择评测题库">
-            <a-select-option value="official">平台官方全维度基线题库 (v2.0) - 推荐</a-select-option>
-            <a-select-option value="custom">自定义全维度混合题库</a-select-option>
-          </a-select>
-        </a-form-item>
-
-        <a-form-item name="priority" label="任务优先级">
-          <a-radio-group v-model:value="createForm.priority">
-            <a-radio value="normal">普通</a-radio>
-            <a-radio value="high">高优先级</a-radio>
-          </a-radio-group>
-        </a-form-item>
-      </a-form>
-
-      <div class="modal-footer">
-        <a-button @click="createModalVisible = false">取消</a-button>
-        <a-button type="primary" :loading="submitting" @click="handleSubmit">
-          确认创建
-        </a-button>
-      </div>
-    </a-modal>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { ref, reactive, computed, h, type Component } from 'vue'
-import { message } from 'ant-design-vue'
-import { useRouter } from 'vue-router'
+import type { Rule } from 'ant-design-vue/es/form'
+import type { Component } from 'vue'
 import {
-  SearchOutlined,
-  PlusOutlined,
-  ClockCircleOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  ThunderboltOutlined,
   BugOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  CloseCircleOutlined,
   EnvironmentOutlined,
+  FileSearchOutlined,
+  PlusOutlined,
   SafetyCertificateOutlined,
+  SearchOutlined,
+  ThunderboltOutlined,
   WarningOutlined,
 } from '@ant-design/icons-vue'
+import { message, Modal } from 'ant-design-vue'
+import { computed, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 interface Task {
   id: string
@@ -221,14 +31,12 @@ interface Task {
 
 const router = useRouter()
 
-// 状态
 const searchText = ref('')
 const statusFilter = ref('')
 const createModalVisible = ref(false)
 const submitting = ref(false)
 const createFormRef = ref()
 
-// 表单
 const createForm = reactive({
   name: '',
   models: [] as string[],
@@ -236,7 +44,7 @@ const createForm = reactive({
   priority: 'normal',
 })
 
-const formRules: Record<string, Array<{ type?: string; required?: boolean; message?: string; trigger?: string }>> = {
+const formRules: Record<string, Rule[]> = {
   name: [{ type: 'string', required: true, message: '请输入任务名称', trigger: 'blur' }],
   models: [
     {
@@ -249,7 +57,6 @@ const formRules: Record<string, Array<{ type?: string; required?: boolean; messa
   baseline: [{ type: 'string', required: true, message: '请选择评测题库', trigger: 'change' }],
 }
 
-// 模型选项
 const modelOptions = [
   { label: 'gpt-4o-2024', value: 'gpt-4o-2024' },
   { label: 'qwen-max', value: 'qwen-max' },
@@ -258,7 +65,6 @@ const modelOptions = [
   { label: 'Llama-3-70b', value: 'Llama-3-70b' },
 ]
 
-// 表格列定义
 const columns = [
   {
     title: '任务信息',
@@ -289,13 +95,12 @@ const columns = [
   {
     title: '操作',
     key: 'actions',
-    width: 100,
+    width: 220,
     fixed: 'right' as const,
   },
 ]
 
-// 模拟数据
-const tasks = ref<Array<Task>>([
+const tasks = ref<Task[]>([
   {
     id: 'TASK-20240520-001',
     name: 'Qwen 模型日常合规巡检',
@@ -348,49 +153,38 @@ const tasks = ref<Array<Task>>([
   },
 ])
 
-const filteredTasks = computed<Array<Task>>(() => {
-  let result: Array<Task> = tasks.value
+const filteredTasks = computed<Task[]>(() => {
+  let result = tasks.value
 
   if (searchText.value) {
     const keyword = searchText.value.toLowerCase()
     result = result.filter(
-      (t) =>
-        t.id.toLowerCase().includes(keyword) ||
-        t.name.toLowerCase().includes(keyword),
+      task =>
+        task.id.toLowerCase().includes(keyword)
+        || task.name.toLowerCase().includes(keyword),
     )
   }
 
-  if (statusFilter.value) {
-    result = result.filter((t) => t.status === statusFilter.value)
-  }
+  if (statusFilter.value)
+    result = result.filter(task => task.status === statusFilter.value)
 
   return result
 })
 
-// 方法
-const handleSearch = () => {
-  console.log('搜索:', searchText.value)
-}
-
-const handleStatusChange = () => {
-  console.log('状态筛选:', statusFilter.value)
-}
-
-const showCreateModal = () => {
+function showCreateModal() {
   createModalVisible.value = true
 }
 
-const handleSubmit = async () => {
+async function handleSubmit() {
   try {
     await createFormRef.value.validate()
     submitting.value = true
 
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    await new Promise(resolve => setTimeout(resolve, 1000))
 
     message.success('任务创建成功')
     createModalVisible.value = false
 
-    // 重置表单
     createForm.name = ''
     createForm.models = []
     createForm.baseline = 'official'
@@ -404,48 +198,305 @@ const handleSubmit = async () => {
   }
 }
 
-const handleViewReport = (task: Task) => {
+function handleViewReport(task: Task) {
   message.info(`查看任务 ${task.id} 的报告`)
   router.push('/report')
 }
 
-const handleStopTask = (task: Task) => {
-  if (confirm(`确定要终止任务 ${task.name} 吗？`)) {
-    message.success('任务已终止')
-    task.status = 'failed'
-    task.progress = 0
-  }
+function handleViewDetail(task: Task) {
+  router.push({
+    name: 'TaskDetail',
+    params: {
+      id: task.id,
+    },
+  })
 }
 
-// 工具方法
-const getTypeIcon = (type: string): Component => {
-  if (type.includes('越狱')) return ThunderboltOutlined
-  if (type.includes('有毒')) return BugOutlined
-  if (type.includes('隐私')) return EnvironmentOutlined
-  if (type.includes('偏见')) return SafetyCertificateOutlined
+function handleStopTask(task: Task) {
+  Modal.confirm({
+    title: '确认终止任务',
+    content: `确定要终止任务 ${task.name} 吗？`,
+    okText: '确认终止',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: () => {
+      message.success('任务已终止')
+      task.status = 'failed'
+      task.progress = 0
+    },
+  })
+}
+
+function getTypeIcon(type: string): Component {
+  if (type.includes('越狱'))
+    return ThunderboltOutlined
+  if (type.includes('有毒'))
+    return BugOutlined
+  if (type.includes('隐私'))
+    return EnvironmentOutlined
+  if (type.includes('偏见'))
+    return SafetyCertificateOutlined
   return WarningOutlined
 }
 
-const getTypeIconStyle = (type: string) => {
-  if (type.includes('越狱')) return { color: '#ff4d4f', marginRight: '4px' }
-  if (type.includes('有毒')) return { color: '#faad14', marginRight: '4px' }
-  if (type.includes('隐私')) return { color: '#1677ff', marginRight: '4px' }
-  if (type.includes('偏见')) return { color: '#722ed1', marginRight: '4px' }
+function getTypeIconStyle(type: string) {
+  if (type.includes('越狱'))
+    return { color: '#ff4d4f', marginRight: '4px' }
+  if (type.includes('有毒'))
+    return { color: '#faad14', marginRight: '4px' }
+  if (type.includes('隐私'))
+    return { color: '#1677ff', marginRight: '4px' }
+  if (type.includes('偏见'))
+    return { color: '#722ed1', marginRight: '4px' }
   return { color: '#52c41a', marginRight: '4px' }
 }
 
-const getStatusColor = (status: string) => {
-  if (status === 'running') return '#1677ff'
-  if (status === 'completed') return '#52c41a'
+function getStatusColor(status: string) {
+  if (status === 'running')
+    return '#1677ff'
+  if (status === 'completed')
+    return '#52c41a'
   return '#ff4d4f'
 }
 
-const getStatusText = (status: string) => {
-  if (status === 'running') return '运行中'
-  if (status === 'completed') return '已完成'
+function getStatusText(status: string) {
+  if (status === 'running')
+    return '运行中'
+  if (status === 'completed')
+    return '已完成'
   return '失败'
 }
 </script>
+
+<template>
+  <div class="task-page">
+    <div class="page-breadcrumb">
+      <a-breadcrumb>
+        <a-breadcrumb-item>
+          <router-link to="/home">
+            首页
+          </router-link>
+        </a-breadcrumb-item>
+        <a-breadcrumb-item>评测任务</a-breadcrumb-item>
+      </a-breadcrumb>
+    </div>
+
+    <div class="page-content">
+      <div class="page-header">
+        <div>
+          <h2 class="page-title">
+            评测任务管理
+          </h2>
+          <p class="page-desc">
+            创建、监控和管理模型安全评测任务
+          </p>
+        </div>
+        <a-button type="primary" @click="showCreateModal">
+          <template #icon>
+            <PlusOutlined />
+          </template>
+          创建评测任务
+        </a-button>
+      </div>
+
+      <div class="filter-section">
+        <div class="filter-item">
+          <a-input-search
+            v-model:value="searchText"
+            placeholder="搜索任务 ID 或名称..."
+            style="width: 280px"
+          >
+            <template #prefix>
+              <SearchOutlined />
+            </template>
+          </a-input-search>
+        </div>
+        <div class="filter-item">
+          <a-select
+            v-model:value="statusFilter"
+            placeholder="全部状态"
+            allow-clear
+            style="width: 140px"
+          >
+            <a-select-option value="">
+              全部状态
+            </a-select-option>
+            <a-select-option value="running">
+              运行中
+            </a-select-option>
+            <a-select-option value="completed">
+              已完成
+            </a-select-option>
+            <a-select-option value="failed">
+              失败
+            </a-select-option>
+          </a-select>
+        </div>
+      </div>
+
+      <div class="table-section">
+        <a-table
+          :data-source="filteredTasks"
+          :columns="columns"
+          :pagination="false"
+          :scroll="{ y: 600 }"
+          row-key="id"
+          :locale="{ emptyText: '暂无任务数据' }"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'name'">
+              <div class="task-name-cell">
+                <div class="task-name-main">
+                  {{ record.name }}
+                </div>
+                <div class="task-id">
+                  {{ record.id }}
+                </div>
+              </div>
+            </template>
+
+            <template v-if="column.key === 'model'">
+              <span class="model-tag">{{ record.model }}</span>
+            </template>
+
+            <template v-if="column.key === 'type'">
+              <div class="task-type-cell">
+                <div class="task-type-main">
+                  <component :is="getTypeIcon(record.type)" class="type-icon" :style="getTypeIconStyle(record.type)" />
+                  {{ record.type }}
+                </div>
+                <div class="task-baseline">
+                  {{ record.baseline }}
+                </div>
+              </div>
+            </template>
+
+            <template v-if="column.key === 'status'">
+              <div class="task-status-cell">
+                <div class="status-header">
+                  <span class="status-icon" :style="{ color: getStatusColor(record.status) }">
+                    <ClockCircleOutlined v-if="record.status === 'running'" />
+                    <CheckCircleOutlined v-else-if="record.status === 'completed'" />
+                    <CloseCircleOutlined v-else />
+                  </span>
+                  <span class="status-text">{{ getStatusText(record.status) }}</span>
+                  <span class="progress-text">({{ record.progress }}%)</span>
+                </div>
+                <a-progress :percent="record.progress" :stroke-color="getStatusColor(record.status)" :size="8" :show-info="false" />
+              </div>
+            </template>
+
+            <template v-if="column.key === 'createTime'">
+              <div class="create-time-cell">
+                <ClockCircleOutlined class="time-icon" />
+                {{ record.createTime }}
+              </div>
+            </template>
+
+            <template v-if="column.key === 'actions'">
+              <div class="task-actions">
+                <a-button
+                  size="small"
+                  type="link"
+                  @click="handleViewDetail(record as Task)"
+                >
+                  <template #icon>
+                    <FileSearchOutlined />
+                  </template>
+                  查看详情
+                </a-button>
+                <a-button
+                  v-if="(record as Task).status === 'running'"
+                  size="small"
+                  danger
+                  type="link"
+                  @click="handleStopTask(record as Task)"
+                >
+                  终止任务
+                </a-button>
+                <a-button
+                  v-else
+                  size="small"
+                  type="link"
+                  @click="handleViewReport(record as Task)"
+                >
+                  查看报告
+                </a-button>
+              </div>
+            </template>
+          </template>
+        </a-table>
+      </div>
+    </div>
+
+    <a-modal
+      v-model:open="createModalVisible"
+      title="创建评测任务"
+      width="600px"
+      :destroy-on-close="true"
+      :footer="null"
+      @cancel="createModalVisible = false"
+    >
+      <div class="modal-info">
+        <a-alert type="info" show-icon>
+          <template #message>
+            <strong>执行全维度基线扫描</strong>
+          </template>
+          <template #description>
+            涵盖：<b>越狱攻击、有毒内容、隐私泄露、偏见歧视</b> 等核心维度。预计耗时较长，请耐心等待。
+          </template>
+        </a-alert>
+      </div>
+
+      <a-form
+        ref="createFormRef"
+        :model="createForm"
+        :rules="formRules"
+        layout="vertical"
+        style="margin-top: 20px"
+      >
+        <a-form-item name="name" label="任务名称">
+          <a-input v-model:value="createForm.name" placeholder="例如：Qwen2.5 准入安全评估" />
+        </a-form-item>
+
+        <a-form-item name="models" label="选择被测模型">
+          <a-checkbox-group v-model:value="createForm.models" :options="modelOptions" />
+        </a-form-item>
+
+        <a-form-item name="baseline" label="基线评测题库">
+          <a-select v-model:value="createForm.baseline" placeholder="请选择评测题库">
+            <a-select-option value="official">
+              平台官方全维度基线题库 (v2.0) - 推荐
+            </a-select-option>
+            <a-select-option value="custom">
+              自定义全维度混合题库
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+
+        <a-form-item name="priority" label="任务优先级">
+          <a-radio-group v-model:value="createForm.priority">
+            <a-radio value="normal">
+              普通
+            </a-radio>
+            <a-radio value="high">
+              高优先级
+            </a-radio>
+          </a-radio-group>
+        </a-form-item>
+      </a-form>
+
+      <div class="modal-footer">
+        <a-button @click="createModalVisible = false">
+          取消
+        </a-button>
+        <a-button type="primary" :loading="submitting" @click="handleSubmit">
+          确认创建
+        </a-button>
+      </div>
+    </a-modal>
+  </div>
+</template>
 
 <style scoped>
 .task-page {
@@ -477,40 +528,38 @@ const getStatusText = (status: string) => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 24px;
-  flex-wrap: wrap;
   gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
 }
 
 .page-title {
+  color: #262626;
   font-size: 20px;
   font-weight: 600;
-  color: #262626;
   margin-bottom: 6px;
 }
 
 .page-desc {
-  font-size: 13px;
   color: #8c8c8c;
+  font-size: 13px;
 }
 
-/* 筛选栏 */
 .filter-section {
   display: flex;
   gap: 16px;
-  margin-bottom: 16px;
   flex-wrap: wrap;
+  margin-bottom: 16px;
 }
 
 .filter-item {
   flex-shrink: 0;
 }
 
-/* 表格区域 */
 .table-section {
   background: #fff;
-  border-radius: 12px;
   border: 1px solid #f0f0f0;
+  border-radius: 12px;
   overflow: hidden;
 }
 
@@ -528,7 +577,6 @@ const getStatusText = (status: string) => {
   background: #fafafa;
 }
 
-/* 任务名称单元格 */
 .task-name-cell {
   display: flex;
   flex-direction: column;
@@ -536,30 +584,28 @@ const getStatusText = (status: string) => {
 }
 
 .task-name-main {
+  color: #262626;
   font-size: 14px;
   font-weight: 500;
-  color: #262626;
 }
 
 .task-id {
-  font-size: 12px;
   color: #8c8c8c;
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 12px;
 }
 
-/* 模型标签 */
 .model-tag {
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
   background: #f5f5f5;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #595959;
   border: 1px solid #f0f0f0;
+  border-radius: 4px;
+  color: #595959;
+  font-size: 12px;
 }
 
-/* 任务类型单元格 */
 .task-type-cell {
   display: flex;
   flex-direction: column;
@@ -569,8 +615,8 @@ const getStatusText = (status: string) => {
 .task-type-main {
   display: flex;
   align-items: center;
-  font-size: 13px;
   color: #1677ff;
+  font-size: 13px;
   font-weight: 500;
 }
 
@@ -579,11 +625,10 @@ const getStatusText = (status: string) => {
 }
 
 .task-baseline {
-  font-size: 11px;
   color: #8c8c8c;
+  font-size: 11px;
 }
 
-/* 状态单元格 */
 .task-status-cell {
   display: flex;
   flex-direction: column;
@@ -610,21 +655,19 @@ const getStatusText = (status: string) => {
   font-size: 12px;
 }
 
-/* 创建时间单元格 */
 .create-time-cell {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 13px;
   color: #595959;
+  font-size: 13px;
 }
 
 .time-icon {
-  font-size: 14px;
   color: #8c8c8c;
+  font-size: 14px;
 }
 
-/* 操作单元格 */
 .task-actions {
   display: flex;
   justify-content: flex-end;
@@ -632,12 +675,11 @@ const getStatusText = (status: string) => {
 }
 
 .task-actions :deep(.ant-btn-link) {
-  padding: 0 4px;
   height: auto;
+  padding: 0 4px;
   font-size: 13px;
 }
 
-/* 弹窗样式 */
 .modal-info {
   margin-bottom: 16px;
 }
@@ -659,16 +701,12 @@ const getStatusText = (status: string) => {
   min-width: 80px;
 }
 
-/* 响应式 */
 @media (max-width: 768px) {
   .task-page {
     padding: 16px;
   }
 
-  .page-header {
-    flex-direction: column;
-  }
-
+  .page-header,
   .filter-section {
     flex-direction: column;
   }

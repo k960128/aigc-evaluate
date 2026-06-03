@@ -9,27 +9,29 @@ import com.kant.llm.eval.common.enums.ModelManufacturerEnum;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.zhipuai.ZhiPuAiChatModel;
-import org.springframework.ai.zhipuai.ZhiPuAiChatOptions;
-import org.springframework.ai.zhipuai.api.ZhiPuAiApi;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.api.OpenAiApi;
 
 @Slf4j
-public class GlmModelClientStrategy implements ModelClientStrategy {
-
+public class GptModelClientStrategy implements ModelClientStrategy {
     @Override
     public ModelResponse call(ModelRequest modelRequest) {
         long startTime = System.currentTimeMillis();
-        ChatModel chatModel = new ZhiPuAiChatModel(ZhiPuAiApi.builder()
-                .apiKey(modelRequest.getModelInfo().getApiKey())
-                .build(),
-                ZhiPuAiChatOptions.builder()
+        ChatModel chatModel = OpenAiChatModel.builder()
+                .openAiApi(OpenAiApi.builder()
+                        .baseUrl(modelRequest.getModelInfo().getBaseUrl())
+                        .apiKey(modelRequest.getModelInfo().getApiKey())
+                        .build())
+                .defaultOptions(OpenAiChatOptions.builder()
                         .model(modelRequest.getModelInfo().getModel())
-                        .build());
+                        .build())
+                .build();
         ChatClient client = ChatClient.builder(chatModel).build();
         ChatClient.ChatClientRequestSpec requestSpec = client.prompt(modelRequest.getInputText());
-        log.info("GlmModelClientStrategy requestSpec: {}", requestSpec);
+        log.error("GptModelClientStrategy requestSpec: {}", requestSpec);
         ChatClient.CallResponseSpec call = requestSpec.call();
-        log.info("GlmModelClientStrategy call: {}", call);
+        log.error("GptModelClientStrategy call: {}", call);
         long endTime = System.currentTimeMillis();
         return ModelResponse.builder()
                 .modelId(modelRequest.getModelInfo().getModelId())
@@ -41,25 +43,26 @@ public class GlmModelClientStrategy implements ModelClientStrategy {
 
     @Override
     public ModelManufacturerEnum getManufacturer() {
-        return ModelManufacturerEnum.GLM;
+        return ModelManufacturerEnum.OPENAI;
     }
 
     @Override
     public ModelConnectionResponse connection(ModelRequest modelRequest) {
         long startTime = System.currentTimeMillis();
-        ChatModel chatModel = new ZhiPuAiChatModel(ZhiPuAiApi.builder()
-                .apiKey(modelRequest.getModelInfo().getApiKey())
-                .baseUrl(modelRequest.getModelInfo().getBaseUrl())
-                .build(),
-                ZhiPuAiChatOptions.builder()
+        ChatModel chatModel = OpenAiChatModel.builder()
+                .openAiApi(OpenAiApi.builder()
+                        .baseUrl(modelRequest.getModelInfo().getBaseUrl())
+                        .apiKey(modelRequest.getModelInfo().getApiKey())
+                        .build())
+                .defaultOptions(OpenAiChatOptions.builder()
                         .model(modelRequest.getModelInfo().getModel())
-                        .build());
-
+                        .build())
+                .build();
         ChatClient client = ChatClient.builder(chatModel).build();
         ChatClient.ChatClientRequestSpec requestSpec = client.prompt("只返回1,不要返回其他任何内容!");
-        log.info("GlmModelClientStrategy requestSpec: {}", requestSpec);
+        log.error("GptModelClientStrategy requestSpec: {}", requestSpec);
         ChatClient.CallResponseSpec call = requestSpec.call();
-        log.info("GlmModelClientStrategy call: {}", call);
+        log.error("GptModelClientStrategy call: {}", call);
         long endTime = System.currentTimeMillis();
         return ModelConnectionResponse.builder()
                 .result(ObjectUtil.equal(call.content(), "1"))

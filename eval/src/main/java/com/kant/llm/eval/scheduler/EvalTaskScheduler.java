@@ -45,7 +45,7 @@ public class EvalTaskScheduler {
     /**
      * 定时任务 每秒执行一次任务
      */
-    @Scheduled(fixedDelay = 1000)
+//    @Scheduled(fixedDelay = 1000)
     public void schedule() {
         List<EvalTaskDetailDO> evalTaskDetailDOS =
                 evalTaskService.selectPendingTasks();

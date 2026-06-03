@@ -6,7 +6,6 @@ import com.kant.llm.eval.common.enums.TaskStatusEnums;
 import com.kant.llm.eval.dao.entity.DataSetSampleDO;
 import com.kant.llm.eval.dao.entity.EvalTaskDO;
 import com.kant.llm.eval.dao.entity.EvalTaskDetailDO;
-import com.kant.llm.eval.dao.entity.ModelInfoDO;
 import com.kant.llm.eval.dao.mapper.DataSetSampleMapper;
 import com.kant.llm.eval.dao.mapper.EvalTaskDetailMapper;
 import com.kant.llm.eval.dao.mapper.EvalTaskMapper;

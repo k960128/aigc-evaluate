@@ -10,5 +10,6 @@ public enum ModelManufacturerEnum {
     TELE,
     SPARK,
     GLM,
-    KIMI
+    KIMI,
+    GPT
 }

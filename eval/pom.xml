@@ -33,6 +33,12 @@
         </dependency>
 
         <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
         </dependency>
@@ -111,10 +117,10 @@
         </dependency>
 
         <!-- 向量 -->
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-vector-store-elasticsearch</artifactId>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>org.springframework.ai</groupId>-->
+<!--            <artifactId>spring-ai-starter-vector-store-elasticsearch</artifactId>-->
+<!--        </dependency>-->
 
         <!-- AC 自动机 - hankcs/AhoCorasickDoubleArrayTrie 高性能实现 -->
         <dependency>

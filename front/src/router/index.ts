@@ -25,9 +25,24 @@ const router = createRouter({
           component: () => import('../views/Task.vue'),
         },
         {
+          path: 'task/:id',
+          name: 'TaskDetail',
+          component: () => import('../views/TaskDetail.vue'),
+        },
+        {
           path: 'report',
           name: 'Report',
           component: () => import('../views/Report.vue'),
+        },
+        {
+          path: 'dataset',
+          name: 'DatasetManage',
+          component: () => import('../views/DatasetManage.vue'),
+        },
+        {
+          path: 'user',
+          name: 'UserManage',
+          component: () => import('../views/UserManage.vue'),
         },
         {
           path: 'resource/vendor',
@@ -38,6 +53,11 @@ const router = createRouter({
           path: 'resource/model',
           name: 'ModelManage',
           component: () => import('../views/resource/ModelManage.vue'),
+        },
+        {
+          path: 'resource/knowledge',
+          name: 'KnowledgeManage',
+          component: () => import('../views/resource/KnowledgeManage.vue'),
         },
       ],
     },
