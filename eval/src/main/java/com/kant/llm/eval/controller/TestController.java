@@ -22,13 +22,9 @@ public class TestController {
     private Map<ModelManufacturerEnum, ModelInfo> modelInfoMap;
 
     private final ModelClientStrategyFactory modelClientStrategyFactory;
-    private final AcAutomatonService acAutomatonService;
 
-    public TestController(ModelClientStrategyFactory modelClientStrategyFactory,
-                          AcAutomatonService acAutomatonService,
-                          AcAutomatonService acAutomatonService1) {
+    public TestController(ModelClientStrategyFactory modelClientStrategyFactory) {
         this.modelClientStrategyFactory = modelClientStrategyFactory;
-        this.acAutomatonService = acAutomatonService1;
         this.modelInfoMap = new ConcurrentHashMap<>() {{
             put(ModelManufacturerEnum.DEEPSEEK, ModelInfo.builder()
                     .apiKey(DEEP_SEEK)
@@ -67,25 +63,5 @@ public class TestController {
         modelInfo.setManufacturerType(ModelManufacturerEnum.DEEPSEEK);
         ModelClientStrategy strategy = modelClientStrategyFactory.getStrategy(modelInfo);
         return Results.success(strategy.getManufacturer().name());
-    }
-
-    /**
-     * 测试模型调用
-     * @return 模型响应内容
-     */
-    @GetMapping("/test")
-    public Result<String> test(String keyWord) {
-//        ModelInfo modelInfo = modelInfoMap.get(ModelManufacturerEnum.GLM);
-//        ModelRequest request = ModelRequest.builder()
-//                .modelInfo(modelInfo)
-//                .inputText("你是什么大模型?")
-//                .build();
-//        ModelClientStrategy strategy = modelClientStrategyFactory.getStrategy(modelInfo);
-//        ModelResponse call = strategy.call(request);
-//        return Results.success(call.getRespContent());
-
-
-        String match = acAutomatonService.match(keyWord);
-        return Results.success(match);
     }
 }
