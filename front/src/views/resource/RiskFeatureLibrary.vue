@@ -25,6 +25,7 @@ import {
   deleteRiskVocabulary,
   getRiskVocabularyPage,
   syncRiskVocabularyToRedis,
+  updateRiskVocabulary,
 } from '../../api/risk-vocabulary'
 
 interface RiskDetailDisplay extends RiskDetail {
@@ -132,13 +133,6 @@ function sortRiskDetails(items: RiskDetail[]) {
 
       return firstOrder - secondOrder || first.id - second.id
     })
-}
-
-function getCurrentTime() {
-  const now = new Date()
-  const pad = (value: number) => String(value).padStart(2, '0')
-
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`
 }
 
 function resetVocabularyPage() {
@@ -289,25 +283,23 @@ async function handleModalOk() {
 
     if (editingRecord.value) {
       const current = editingRecord.value
-      const coreChanged = current.keyword !== formState.keyword
-        || current.riskDetailsId !== formState.riskDetailsId
-        || current.riskLevel !== formState.riskLevel
-        || current.matchType !== formState.matchType
-
-      const updatedRecord: RiskVocabularyKeyword = {
-        ...current,
+      const { data: res } = await updateRiskVocabulary({
+        id: current.id,
+        groupId: current.groupId,
         keyword: formState.keyword,
         riskDetailsId: formState.riskDetailsId,
         riskLevel: formState.riskLevel,
         matchType: formState.matchType,
-        syncStatus: coreChanged ? 0 : formState.syncStatus,
-        updateTime: getCurrentTime(),
+        syncStatus: formState.syncStatus,
+      })
+
+      if (!isSuccessResponse(res) || !res.data) {
+        throw new Error(res.message || '编辑特征词失败')
       }
 
-      keywords.value = keywords.value.map(item => item.id === current.id ? updatedRecord : item)
-      editingRecord.value = updatedRecord
       modalVisible.value = false
-      message.warning('后端暂未提供编辑接口，本次修改仅前端临时生效')
+      message.success('特征词编辑成功')
+      await fetchVocabularyPage()
       return
     }
 
@@ -319,7 +311,7 @@ async function handleModalOk() {
       matchType: formState.matchType,
     })
 
-    if (!isSuccessResponse(res) || res.data !== true) {
+    if (!isSuccessResponse(res) || !res.data) {
       throw new Error(res.message || '新增特征词失败')
     }
 
@@ -351,7 +343,7 @@ function handleDelete(record: RiskVocabularyKeyword) {
         const shouldMovePrevPage = keywords.value.length === 1 && currentPage.value > 1
         const { data: res } = await deleteRiskVocabulary(record.id)
 
-        if (!isSuccessResponse(res) || res.data !== true) {
+        if (!isSuccessResponse(res)) {
           throw new Error(res.message || '删除特征词失败')
         }
 

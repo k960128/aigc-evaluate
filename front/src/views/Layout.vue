@@ -24,6 +24,8 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '../stores/app'
 
+const MOCK_AUTH_KEY = 'mock-authenticated'
+
 const router = useRouter()
 const route = useRoute()
 const appStore = useAppStore()
@@ -60,6 +62,15 @@ function toggleSidebar() {
 function handleMenuClick({ key }: { key: string | number }) {
   router.push(String(key))
 }
+
+function handleUserMenuClick({ key }: { key: string | number }) {
+  if (key !== 'logout') {
+    return
+  }
+
+  localStorage.removeItem(MOCK_AUTH_KEY)
+  router.push('/login')
+}
 </script>
 
 <template>
@@ -94,7 +105,7 @@ function handleMenuClick({ key }: { key: string | number }) {
             <DownOutlined class="user-arrow" />
           </div>
           <template #overlay>
-            <a-menu>
+            <a-menu @click="handleUserMenuClick">
               <a-menu-item key="profile">
                 <UserOutlined />
                 <span style="margin-left: 8px">个人设置</span>
