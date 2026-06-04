@@ -23,6 +23,7 @@
         <dashscope.version>2.13.0</dashscope.version>
         <commons-lang3.version>3.12.0</commons-lang3.version>
         <commons-compress.version>1.26.1</commons-compress.version>
+        <sa-token.version>1.45.0</sa-token.version>
     </properties>
 
     <dependencies>
@@ -158,6 +159,20 @@
             <groupId>com.hankcs</groupId>
             <artifactId>aho-corasick-double-array-trie</artifactId>
             <version>1.2.3</version>
+        </dependency>
+
+
+        <!-- 认证鉴权 -sa-token -->
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-spring-boot3-starter</artifactId>
+            <version>${sa-token.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-redis-template</artifactId>
+            <version>${sa-token.version}</version>
         </dependency>
     </dependencies>
 

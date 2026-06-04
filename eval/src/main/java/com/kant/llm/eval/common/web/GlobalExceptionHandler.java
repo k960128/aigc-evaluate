@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.StrUtil;
 import com.kant.llm.eval.common.convention.Result;
 import com.kant.llm.eval.common.errorcode.BaseErrorCode;
+import com.kant.llm.eval.common.exception.AbstractException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -71,6 +72,12 @@ public class GlobalExceptionHandler {
 //        log.error("[{}] {} ", request.getMethod(), getUrl(request), throwable);
 //        return Results.failure();
 //    }
+
+    @ExceptionHandler(value = AbstractException.class)
+    public Result<Void> abstractExceptionHandler(HttpServletRequest request, AbstractException ex) {
+        log.warn("[{}] {} [ex] {}", request.getMethod(), getUrl(request), ex.getErrorMessage());
+        return Results.failure(ex);
+    }
 
     private String getUrl(HttpServletRequest request) {
         if (StrUtil.isBlank(request.getQueryString())) {
