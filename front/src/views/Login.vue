@@ -4,8 +4,8 @@ import { message } from 'ant-design-vue'
 import type { Rule } from 'ant-design-vue/es/form'
 import { reactive, shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
-
-const MOCK_AUTH_KEY = 'mock-authenticated'
+import { login } from '../api/auth'
+import { setAuthToken } from '../utils/auth'
 
 const router = useRouter()
 const loading = shallowRef(false)
@@ -23,7 +23,17 @@ async function handleLogin() {
   loading.value = true
 
   try {
-    localStorage.setItem(MOCK_AUTH_KEY, 'true')
+    const { data: res } = await login({
+      username: formState.username,
+      password: formState.password,
+    })
+    const token = res.data?.tokenValue
+    if (!token) {
+      message.error('登录响应缺少 token')
+      return
+    }
+
+    setAuthToken(token)
     message.success('登录成功')
     await router.push('/home')
   }

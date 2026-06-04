@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { isAuthenticated } from '../utils/auth'
 import Layout from '../views/Layout.vue'
-
-const MOCK_AUTH_KEY = 'mock-authenticated'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -87,13 +86,13 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-  const isAuthenticated = localStorage.getItem(MOCK_AUTH_KEY) === 'true'
+  const hasToken = isAuthenticated()
 
   if (to.path === '/login') {
-    return isAuthenticated ? '/home' : true
+    return hasToken ? '/home' : true
   }
 
-  if (!isAuthenticated) {
+  if (!hasToken) {
     return '/login'
   }
 

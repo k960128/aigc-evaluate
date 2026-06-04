@@ -22,9 +22,9 @@ import {
 } from '@ant-design/icons-vue'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { logout } from '../api/auth'
 import { useAppStore } from '../stores/app'
-
-const MOCK_AUTH_KEY = 'mock-authenticated'
+import { clearAuthToken } from '../utils/auth'
 
 const router = useRouter()
 const route = useRoute()
@@ -63,13 +63,18 @@ function handleMenuClick({ key }: { key: string | number }) {
   router.push(String(key))
 }
 
-function handleUserMenuClick({ key }: { key: string | number }) {
+async function handleUserMenuClick({ key }: { key: string | number }) {
   if (key !== 'logout') {
     return
   }
 
-  localStorage.removeItem(MOCK_AUTH_KEY)
-  router.push('/login')
+  try {
+    await logout()
+  }
+  finally {
+    clearAuthToken()
+    await router.push('/login')
+  }
 }
 </script>
 
