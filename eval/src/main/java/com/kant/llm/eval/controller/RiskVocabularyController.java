@@ -43,77 +43,6 @@ public class RiskVocabularyController {
     private final RiskVocabularyKeywordService keywordService;
 
     /**
-     * 创建风险词库分组。
-     *
-     * @param request 分组创建请求，包含分组名称、描述和创建人
-     * @return 创建成功后的分组信息
-     */
-    @PostMapping("/group/create")
-    public Result<RiskVocabularyGroupVO> createGroup(@RequestBody CreateRiskVocabularyGroupRequest request) {
-        RiskVocabularyGroupDO entity = new RiskVocabularyGroupDO();
-        BeanUtils.copyProperties(request, entity);
-        groupService.save(entity);
-        return Results.success(convertToGroupVO(entity));
-    }
-
-    /**
-     * 更新风险词库分组。
-     *
-     * @param request 分组更新请求，包含分组 ID 以及需要更新的字段
-     * @return 更新后的分组信息；分组不存在时返回空数据
-     */
-    @PutMapping("/group/update")
-    public Result<RiskVocabularyGroupVO> updateGroup(@RequestBody UpdateRiskVocabularyGroupRequest request) {
-        RiskVocabularyGroupDO entity = groupService.getById(request.getId());
-        if (entity == null) {
-            return Results.success(null);
-        }
-        BeanUtils.copyProperties(request, entity);
-        groupService.updateById(entity);
-        return Results.success(convertToGroupVO(entity));
-    }
-
-    /**
-     * 删除风险词库分组。
-     *
-     * @param id 分组 ID
-     * @return 无返回数据
-     */
-    @DeleteMapping("/group/delete")
-    public Result<Void> deleteGroup(@RequestParam("id") Long id) {
-        groupService.removeById(id);
-        return Results.success();
-    }
-
-    /**
-     * 根据 ID 查询风险词库分组详情。
-     *
-     * @param id 分组 ID
-     * @return 分组详情；分组不存在时返回空数据
-     */
-    @GetMapping("/group/get")
-    public Result<RiskVocabularyGroupVO> getGroupById(@RequestParam("id") Long id) {
-        RiskVocabularyGroupDO entity = groupService.getById(id);
-        if (entity == null) {
-            return Results.success(null);
-        }
-        return Results.success(convertToGroupVO(entity));
-    }
-
-    /**
-     * 查询全部风险词库分组。
-     *
-     * @return 分组列表
-     */
-    @GetMapping("/group/list")
-    public Result<List<RiskVocabularyGroupVO>> listGroup() {
-        List<RiskVocabularyGroupVO> voList = groupService.list().stream()
-                .map(this::convertToGroupVO)
-                .collect(Collectors.toList());
-        return Results.success(voList);
-    }
-
-    /**
      * 创建风险词库特征词。
      *
      * <p>当请求未传入同步状态时，默认设置为 0，表示待同步。</p>
@@ -250,24 +179,6 @@ public class RiskVocabularyController {
         keywordService.updateBatchById(pendingList);
 
         return Results.success("成功推送 " + pendingList.size() + " 条特征词，AC自动机将在一分钟内完成热更");
-    }
-
-    /**
-     * 将风险词库分组实体转换为接口响应 VO。
-     *
-     * @param entity 风险词库分组实体
-     * @return 风险词库分组响应对象
-     */
-    private RiskVocabularyGroupVO convertToGroupVO(RiskVocabularyGroupDO entity) {
-        return RiskVocabularyGroupVO.builder()
-                .id(entity.getId())
-                .name(entity.getName())
-                .description(entity.getDescription())
-                .creator(entity.getCreator())
-                .updater(entity.getUpdater())
-                .createTime(entity.getCreateTime())
-                .updateTime(entity.getUpdateTime())
-                .build();
     }
 
     /**
