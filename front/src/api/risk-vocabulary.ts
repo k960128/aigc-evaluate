@@ -24,7 +24,11 @@ export interface RiskVocabularyPageParams {
   current?: number
   size?: number
   riskDetailsId?: number
+  groupId?: number
   keyword?: string
+  riskLevel?: RiskVocabularyRiskLevel
+  matchType?: RiskVocabularyMatchType
+  syncStatus?: RiskVocabularySyncStatus
 }
 
 export interface CreateRiskVocabularyReq {
@@ -36,18 +40,27 @@ export interface CreateRiskVocabularyReq {
   syncStatus?: RiskVocabularySyncStatus
 }
 
+export interface UpdateRiskVocabularyReq extends CreateRiskVocabularyReq {
+  id: number
+  updater?: string
+}
+
 export function getRiskVocabularyPage(params?: RiskVocabularyPageParams) {
-  return request.get<Result<PageResult<RiskVocabularyKeyword>>>('/risk/vocabularies/page', { params })
+  return request.post<Result<PageResult<RiskVocabularyKeyword>>>('/risk/vocabularies/keyword/page', params)
 }
 
 export function createRiskVocabulary(data: CreateRiskVocabularyReq) {
-  return request.post<Result<boolean>>('/risk/vocabularies', data)
+  return request.post<Result<RiskVocabularyKeyword>>('/risk/vocabularies/keyword/create', data)
+}
+
+export function updateRiskVocabulary(data: UpdateRiskVocabularyReq) {
+  return request.put<Result<RiskVocabularyKeyword | null>>('/risk/vocabularies/keyword/update', data)
 }
 
 export function syncRiskVocabularyToRedis() {
-  return request.post<Result<string>>('/risk/vocabularies/sync-to-redis')
+  return request.post<Result<string>>('/risk/vocabularies/keyword/sync-to-redis')
 }
 
 export function deleteRiskVocabulary(id: number) {
-  return request.delete<Result<boolean>>(`/risk/vocabularies/${id}`)
+  return request.delete<Result<null>>('/risk/vocabularies/keyword/delete', { params: { id } })
 }
