@@ -37,6 +37,8 @@ public class L1InterceptionEngine {
 
     private static final int RISK_LEVEL_WARNING = 2;
 
+    private static final int SYNC_STATUS_SYNCED = 1;
+
     private final RiskVocabularyKeywordService riskVocabularyKeywordService;
 
     /**
@@ -56,13 +58,14 @@ public class L1InterceptionEngine {
     }
 
     /**
-     * 将全量有效风险词库重载到一棵新的 Trie 中。
+     * 将全量有效且已同步的风险词库重载到一棵新的 Trie 中。
      *
      * <p>该方法不会加锁阻塞评测线程。新 Trie 构建期间，已有请求继续使用旧 Trie
      * 快照；新 Trie 准备完成后，通过一次 volatile 写入发布给后续请求。</p>
      */
     public void reloadTrie() {
         List<RiskVocabularyKeywordDO> keywords = riskVocabularyKeywordService.lambdaQuery()
+                .eq(RiskVocabularyKeywordDO::getSyncStatus, SYNC_STATUS_SYNCED)
                 .eq(RiskVocabularyKeywordDO::getDeleted, false)
                 .list();
 
@@ -98,7 +101,7 @@ public class L1InterceptionEngine {
             return context;
         }
 
-        trie.parseText(prompt, (AhoCorasickDoubleArrayTrie.IHit<RiskTag>) (begin, end, riskTag) -> {
+        trie.parseText(prompt, (begin, end, riskTag) -> {
             if (riskTag == null || riskTag.getRiskLevel() == null) {
                 return;
             }
