@@ -9,7 +9,6 @@ import com.kant.llm.eval.dto.req.CreateRiskVocabularyKeywordRequest;
 import com.kant.llm.eval.dto.req.RiskVocabularyKeywordPageRequest;
 import com.kant.llm.eval.dto.req.UpdateRiskVocabularyKeywordRequest;
 import com.kant.llm.eval.dto.resp.RiskVocabularyKeywordVO;
-import com.kant.llm.eval.service.RiskVocabularyGroupService;
 import com.kant.llm.eval.service.RiskVocabularyKeywordService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
@@ -35,7 +34,6 @@ import java.util.stream.Collectors;
 @RequestMapping("/risk/vocabularies")
 @RequiredArgsConstructor
 public class RiskVocabularyController {
-    private final RiskVocabularyGroupService groupService;
     private final RiskVocabularyKeywordService keywordService;
 
     /**
