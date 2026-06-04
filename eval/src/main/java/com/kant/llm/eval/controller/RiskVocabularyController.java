@@ -184,7 +184,6 @@ public class RiskVocabularyController {
     private RiskVocabularyKeywordVO convertToKeywordVO(RiskVocabularyKeywordDO entity) {
         return RiskVocabularyKeywordVO.builder()
                 .id(entity.getId())
-                .groupId(entity.getGroupId())
                 .riskDetailsId(entity.getRiskDetailsId())
                 .keyword(entity.getKeyword())
                 .riskLevel(entity.getRiskLevel())

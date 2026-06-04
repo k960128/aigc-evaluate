@@ -15,9 +15,6 @@ public class RiskVocabularyKeywordVO {
     /** 主键 ID */
     private Long id;
 
-    /** 所属分组 ID */
-    private Long groupId;
-
     /** 所属风险明细 ID */
     private Long riskDetailsId;
 
