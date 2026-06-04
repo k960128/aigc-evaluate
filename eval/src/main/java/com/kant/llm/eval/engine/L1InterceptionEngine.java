@@ -77,7 +77,7 @@ public class L1InterceptionEngine {
         }
 
         this.activeTrie = buildTrie(dictionary);
-        log.info("L1 interception trie reloaded, keywordSize={}", dictionary.size());
+        log.info("AC自动机同步完成, keywordSize={}", dictionary.size());
     }
 
     /**
