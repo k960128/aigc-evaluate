@@ -42,7 +42,6 @@ interface FeatureFormState {
 }
 
 const columns = [
-  { title: 'ID', key: 'id', width: 110, fixed: 'left' as const },
   { title: '特征词', key: 'keyword', width: 240 },
   { title: '风险等级', key: 'riskLevel', width: 150, align: 'center' as const },
   { title: '匹配模式', key: 'matchType', width: 150, align: 'center' as const },
