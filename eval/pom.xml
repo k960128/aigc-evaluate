@@ -137,6 +137,12 @@
             <version>${fastjson.version}</version>
         </dependency>
 
+        <!-- Jackson Java 8 时间类型支持 -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-lang3</artifactId>

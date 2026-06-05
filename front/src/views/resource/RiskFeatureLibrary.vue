@@ -73,7 +73,7 @@ const formState = reactive<FeatureFormState>({
   riskDetailsId: undefined,
   riskLevel: 1,
   matchType: 1,
-  syncStatus: 0,
+  syncStatus: false,
 })
 
 const formRules: Record<string, Rule[]> = {
@@ -96,8 +96,8 @@ const selectedRiskDetailMeta = computed(() => {
 })
 
 const currentPageItemCount = computed(() => keywords.value.length)
-const pendingSyncCount = computed(() => keywords.value.filter(item => item.syncStatus === 0).length)
-const syncedCount = computed(() => keywords.value.filter(item => item.syncStatus === 1).length)
+const pendingSyncCount = computed(() => keywords.value.filter(item => item.syncStatus === false).length)
+const syncedCount = computed(() => keywords.value.filter(item => item.syncStatus === true).length)
 
 const displayRiskDetails = computed<RiskDetailDisplay[]>(() =>
   riskDetails.value.map((detail) => {
@@ -242,7 +242,7 @@ function resetForm() {
     riskDetailsId: selectedRiskDetailId.value || riskDetails.value[0]?.id,
     riskLevel: 1,
     matchType: 1,
-    syncStatus: 0,
+    syncStatus: false,
   })
 }
 
@@ -541,7 +541,7 @@ onMounted(fetchRiskDetails)
               </template>
 
               <template v-if="column.key === 'syncStatus'">
-                <span v-if="record.syncStatus === 0" class="sync-status pending">
+                <span v-if="record.syncStatus === false" class="sync-status pending">
                   <WarningOutlined />
                   待同步
                 </span>
@@ -638,10 +638,10 @@ onMounted(fetchRiskDetails)
 
         <a-form-item v-if="editingRecord" label="同步状态">
           <a-select v-model:value="formState.syncStatus">
-            <a-select-option :value="0">
+            <a-select-option :value="false">
               待同步
             </a-select-option>
-            <a-select-option :value="1">
+            <a-select-option :value="true">
               已同步
             </a-select-option>
           </a-select>

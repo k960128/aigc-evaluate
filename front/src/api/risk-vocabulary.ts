@@ -12,7 +12,7 @@ export interface RiskVocabularyKeyword {
   keyword: string
   riskLevel: RiskVocabularyRiskLevel
   matchType: RiskVocabularyMatchType
-  syncStatus: RiskVocabularySyncStatus
+  syncStatus: boolean
   creator?: string
   updater?: string
   createTime?: string
@@ -28,7 +28,7 @@ export interface RiskVocabularyPageParams {
   keyword?: string
   riskLevel?: RiskVocabularyRiskLevel
   matchType?: RiskVocabularyMatchType
-  syncStatus?: RiskVocabularySyncStatus
+  syncStatus?: boolean
 }
 
 export interface CreateRiskVocabularyReq {

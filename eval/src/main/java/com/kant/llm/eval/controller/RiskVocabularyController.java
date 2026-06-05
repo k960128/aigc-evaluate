@@ -48,7 +48,7 @@ public class RiskVocabularyController {
     public Result<RiskVocabularyKeywordVO> createKeyword(@RequestBody CreateRiskVocabularyKeywordRequest request) {
         RiskVocabularyKeywordDO entity = new RiskVocabularyKeywordDO();
         BeanUtils.copyProperties(request, entity);
-        entity.setSyncStatus(request.getSyncStatus() != null && request.getSyncStatus());
+        entity.setSyncStatus(false);
         keywordService.save(entity);
         return Results.success(convertToKeywordVO(entity));
     }
