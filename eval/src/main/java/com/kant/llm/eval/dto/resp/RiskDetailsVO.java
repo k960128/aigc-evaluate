@@ -1,5 +1,7 @@
 package com.kant.llm.eval.dto.resp;
 
+import com.baomidou.mybatisplus.annotation.*;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import lombok.AllArgsConstructor;
@@ -13,21 +15,21 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class RiskVocabularyGroupVO {
-    /** 主键 ID */
+public class RiskDetailsVO {
+    /** 主键ID */
     private Long id;
 
-    /** 分组名称 */
-    private String name;
+    /** 关联的风险大类ID (对应 risk_category.id) */
+    private Long categoryId;
 
-    /** 分组描述 */
-    private String description;
+    /** 具体风险项名称 (如：煽动颠覆/分裂国家) */
+    private String detailsName;
 
-    /** 创建人 */
-    private String creator;
+    /** 类目内排序权重 */
+    private Integer sortOrder;
 
-    /** 更新人 */
-    private String updater;
+    /** 状态: 0-禁用, 1-启用 */
+    private Integer status;
 
     /** 创建时间 */
     @JsonSerialize(using = LocalDateTimeSerializer.class)
@@ -36,4 +38,7 @@ public class RiskVocabularyGroupVO {
     /** 更新时间 */
     @JsonSerialize(using = LocalDateTimeSerializer.class)
     private LocalDateTime updateTime;
+
+    /** 是否删除 0未删除 1删除 */
+    private Boolean deleted;
 }

@@ -1,5 +1,7 @@
 package com.kant.llm.eval.dto.resp;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -30,7 +32,9 @@ public class ModelManufacturerVO {
     /** 是否启用 */
     private Boolean enable;
     /** 创建时间 */
+    @JsonSerialize(using = LocalDateTimeSerializer.class)
     private LocalDateTime createTime;
     /** 更新时间 */
+    @JsonSerialize(using = LocalDateTimeSerializer.class)
     private LocalDateTime updateTime;
 }

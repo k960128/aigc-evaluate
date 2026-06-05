@@ -6,6 +6,7 @@ import com.kant.llm.eval.common.convention.Result;
 import com.kant.llm.eval.common.web.Results;
 import com.kant.llm.eval.dao.entity.RiskCategoryDO;
 import com.kant.llm.eval.dao.entity.RiskDetailsDO;
+import com.kant.llm.eval.dto.resp.RiskDetailsVO;
 import com.kant.llm.eval.service.RiskCategoryService;
 import com.kant.llm.eval.service.RiskDetailsService;
 import lombok.RequiredArgsConstructor;
@@ -127,20 +128,8 @@ public class RiskCategoryController {
      * 根据分类ID查询风险明细列表（不分页）
      */
     @GetMapping("/details/list")
-    public Result<List<RiskDetailsDO>> detailsList(
-            @RequestParam(required = false) Long categoryId,
-            @RequestParam(required = false) Integer status) {
-
-        LambdaQueryWrapper<RiskDetailsDO> queryWrapper = new LambdaQueryWrapper<>();
-        if (categoryId != null) {
-            queryWrapper.eq(RiskDetailsDO::getCategoryId, categoryId);
-        }
-        if (status != null) {
-            queryWrapper.eq(RiskDetailsDO::getStatus, status);
-        }
-        queryWrapper.orderByAsc(RiskDetailsDO::getSortOrder);
-
-        return Results.success(riskDetailsService.list(queryWrapper));
+    public Result<List<RiskDetailsVO>> detailsList() {
+        return Results.success(riskDetailsService.detailsList());
     }
 
     /**

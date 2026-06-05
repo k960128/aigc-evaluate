@@ -43,11 +43,10 @@ interface FeatureFormState {
 
 const columns = [
   { title: 'ID', key: 'id', width: 110, fixed: 'left' as const },
-  { title: '特征词 keyword', key: 'keyword', width: 240 },
-  { title: '所属小类 ID risk_details_id', key: 'riskDetailsId', width: 180 },
-  { title: '风险等级 riskLevel', key: 'riskLevel', width: 150, align: 'center' as const },
-  { title: '匹配模式 matchType', key: 'matchType', width: 150, align: 'center' as const },
-  { title: '同步状态 syncStatus', key: 'syncStatus', width: 160, align: 'center' as const },
+  { title: '特征词', key: 'keyword', width: 240 },
+  { title: '风险等级', key: 'riskLevel', width: 150, align: 'center' as const },
+  { title: '匹配模式', key: 'matchType', width: 150, align: 'center' as const },
+  { title: '同步状态', key: 'syncStatus', width: 160, align: 'center' as const },
   { title: '操作', key: 'action', width: 150, align: 'center' as const, fixed: 'right' as const },
 ]
 
