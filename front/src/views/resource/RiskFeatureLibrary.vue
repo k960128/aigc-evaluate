@@ -24,7 +24,7 @@ import {
   createRiskVocabulary,
   deleteRiskVocabulary,
   getRiskVocabularyPage,
-  syncRiskVocabularyToRedis,
+  syncRiskVocabularyToPublish,
   updateRiskVocabulary,
 } from '../../api/risk-vocabulary'
 
@@ -364,7 +364,7 @@ function handleDelete(record: RiskVocabularyKeyword) {
 async function handlePushToRedis() {
   syncLoading.value = true
   try {
-    const { data: res } = await syncRiskVocabularyToRedis()
+    const { data: res } = await syncRiskVocabularyToPublish()
 
     if (!isSuccessResponse(res)) {
       throw new Error(res.message || '推送 Redis 失败')

@@ -57,8 +57,8 @@ export function updateRiskVocabulary(data: UpdateRiskVocabularyReq) {
   return request.put<Result<RiskVocabularyKeyword | null>>('/risk/vocabularies/keyword/update', data)
 }
 
-export function syncRiskVocabularyToRedis() {
-  return request.post<Result<string>>('/risk/vocabularies/keyword/sync-to-redis')
+export function syncRiskVocabularyToPublish() {
+  return request.post<Result<string>>('/risk/vocabularies/keyword/version/publish')
 }
 
 export function deleteRiskVocabulary(id: number) {

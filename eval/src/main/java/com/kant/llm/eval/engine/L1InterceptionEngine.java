@@ -1,32 +1,37 @@
 package com.kant.llm.eval.engine;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hankcs.algorithm.AhoCorasickDoubleArrayTrie;
+import com.kant.llm.eval.common.constant.RiskVocabularyAcRedisKeys;
 import com.kant.llm.eval.common.convention.EvalContext;
 import com.kant.llm.eval.common.exception.SecurityBlockException;
 import com.kant.llm.eval.dao.entity.RiskVocabularyKeywordDO;
+import com.kant.llm.eval.engine.model.AcAutomatonContext;
 import com.kant.llm.eval.engine.model.RiskTag;
+import com.kant.llm.eval.engine.model.RiskVocabularyPublishMessage;
+import com.kant.llm.eval.engine.model.RiskVocabularySnapshot;
+import com.kant.llm.eval.engine.model.RiskVocabularySnapshotItem;
+import com.kant.llm.eval.engine.support.RiskVocabularyAcSupport;
 import com.kant.llm.eval.service.RiskVocabularyKeywordService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDateTime;
 import java.util.List;
-import java.util.TreeMap;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * 基于 Aho-Corasick Double Array Trie 的 L1 字面量极速拦截引擎。
+ * L1 字面量风险拦截引擎。
  *
- * <p>引擎内部只维护一个全局可见的 Trie 引用：{@link #activeTrie}。
- * 在线评测线程只读取一次 volatile 引用，并基于该不可变快照完成扫描。
- * 词库重载时会先在局部变量中构建一棵全新的 Trie，构建成功后再通过一次 volatile
- * 赋值发布。该双缓冲策略可以保证热路径 {@link #analyze(String)} 无锁执行，
- * 避免词库重载阻塞网关流量。</p>
- *
- * <p>每个 Trie 叶子节点挂载一个 {@link RiskTag} 载荷。载荷中包含特征词 ID、
- * 风险明细 ID 和风险等级，因此命中后可以立即完成分级路由，无需二次查询。</p>
+ * <p>引擎只维护当前生效的 AC 自动机上下文。新版本在后台完整构建并校验成功后，
+ * 再通过 AtomicReference 原子替换，保证评测热路径无锁且不会读到半成品 Trie。</p>
  */
 @Slf4j
 @Component
@@ -41,54 +46,30 @@ public class L1InterceptionEngine {
 
     private final RiskVocabularyKeywordService riskVocabularyKeywordService;
 
-    /**
-     * 评测线程使用的唯一全局 AC 自动机 Trie。
-     *
-     * <p>该对象一旦发布就不再原地修改。reload 必须先构建局部新 Trie，
-     * 等构建成功后再原子替换当前引用。</p>
-     */
-    private volatile AhoCorasickDoubleArrayTrie<RiskTag> activeTrie = buildTrie(new TreeMap<>());
+    private final StringRedisTemplate stringRedisTemplate;
+
+    private final ObjectMapper objectMapper;
 
     /**
-     * Spring 容器启动时初始化 L1 词库。
+     * 当前 JVM 正在使用的 AC 自动机版本。
+     */
+    private final AtomicReference<AcAutomatonContext> activeContext = new AtomicReference<>(emptyContext());
+
+    /**
+     * 应用启动时优先加载 Redis latest 快照；Redis 不可用或快照缺失时，回退到 DB 已同步词条构建。
      */
     @PostConstruct
     public void init() {
-        reloadTrie();
-    }
-
-    /**
-     * 将全量有效且已同步的风险词库重载到一棵新的 Trie 中。
-     *
-     * <p>该方法不会加锁阻塞评测线程。新 Trie 构建期间，已有请求继续使用旧 Trie
-     * 快照；新 Trie 准备完成后，通过一次 volatile 写入发布给后续请求。</p>
-     */
-    public void reloadTrie() {
-        List<RiskVocabularyKeywordDO> keywords = riskVocabularyKeywordService.lambdaQuery()
-                .eq(RiskVocabularyKeywordDO::getSyncStatus, SYNC_STATUS_SYNCED)
-                .eq(RiskVocabularyKeywordDO::getDeleted, false)
-                .list();
-
-        TreeMap<String, RiskTag> dictionary = new TreeMap<>();
-        if (!CollectionUtils.isEmpty(keywords)) {
-            for (RiskVocabularyKeywordDO keyword : keywords) {
-                appendKeyword(dictionary, keyword);
-            }
+        if (reloadLatestSnapshotFromRedis()) {
+            return;
         }
-
-        this.activeTrie = buildTrie(dictionary);
-        log.info("AC自动机同步完成, keywordSize={}", dictionary.size());
+        reloadTrieFromSyncedDbKeywords();
     }
 
     /**
-     * 通过一次 O(N) Aho-Corasick 扫描分析 Prompt。
+     * 使用当前生效的 AC 自动机扫描 prompt。
      *
-     * <p>风险等级 1 表示致命命中，会立即抛出 {@link SecurityBlockException}
-     * 并中断扫描。风险等级 2 表示疑似命中，其风险明细 ID 会被收集到
-     * {@link EvalContext#getHitWarningTags()} 中，并继续扫描以供下游 L2 评测使用。</p>
-     *
-     * @param prompt 原始模型请求 Prompt
-     * @return 写入 L1 疑似风险标签后的评测上下文
+     * <p>方法内只读取一次 activeContext，后续扫描都基于该不可变快照，避免热更新过程中前后不一致。</p>
      */
     public EvalContext analyze(String prompt) {
         EvalContext context = new EvalContext(prompt);
@@ -96,7 +77,8 @@ public class L1InterceptionEngine {
             return context;
         }
 
-        AhoCorasickDoubleArrayTrie<RiskTag> trie = this.activeTrie;
+        AcAutomatonContext acContext = activeContext.get();
+        AhoCorasickDoubleArrayTrie<RiskTag> trie = acContext == null ? null : acContext.getTrie();
         if (trie == null) {
             return context;
         }
@@ -120,38 +102,158 @@ public class L1InterceptionEngine {
         return context;
     }
 
-    private void appendKeyword(TreeMap<String, RiskTag> dictionary, RiskVocabularyKeywordDO keyword) {
-        if (keyword == null
-                || !StringUtils.hasText(keyword.getKeyword())
-                || keyword.getRiskLevel() == null
-                || keyword.getRiskDetailsId() == null) {
-            return;
+    /**
+     * 根据 Redis Pub/Sub 发布消息加载并切换到新版本 AC。
+     *
+     * <p>该方法由监听器的单线程构建执行器调用。构建失败会抛出异常给监听器重试，
+     * 当前 activeContext 不会被修改。</p>
+     */
+    public boolean rebuildFromPublishMessage(RiskVocabularyPublishMessage message) {
+        if (message == null || message.getVersionId() == null || !StringUtils.hasText(message.getSnapshotKey())) {
+            log.warn("跳过无效的 AC 自动机发布消息：{}", message);
+            return false;
         }
 
-        String literal = keyword.getKeyword().trim();
-        RiskTag riskTag = new RiskTag(keyword.getId(), keyword.getRiskDetailsId(), keyword.getRiskLevel());
-        dictionary.merge(literal, riskTag, L1InterceptionEngine::selectHigherPriorityTag);
+        AcAutomatonContext current = activeContext.get();
+        if (current != null && current.getVersionId() != null
+                && current.getVersionId() >= message.getVersionId()) {
+            // Snowflake 版本号递增，旧消息或重复消息不能覆盖当前较新的 AC。
+            log.info("跳过过期的 AC 自动机版本，当前版本={}，消息版本={}",
+                    current.getVersionId(), message.getVersionId());
+            return true;
+        }
+
+        RiskVocabularySnapshot snapshot = loadSnapshot(message.getSnapshotKey());
+        if (snapshot == null) {
+            throw new IllegalStateException("未找到 AC 自动机快照：" + message.getSnapshotKey());
+        }
+        if (!Objects.equals(message.getVersionId(), snapshot.getVersionId())) {
+            throw new IllegalStateException("AC 自动机快照版本不一致，消息版本="
+                    + message.getVersionId() + "，快照版本=" + snapshot.getVersionId());
+        }
+        if (!Objects.equals(message.getHash(), snapshot.getHash())) {
+            throw new IllegalStateException("AC 自动机快照哈希不一致，版本号=" + message.getVersionId());
+        }
+        if (!Objects.equals(message.getWordCount(), snapshot.getWordCount())) {
+            throw new IllegalStateException("AC 自动机快照词条数量不一致，版本号=" + message.getVersionId());
+        }
+
+        AcAutomatonContext newContext = buildContext(snapshot);
+        // 只有完整构建和校验成功后才替换引用；失败时继续使用旧 AC。
+        activeContext.set(newContext);
+        log.info("AC 自动机版本切换完成，版本号={}，特征词数量={}，快照哈希={}",
+                newContext.getVersionId(), newContext.getWordCount(), newContext.getHash());
+        return true;
     }
 
-    private static RiskTag selectHigherPriorityTag(RiskTag existing, RiskTag incoming) {
-        if (existing == null) {
-            return incoming;
-        }
-        if (incoming == null || incoming.getRiskLevel() == null) {
-            return existing;
-        }
-        if (existing.getRiskLevel() == null) {
-            return incoming;
-        }
-        return incoming.getRiskLevel() < existing.getRiskLevel() ? incoming : existing;
+    /**
+     * 暴露当前版本上下文，便于后续排查节点加载状态或扩展管理接口。
+     */
+    public AcAutomatonContext getActiveContext() {
+        return activeContext.get();
     }
 
-    private static AhoCorasickDoubleArrayTrie<RiskTag> buildTrie(TreeMap<String, RiskTag> dictionary) {
-        AhoCorasickDoubleArrayTrie<RiskTag> trie = new AhoCorasickDoubleArrayTrie<>();
-        trie.build(dictionary == null ? new TreeMap<>() : dictionary);
-        return trie;
+    /**
+     * 从 Redis latest 指针加载最新快照。
+     */
+    private boolean reloadLatestSnapshotFromRedis() {
+        try {
+            String latestVersion = stringRedisTemplate.opsForValue().get(RiskVocabularyAcRedisKeys.LATEST_VERSION);
+            if (!StringUtils.hasText(latestVersion)) {
+                return false;
+            }
+            Long versionId = Long.valueOf(latestVersion);
+            String snapshotKey = RiskVocabularyAcRedisKeys.snapshotKey(versionId);
+            RiskVocabularySnapshot snapshot = loadSnapshot(snapshotKey);
+            if (snapshot == null) {
+                log.warn("Redis 中缺少最新 AC 自动机快照，版本号={}", versionId);
+                return false;
+            }
+            activeContext.set(buildContext(snapshot));
+            log.info("从 Redis 初始化 AC 自动机完成，版本号={}，特征词数量={}，快照哈希={}",
+                    snapshot.getVersionId(), snapshot.getWordCount(), snapshot.getHash());
+            return true;
+        } catch (Exception ex) {
+            log.warn("从 Redis 初始化 AC 自动机失败，回退到 DB 已同步词条构建", ex);
+            return false;
+        }
     }
 
+    /**
+     * Redis 快照不可用时的启动兜底策略。
+     *
+     * <p>这里只读取 syncStatus=true 的 DB 词条，保持和历史实现兼容。</p>
+     */
+    private void reloadTrieFromSyncedDbKeywords() {
+        List<RiskVocabularyKeywordDO> keywords = riskVocabularyKeywordService.lambdaQuery()
+                .eq(RiskVocabularyKeywordDO::getSyncStatus, SYNC_STATUS_SYNCED)
+                .eq(RiskVocabularyKeywordDO::getDeleted, false)
+                .list();
+
+        List<RiskVocabularySnapshotItem> items = RiskVocabularyAcSupport.toSnapshotItems(keywords);
+        String hash = RiskVocabularyAcSupport.calculateHash(items);
+        RiskVocabularySnapshot snapshot = RiskVocabularySnapshot.builder()
+                .versionId(null)
+                .hash(hash)
+                .wordCount(items.size())
+                .publishTime(LocalDateTime.now())
+                .items(items)
+                .build();
+        activeContext.set(buildContext(snapshot));
+        log.info("从 DB 兜底初始化 AC 自动机完成，特征词数量={}，快照哈希={}", items.size(), hash);
+    }
+
+    /**
+     * 根据 Redis snapshotKey 读取并反序列化快照。
+     */
+    private RiskVocabularySnapshot loadSnapshot(String snapshotKey) {
+        String snapshotJson = stringRedisTemplate.opsForValue().get(snapshotKey);
+        if (!StringUtils.hasText(snapshotJson)) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(snapshotJson, RiskVocabularySnapshot.class);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("反序列化 AC 自动机快照失败：" + snapshotKey, ex);
+        }
+    }
+
+    /**
+     * 校验快照内容并构建新的 AC 上下文。
+     */
+    private AcAutomatonContext buildContext(RiskVocabularySnapshot snapshot) {
+        List<RiskVocabularySnapshotItem> items = snapshot.getItems();
+        if (CollectionUtils.isEmpty(items)) {
+            items = List.of();
+        }
+        String actualHash = RiskVocabularyAcSupport.calculateHash(items);
+        if (!Objects.equals(snapshot.getHash(), actualHash)) {
+            throw new IllegalStateException("AC 自动机快照内容哈希校验失败，版本号=" + snapshot.getVersionId());
+        }
+
+        return AcAutomatonContext.builder()
+                .versionId(snapshot.getVersionId())
+                .hash(snapshot.getHash())
+                .wordCount(items.size())
+                .buildTime(LocalDateTime.now())
+                .trie(RiskVocabularyAcSupport.buildTrie(items))
+                .build();
+    }
+
+    /**
+     * 空 AC 上下文，保证服务启动早期即使还没有词库也可以安全调用 analyze。
+     */
+    private static AcAutomatonContext emptyContext() {
+        return AcAutomatonContext.builder()
+                .wordCount(0)
+                .buildTime(LocalDateTime.now())
+                .trie(RiskVocabularyAcSupport.buildTrie(List.of()))
+                .build();
+    }
+
+    /**
+     * AC 回调返回的是 begin/end 下标，这里做边界保护后再截取命中的原始文本。
+     */
     private static String substringSafely(String source, int begin, int end) {
         if (source == null || begin >= end) {
             return "";

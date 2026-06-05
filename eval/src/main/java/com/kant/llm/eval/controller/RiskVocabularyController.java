@@ -48,6 +48,7 @@ public class RiskVocabularyController {
     public Result<RiskVocabularyKeywordVO> createKeyword(@RequestBody CreateRiskVocabularyKeywordRequest request) {
         RiskVocabularyKeywordDO entity = new RiskVocabularyKeywordDO();
         BeanUtils.copyProperties(request, entity);
+        // 新增词条默认只进入 DB，等待后台业务发布后再进入 AC 快照。
         entity.setSyncStatus(false);
         keywordService.save(entity);
         return Results.success(convertToKeywordVO(entity));
@@ -66,6 +67,8 @@ public class RiskVocabularyController {
             return Results.success(null);
         }
         BeanUtils.copyProperties(request, entity);
+        // 特征词内容发生变更后，需要重新发布 AC 快照才能进入线上 Trie。
+        entity.setSyncStatus(false);
         keywordService.updateById(entity);
         return Results.success(convertToKeywordVO(entity));
     }
@@ -157,22 +160,10 @@ public class RiskVocabularyController {
      *
      * @return 同步处理结果描述
      */
-    @PostMapping("/keyword/sync-to-redis")
-    public Result<String> syncToRedis() {
-        LambdaQueryWrapper<RiskVocabularyKeywordDO> query = new LambdaQueryWrapper<>();
-        query.eq(RiskVocabularyKeywordDO::getSyncStatus, 0);
-        List<RiskVocabularyKeywordDO> pendingList = keywordService.list(query);
-
-        if (pendingList.isEmpty()) {
-            return Results.success("当前没有需要同步的词条");
-        }
-
-        for (RiskVocabularyKeywordDO kw : pendingList) {
-            kw.setSyncStatus(true);
-        }
-        keywordService.updateBatchById(pendingList);
-
-        return Results.success("成功推送 " + pendingList.size() + " 条特征词，AC自动机将在一分钟内完成热更");
+    @PostMapping("/keyword/version/publish")
+    public Result<String> publishAcSnapshot() {
+        // 发布一个新的特征词版本。
+        return Results.success(keywordService.publishAcSnapshot());
     }
 
     /**
