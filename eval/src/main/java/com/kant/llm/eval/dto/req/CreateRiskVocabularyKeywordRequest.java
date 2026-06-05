@@ -26,7 +26,7 @@ public class CreateRiskVocabularyKeywordRequest {
     private Integer matchType;
 
     /** Redis 同步状态：0-待同步，1-已同步 */
-    private Integer syncStatus;
+    private Boolean syncStatus;
 
     /** 创建人 */
     private String creator;

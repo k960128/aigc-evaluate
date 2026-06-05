@@ -37,7 +37,7 @@ public class L1InterceptionEngine {
 
     private static final int RISK_LEVEL_WARNING = 2;
 
-    private static final int SYNC_STATUS_SYNCED = 1;
+    private static final boolean SYNC_STATUS_SYNCED = true;
 
     private final RiskVocabularyKeywordService riskVocabularyKeywordService;
 

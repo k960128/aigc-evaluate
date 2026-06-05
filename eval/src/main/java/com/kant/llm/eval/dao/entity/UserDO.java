@@ -50,7 +50,7 @@ public class UserDO {
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
 
-    /** Deleted flag: 0 normal, 1 deleted. */
-    @TableLogic(value = "0", delval = "1")
-    private Integer deleted;
+    /** 是否删除 */
+    @TableLogic
+    private Boolean deleted;
 }

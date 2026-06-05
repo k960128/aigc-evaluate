@@ -3,6 +3,7 @@ package com.kant.llm.eval.common.database;
 import com.baomidou.mybatisplus.core.handlers.MetaObjectHandler;
 import org.apache.ibatis.reflection.MetaObject;
 
+import java.time.LocalDateTime;
 import java.util.Date;
 
 /**
@@ -12,13 +13,13 @@ public class MyMetaObjectHandler implements MetaObjectHandler {
 
     @Override
     public void insertFill(MetaObject metaObject) {
-        strictInsertFill(metaObject, "createTime", Date::new, Date.class);
-        strictInsertFill(metaObject, "updateTime", Date::new, Date.class);
-        strictInsertFill(metaObject, "deleted", () -> 0, Integer.class);
+        strictInsertFill(metaObject, "createTime", LocalDateTime.class, LocalDateTime.now());
+        strictInsertFill(metaObject, "updateTime", LocalDateTime.class, LocalDateTime.now());
+        strictInsertFill(metaObject, "deleted", () -> false, Boolean.class);
     }
 
     @Override
     public void updateFill(MetaObject metaObject) {
-        strictUpdateFill(metaObject, "updateTime", Date::new, Date.class);
+        strictUpdateFill(metaObject, "updateTime", LocalDateTime.class, LocalDateTime.now());
     }
 }
