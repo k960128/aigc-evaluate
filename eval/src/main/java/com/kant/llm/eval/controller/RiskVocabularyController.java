@@ -168,7 +168,7 @@ public class RiskVocabularyController {
         }
 
         for (RiskVocabularyKeywordDO kw : pendingList) {
-            kw.setSyncStatus(1);
+            kw.setSyncStatus(true);
         }
         keywordService.updateBatchById(pendingList);
 
