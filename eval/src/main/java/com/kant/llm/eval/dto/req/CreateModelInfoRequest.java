@@ -31,6 +31,8 @@ public class CreateModelInfoRequest {
     private Long maxCompletionTokens;
     /** 流式响应 */
     private Boolean stream;
+    /** 状态 0，停用 1，启用 */
+    private Boolean status;
     /** 扩展配置 */
     private Map<String, Object> config;
 }

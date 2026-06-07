@@ -134,6 +134,7 @@ public class SourceController {
                 .maxCompletionTokens(request.getMaxCompletionTokens())
                 .stream(request.getStream())
                 .config(request.getConfig())
+                .status(true)
                 .build();
         modelInfoService.save(entity);
         return Results.success(convertToModelInfoVO(entity));
@@ -234,6 +235,7 @@ public class SourceController {
                 .maxThreadSize(entity.getMaxThreadSize())
                 .maxCompletionTokens(entity.getMaxCompletionTokens())
                 .stream(entity.getStream())
+                .status(entity.getStatus())
                 .config(entity.getConfig())
                 .version(entity.getVersion())
                 .createTime(entity.getCreateTime())

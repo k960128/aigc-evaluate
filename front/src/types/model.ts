@@ -9,6 +9,7 @@ export interface ModelInfo {
   originName: string
   maxCompletionTokens: number
   stream: boolean
+  status: boolean
   config: Record<string, any> | null
   version: number
   createTime: string
@@ -25,6 +26,7 @@ export interface CreateModelReq {
   originName?: string
   maxCompletionTokens?: number
   stream?: boolean
+  status?: boolean
   config?: Record<string, any> | null
 }
 
@@ -39,6 +41,7 @@ export interface UpdateModelReq {
   originName?: string
   maxCompletionTokens?: number
   stream?: boolean
+  status?: boolean
   config?: Record<string, any> | null
 }
 

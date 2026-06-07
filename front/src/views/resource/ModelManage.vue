@@ -15,7 +15,7 @@
       <div class="page-header">
         <div class="header-info">
           <h2 class="page-title">模型管理</h2>
-          <p class="page-desc">管理模型版本、API Key 等配置，监控模型在线状态</p>
+          <p class="page-desc">管理模型版本、API Key 等配置，维护模型启用状态</p>
         </div>
         <div class="header-actions">
           <a-select
@@ -50,13 +50,13 @@
         >
           <!-- 卡片顶部状态标签 -->
           <div class="card-status-badge">
-            <template v-if="item._online">
-              <span class="status-dot status-dot-active online-dot" />
-              <span class="status-text online-text">在线(Active)</span>
+            <template v-if="item.status">
+              <span class="status-dot status-dot-active enabled-dot" />
+              <span class="status-text enabled-text">启用(Active)</span>
             </template>
             <template v-else>
-              <span class="status-dot offline-dot" />
-              <span class="status-text offline-text">离线(Disabled)</span>
+              <span class="status-dot disabled-dot" />
+              <span class="status-text disabled-text">停用(Disabled)</span>
             </template>
           </div>
 
@@ -86,7 +86,7 @@
             <a-button type="link" size="small" @click="showModelModal(item)">编辑</a-button>
             <a-divider type="vertical" />
             <a-button type="link" size="small" @click="toggleModelStatus(item)">
-              {{ item._online ? '停用' : '启用' }}
+              {{ item.status ? '停用' : '启用' }}
             </a-button>
             <a-divider type="vertical" />
             <a-popconfirm
@@ -194,11 +194,11 @@
           </template>
         </a-form-item>
 
-        <a-form-item name="online" label="启用状态">
+        <a-form-item name="status" label="启用状态">
           <a-switch
-            v-model:checked="formState.online"
-            checked-children="在线"
-            un-checked-children="离线"
+            v-model:checked="formState.status"
+            checked-children="启用"
+            un-checked-children="停用"
           />
         </a-form-item>
 
@@ -292,11 +292,7 @@ function maskApiKey(apiKey: string) {
 }
 
 // 列表数据
-interface DisplayModel extends ModelInfo {
-  _online: boolean
-}
-
-const models = ref<DisplayModel[]>([])
+const models = ref<ModelInfo[]>([])
 const loading = ref(false)
 const vendorFilter = ref<string>('')
 
@@ -310,7 +306,7 @@ async function fetchModels() {
   try {
     const { data: res } = await getModelList()
     if (res.code === '0' && res.data) {
-      models.value = res.data.map(m => ({ ...m, _online: m.stream !== false }))
+      models.value = res.data.map(m => ({ ...m, status: m.status !== false }))
     }
   } catch {
     message.error('获取模型列表失败')
@@ -326,7 +322,7 @@ onMounted(() => {
 // 弹窗状态
 const modalVisible = ref(false)
 const modalLoading = ref(false)
-const editingModel = ref<DisplayModel | null>(null)
+const editingModel = ref<ModelInfo | null>(null)
 const formRef = ref()
 const connectionTestStatus = ref<'idle' | 'testing' | 'success' | 'fail'>('idle')
 
@@ -339,7 +335,7 @@ const formState = reactive({
   maxCompletionTokens: 500 as number,
   modelDescribe: '',
   extraConfig: '',
-  online: true,
+  status: true,
 })
 
 // 当前厂商的默认 Base URL
@@ -410,7 +406,7 @@ const handleTestConnection = async () => {
   }
 }
 
-const showModelModal = (record: DisplayModel | null = null) => {
+const showModelModal = (record: ModelInfo | null = null) => {
   editingModel.value = record
   connectionTestStatus.value = 'idle'
   if (record) {
@@ -423,7 +419,7 @@ const showModelModal = (record: DisplayModel | null = null) => {
       maxCompletionTokens: record.maxCompletionTokens ?? 500,
       modelDescribe: record.modelDescribe || '',
       extraConfig: record.config ? JSON.stringify(record.config, null, 2) : '',
-      online: record._online,
+      status: record.status,
     })
   } else {
     Object.assign(formState, {
@@ -435,7 +431,7 @@ const showModelModal = (record: DisplayModel | null = null) => {
       maxCompletionTokens: 500,
       modelDescribe: '',
       extraConfig: '',
-      online: true,
+      status: true,
     })
   }
   modalVisible.value = true
@@ -460,7 +456,7 @@ const handleModalOk = async () => {
         maxThreadSize: formState.maxThreadSize,
         maxCompletionTokens: formState.maxCompletionTokens,
         modelDescribe: formState.modelDescribe,
-        stream: formState.online,
+        status: formState.status,
         config,
       }
       if (formState.apiKey) {
@@ -483,7 +479,7 @@ const handleModalOk = async () => {
         maxThreadSize: formState.maxThreadSize,
         maxCompletionTokens: formState.maxCompletionTokens,
         modelDescribe: formState.modelDescribe,
-        stream: formState.online,
+        status: formState.status,
         config,
       })
       if (res.code === '0') {
@@ -501,15 +497,15 @@ const handleModalOk = async () => {
   }
 }
 
-const toggleModelStatus = async (item: DisplayModel) => {
-  const newState = !item._online
+const toggleModelStatus = async (item: ModelInfo) => {
+  const newState = !item.status
   try {
     const { data: res } = await updateModel({
       id: item.id,
-      stream: newState,
+      status: newState,
     })
     if (res.code === '0') {
-      item._online = newState
+      item.status = newState
       message.success(`${item.model} 已${newState ? '启用' : '停用'}`)
     } else {
       message.error(res.message || '操作失败')
@@ -519,7 +515,7 @@ const toggleModelStatus = async (item: DisplayModel) => {
   }
 }
 
-const handleDeleteModel = async (item: DisplayModel) => {
+const handleDeleteModel = async (item: ModelInfo) => {
   try {
     const { data: res } = await deleteModel(item.id)
     if (res.code === '0') {
@@ -627,11 +623,11 @@ const handleDeleteModel = async (item: DisplayModel) => {
   flex-shrink: 0;
 }
 
-.online-dot {
+.enabled-dot {
   background: #52c41a;
 }
 
-.offline-dot {
+.disabled-dot {
   background: #d9d9d9;
 }
 
@@ -640,11 +636,11 @@ const handleDeleteModel = async (item: DisplayModel) => {
   white-space: nowrap;
 }
 
-.online-text {
+.enabled-text {
   color: #52c41a;
 }
 
-.offline-text {
+.disabled-text {
   color: #8c8c8c;
 }
 
