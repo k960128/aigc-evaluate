@@ -30,7 +30,9 @@ public class SourceController {
     private final ModelInfoService modelInfoService;
     private final ModelClientStrategyFactory modelClientStrategyFactory;
 
-    public SourceController(ModelManufacturerService modelManufacturerService, ModelInfoService modelInfoService, ModelClientStrategyFactory modelClientStrategyFactory) {
+    public SourceController(ModelManufacturerService modelManufacturerService,
+                            ModelInfoService modelInfoService,
+                            ModelClientStrategyFactory modelClientStrategyFactory) {
         this.modelManufacturerService = modelManufacturerService;
         this.modelInfoService = modelInfoService;
         this.modelClientStrategyFactory = modelClientStrategyFactory;
@@ -260,6 +262,7 @@ public class SourceController {
                 .apiKey(request.getApiKey())
                 .baseUrl(request.getBaseUrl())
                 .manufacturerType(manufacturerEnum)
+                .modelId(request.getModelId())
                 .build();
         ModelRequest modelRequest = ModelRequest.builder()
                 .modelInfo(modelInfo)

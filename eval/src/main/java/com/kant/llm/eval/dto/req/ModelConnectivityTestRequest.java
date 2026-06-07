@@ -13,6 +13,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ModelConnectivityTestRequest {
+    /** 模型ID */
+    private Long modelId;
     /** 模型名称 */
     private String model;
     /** 模型URL */
