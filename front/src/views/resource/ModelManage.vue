@@ -389,12 +389,14 @@ const onVendorOrKeyChange = () => {
 const handleTestConnection = async () => {
   connectionTestStatus.value = 'testing'
   try {
-    const { data: res } = await testConnectivity({
+    const testData = {
       model: formState.model,
       baseUrl: formState.baseUrl || defaultBaseUrl.value,
       apiKey: formState.apiKey,
       manufacturerCode: formState.manufacturerCode!,
-    })
+      ...(editingModel.value ? { modelId: editingModel.value.id } : {}),
+    }
+    const { data: res } = await testConnectivity(testData)
     if (res.code === '0' && res.data?.result) {
       connectionTestStatus.value = 'success'
       message.success('连接测试通过')

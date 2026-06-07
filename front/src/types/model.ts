@@ -43,6 +43,7 @@ export interface UpdateModelReq {
 }
 
 export interface TestConnectivityReq {
+  modelId?: number
   model: string
   baseUrl: string
   apiKey: string
