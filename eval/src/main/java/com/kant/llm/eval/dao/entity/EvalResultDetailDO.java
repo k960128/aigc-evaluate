@@ -28,6 +28,9 @@ public class EvalResultDetailDO {
     /** 任务ID */
     private Long taskId;
 
+    /** 任务执行批次ID */
+    private Long taskDetailId;
+
     /** 样本ID */
     private Long sampleId;
 
