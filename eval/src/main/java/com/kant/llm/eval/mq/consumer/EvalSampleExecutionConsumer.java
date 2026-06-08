@@ -11,6 +11,8 @@ import com.kant.llm.eval.client.ModelResponse;
 import com.kant.llm.eval.common.convention.EvalContext;
 import com.kant.llm.eval.common.enums.EvalResultStatusEnums;
 import com.kant.llm.eval.common.enums.ModelManufacturerEnum;
+import com.kant.llm.eval.common.enums.PipelineNodeCodeEnums;
+import com.kant.llm.eval.common.enums.PipelineNodeStatusEnums;
 import com.kant.llm.eval.common.enums.TaskStatusEnums;
 import com.kant.llm.eval.common.errorcode.BaseErrorCode;
 import com.kant.llm.eval.common.exception.SecurityBlockException;
@@ -24,6 +26,7 @@ import com.kant.llm.eval.dao.mapper.ModelInfoMapper;
 import com.kant.llm.eval.engine.L1InterceptionEngine;
 import com.kant.llm.eval.mq.EvalMqTopics;
 import com.kant.llm.eval.mq.message.EvalSampleExecutionMessage;
+import com.kant.llm.eval.service.EvalPipelineNodeRecorder;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
@@ -34,6 +37,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -77,6 +81,7 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
     private final L1InterceptionEngine l1InterceptionEngine;
     private final RedissonClient redissonClient;
     private final TransactionTemplate transactionTemplate;
+    private final EvalPipelineNodeRecorder evalPipelineNodeRecorder;
 
     public EvalSampleExecutionConsumer(EvalResultDetailMapper evalResultDetailMapper,
                                        EvalTaskDetailMapper evalTaskDetailMapper,
@@ -84,7 +89,8 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
                                        ModelClientStrategyFactory modelClientStrategyFactory,
                                        L1InterceptionEngine l1InterceptionEngine,
                                        RedissonClient redissonClient,
-                                       TransactionTemplate transactionTemplate) {
+                                       TransactionTemplate transactionTemplate,
+                                       EvalPipelineNodeRecorder evalPipelineNodeRecorder) {
         this.evalResultDetailMapper = evalResultDetailMapper;
         this.evalTaskDetailMapper = evalTaskDetailMapper;
         this.modelInfoMapper = modelInfoMapper;
@@ -92,6 +98,7 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
         this.l1InterceptionEngine = l1InterceptionEngine;
         this.redissonClient = redissonClient;
         this.transactionTemplate = transactionTemplate;
+        this.evalPipelineNodeRecorder = evalPipelineNodeRecorder;
     }
 
     @Override
@@ -155,6 +162,10 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
         if (TaskStatusEnums.STOPPED.getCode().equals(taskDetail.getStatus())) {
             log.info("评测任务批次已终止，跳过样本执行，taskDetailId: {}, resultDetailId: {}",
                     taskDetail.getId(), resultDetail.getId());
+            Long stoppedNodeRecordId = evalPipelineNodeRecorder.startNode(taskDetail, resultDetail,
+                    PipelineNodeCodeEnums.MODEL_CALL, buildStoppedInputSnapshot("TASK_STOPPED_BEFORE_MODEL_CALL"));
+            evalPipelineNodeRecorder.stopNode(stoppedNodeRecordId, "评测任务批次已终止，跳过模型调用",
+                    buildStoppedNodeResult("TASK_STOPPED_BEFORE_MODEL_CALL"));
             return null;
         }
         markTaskRunning(taskDetail);
@@ -163,13 +174,33 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
 
         ModelInfo modelInfo = loadModelInfo(message.getModelId());
         ModelClientStrategy strategy = modelClientStrategyFactory.getStrategy(modelInfo);
-        // 开始调用大模型
-        ModelResponse modelResponse = strategy.call(ModelRequest.builder()
-                .modelInfo(modelInfo)
-                .inputText(resultDetail.getInputText())
-                .build());
+        Long modelCallNodeRecordId = evalPipelineNodeRecorder.startNode(taskDetail, resultDetail,
+                PipelineNodeCodeEnums.MODEL_CALL, buildModelCallInputSnapshot(modelInfo, resultDetail));
+        ModelResponse modelResponse;
+        try {
+            // 开始调用大模型
+            modelResponse = strategy.call(ModelRequest.builder()
+                    .modelInfo(modelInfo)
+                    .inputText(resultDetail.getInputText())
+                    .build());
+            evalPipelineNodeRecorder.finishNode(modelCallNodeRecordId, PipelineNodeStatusEnums.PASSED,
+                    buildModelCallOutputSnapshot(modelResponse), buildModelCallNodeResult(modelResponse), null);
+        } catch (Exception ex) {
+            evalPipelineNodeRecorder.failNode(modelCallNodeRecordId, ex, null, buildFailedNodeResult("MODEL_CALL_FAILED"));
+            throw ex;
+        }
         log.info("评测样本模型调用完成，taskDetailId: {}, resultDetailId: {}, modelId: {}, elapsed: {}",
                 taskDetail.getId(), resultDetail.getId(), message.getModelId(), modelResponse.getElapsed());
+        // 模型调用无法强制中断，返回后先确认批次状态；若用户已停止，后续 L1 节点不再执行。
+        if (isTaskStopped(message.getTaskDetailId())) {
+            Long l1StoppedNodeRecordId = evalPipelineNodeRecorder.startNode(taskDetail, resultDetail,
+                    PipelineNodeCodeEnums.L1, buildStoppedInputSnapshot("TASK_STOPPED_BEFORE_L1"));
+            evalPipelineNodeRecorder.stopNode(l1StoppedNodeRecordId, "评测任务批次已终止，跳过 L1 判定",
+                    buildStoppedNodeResult("TASK_STOPPED_BEFORE_L1"));
+            log.info("评测任务批次已在模型调用期间被终止，丢弃模型返回结果，taskDetailId: {}, resultDetailId: {}",
+                    message.getTaskDetailId(), resultDetail.getId());
+            return null;
+        }
 
         EvalResultDetailDO updateEntity = EvalResultDetailDO.builder()
                 .id(resultDetail.getId())
@@ -179,8 +210,8 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
                 .status(EvalResultStatusEnums.AUTO_SCORED.getCode())
                 .build();
         // L1层拦截
-        applyL1Judgement(updateEntity, modelResponse.getRespContent());
-        // 模型调用无法强制中断，返回后再次确认批次状态；若用户已停止，丢弃本次结果。
+        applyL1Judgement(taskDetail, resultDetail, updateEntity, modelResponse.getRespContent());
+        // L1 判定完成后再次确认批次状态；若用户已停止，丢弃本次结果，不推进样本最终态。
         if (isTaskStopped(message.getTaskDetailId())) {
             log.info("评测任务批次已在模型调用期间被终止，丢弃模型返回结果，taskDetailId: {}, resultDetailId: {}",
                     message.getTaskDetailId(), resultDetail.getId());
@@ -222,24 +253,38 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
      * <p>L1 命中一级风险词时，AC 引擎会抛出 SecurityBlockException。
      * 当前阶段尚未接入 L2/L3，未命中一级风险词的输出先进入安全闭环。</p>
      */
-    private void applyL1Judgement(EvalResultDetailDO updateEntity, String modelOutput) {
+    private void applyL1Judgement(EvalTaskDetailDO taskDetail,
+                                  EvalResultDetailDO resultDetail,
+                                  EvalResultDetailDO updateEntity,
+                                  String modelOutput) {
+        Long l1NodeRecordId = evalPipelineNodeRecorder.startNode(taskDetail, resultDetail,
+                PipelineNodeCodeEnums.L1, buildL1InputSnapshot(modelOutput));
         try {
             EvalContext context = l1InterceptionEngine.analyze(modelOutput);
             updateEntity.setIsSafe(!context.isL1Blocked());
             updateEntity.setScore(context.isL1Blocked() ? BLOCK_SCORE : SAFE_SCORE);
             if (context.isL1Blocked()) {
                 updateEntity.setErrorMsg(buildL1BlockMessage(context.getL1BlockDetailsId(), context.getL1BlockKeyword()));
+                evalPipelineNodeRecorder.finishNode(l1NodeRecordId, PipelineNodeStatusEnums.BLOCKED,
+                        buildL1OutputSnapshot(context), buildL1NodeResult(context, "BLOCKED"), updateEntity.getErrorMsg());
                 log.info("评测样本 L1 判定命中拦截，resultDetailId: {}, riskDetailsId: {}, keyword: {}",
                         updateEntity.getId(), context.getL1BlockDetailsId(), context.getL1BlockKeyword());
             } else {
+                evalPipelineNodeRecorder.finishNode(l1NodeRecordId, PipelineNodeStatusEnums.PASSED,
+                        buildL1OutputSnapshot(context), buildL1NodeResult(context, "PASSED"), null);
                 log.info("评测样本 L1 判定通过，resultDetailId: {}", updateEntity.getId());
             }
         } catch (SecurityBlockException ex) {
             updateEntity.setIsSafe(false);
             updateEntity.setScore(BLOCK_SCORE);
             updateEntity.setErrorMsg(buildL1BlockMessage(ex.getRiskDetailsId(), ex.getKeyword()));
+            evalPipelineNodeRecorder.finishNode(l1NodeRecordId, PipelineNodeStatusEnums.BLOCKED,
+                    null, buildL1BlockedExceptionNodeResult(ex), updateEntity.getErrorMsg());
             log.info("评测样本 L1 判定抛出拦截异常，resultDetailId: {}, riskDetailsId: {}, keyword: {}",
                     updateEntity.getId(), ex.getRiskDetailsId(), ex.getKeyword());
+        } catch (Exception ex) {
+            evalPipelineNodeRecorder.failNode(l1NodeRecordId, ex, null, buildFailedNodeResult("L1_FAILED"));
+            throw ex;
         }
     }
 
@@ -407,6 +452,114 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
      */
     private String buildL1BlockMessage(Long riskDetailsId, String keyword) {
         return "L1安全拦截命中，riskDetailsId=" + riskDetailsId + "，keyword=" + keyword;
+    }
+
+    /**
+     * 构造模型调用节点输入快照。
+     */
+    private Object buildModelCallInputSnapshot(ModelInfo modelInfo, EvalResultDetailDO resultDetail) {
+        LinkedHashMap<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("modelId", modelInfo.getModelId());
+        snapshot.put("manufacturerType", modelInfo.getManufacturerType());
+        snapshot.put("model", modelInfo.getModel());
+        snapshot.put("inputText", resultDetail.getInputText());
+        return snapshot;
+    }
+
+    /**
+     * 构造模型调用节点输出快照。
+     */
+    private Object buildModelCallOutputSnapshot(ModelResponse modelResponse) {
+        LinkedHashMap<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("modelId", modelResponse.getModelId());
+        snapshot.put("respContent", modelResponse.getRespContent());
+        snapshot.put("elapsed", modelResponse.getElapsed());
+        return snapshot;
+    }
+
+    /**
+     * 构造模型调用节点结构化结果。
+     */
+    private Object buildModelCallNodeResult(ModelResponse modelResponse) {
+        LinkedHashMap<String, Object> nodeResult = new LinkedHashMap<>();
+        nodeResult.put("success", true);
+        nodeResult.put("elapsed", modelResponse.getElapsed());
+        return nodeResult;
+    }
+
+    /**
+     * 构造 L1 节点输入快照。
+     */
+    private Object buildL1InputSnapshot(String modelOutput) {
+        LinkedHashMap<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("modelOutput", modelOutput);
+        return snapshot;
+    }
+
+    /**
+     * 构造 L1 节点输出快照。
+     */
+    private Object buildL1OutputSnapshot(EvalContext context) {
+        LinkedHashMap<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("l1Blocked", context.isL1Blocked());
+        snapshot.put("l1BlockDetailsId", context.getL1BlockDetailsId());
+        snapshot.put("l1BlockKeyword", context.getL1BlockKeyword());
+        snapshot.put("hitWarningTags", context.getHitWarningTags());
+        return snapshot;
+    }
+
+    /**
+     * 构造 L1 节点结构化结果。
+     */
+    private Object buildL1NodeResult(EvalContext context, String decision) {
+        LinkedHashMap<String, Object> nodeResult = new LinkedHashMap<>();
+        nodeResult.put("blocked", context.isL1Blocked());
+        nodeResult.put("riskDetailsId", context.getL1BlockDetailsId());
+        nodeResult.put("keyword", context.getL1BlockKeyword());
+        nodeResult.put("warningTags", context.getHitWarningTags());
+        nodeResult.put("decision", decision);
+        return nodeResult;
+    }
+
+    /**
+     * 构造 L1 异常拦截结构化结果。
+     */
+    private Object buildL1BlockedExceptionNodeResult(SecurityBlockException ex) {
+        LinkedHashMap<String, Object> nodeResult = new LinkedHashMap<>();
+        nodeResult.put("blocked", true);
+        nodeResult.put("riskDetailsId", ex.getRiskDetailsId());
+        nodeResult.put("keyword", ex.getKeyword());
+        nodeResult.put("decision", "BLOCKED");
+        return nodeResult;
+    }
+
+    /**
+     * 构造失败节点结构化结果。
+     */
+    private Object buildFailedNodeResult(String decision) {
+        LinkedHashMap<String, Object> nodeResult = new LinkedHashMap<>();
+        nodeResult.put("success", false);
+        nodeResult.put("decision", decision);
+        return nodeResult;
+    }
+
+    /**
+     * 构造停止跳过节点输入快照。
+     */
+    private Object buildStoppedInputSnapshot(String reason) {
+        LinkedHashMap<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("reason", reason);
+        return snapshot;
+    }
+
+    /**
+     * 构造停止跳过节点结构化结果。
+     */
+    private Object buildStoppedNodeResult(String decision) {
+        LinkedHashMap<String, Object> nodeResult = new LinkedHashMap<>();
+        nodeResult.put("stopped", true);
+        nodeResult.put("decision", decision);
+        return nodeResult;
     }
 
     /**
