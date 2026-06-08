@@ -186,6 +186,13 @@
             <artifactId>sa-token-redis-template</artifactId>
             <version>${sa-token.version}</version>
         </dependency>
+
+        <!-- Faker 核心依赖 -->
+        <dependency>
+            <groupId>com.github.javafaker</groupId>
+            <artifactId>javafaker</artifactId>
+            <version>1.0.2</version>
+        </dependency>
     </dependencies>
 
     <build>

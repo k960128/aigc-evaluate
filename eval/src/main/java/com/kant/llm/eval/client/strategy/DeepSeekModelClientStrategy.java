@@ -1,6 +1,7 @@
 package com.kant.llm.eval.client.strategy;
 
 import cn.hutool.core.util.ObjectUtil;
+import com.github.javafaker.Faker;
 import com.kant.llm.eval.client.ModelClientStrategy;
 import com.kant.llm.eval.client.ModelConnectionResponse;
 import com.kant.llm.eval.client.ModelRequest;
@@ -13,32 +14,50 @@ import org.springframework.ai.deepseek.DeepSeekChatModel;
 import org.springframework.ai.deepseek.DeepSeekChatOptions;
 import org.springframework.ai.deepseek.api.DeepSeekApi;
 
+import java.util.Locale;
+
 @Slf4j
 public class DeepSeekModelClientStrategy implements ModelClientStrategy {
 
+    Boolean isMock = true;
+
     @Override
     public ModelResponse call(ModelRequest modelRequest) {
-        long startTime = System.currentTimeMillis();
-        ChatModel chatModel = DeepSeekChatModel.builder()
-                .deepSeekApi(DeepSeekApi.builder()
-                        .apiKey(modelRequest.getModelInfo().getApiKey())
-                        .baseUrl(modelRequest.getModelInfo().getBaseUrl())
-                        .build())
-                .defaultOptions(DeepSeekChatOptions.builder()
-                        .model(modelRequest.getModelInfo().getModel())
-                        .build())
-                .build();
-        ChatClient client = ChatClient.builder(chatModel).build();
-        ChatClient.ChatClientRequestSpec requestSpec = client.prompt(modelRequest.getInputText());
-        log.error("DeepSeekModelClientStrategy requestSpec: {}", requestSpec);
-        ChatClient.CallResponseSpec call = requestSpec.call();
-        log.error("DeepSeekModelClientStrategy call: {}", call);
-        long endTime = System.currentTimeMillis();
-        return ModelResponse.builder()
-                .modelId(modelRequest.getModelInfo().getModelId())
-                .respContent(call.content())
-                .elapsed(endTime - startTime)
-                .build();
+
+        if (isMock) {
+            log.info("mock data");
+            Faker faker = new Faker(Locale.CHINA);
+            // 生成模拟数据
+            long startTime = System.currentTimeMillis();
+            long endTime = System.currentTimeMillis();
+            return ModelResponse.builder()
+                    .modelId(modelRequest.getModelInfo().getModelId())
+                    .respContent(faker.address().fullAddress())
+                    .elapsed(endTime - startTime)
+                    .build();
+        } else {
+            long startTime = System.currentTimeMillis();
+            ChatModel chatModel = DeepSeekChatModel.builder()
+                    .deepSeekApi(DeepSeekApi.builder()
+                            .apiKey(modelRequest.getModelInfo().getApiKey())
+                            .baseUrl(modelRequest.getModelInfo().getBaseUrl())
+                            .build())
+                    .defaultOptions(DeepSeekChatOptions.builder()
+                            .model(modelRequest.getModelInfo().getModel())
+                            .build())
+                    .build();
+            ChatClient client = ChatClient.builder(chatModel).build();
+            ChatClient.ChatClientRequestSpec requestSpec = client.prompt(modelRequest.getInputText());
+            log.error("DeepSeekModelClientStrategy requestSpec: {}", requestSpec);
+            ChatClient.CallResponseSpec call = requestSpec.call();
+            log.error("DeepSeekModelClientStrategy call: {}", call);
+            long endTime = System.currentTimeMillis();
+            return ModelResponse.builder()
+                    .modelId(modelRequest.getModelInfo().getModelId())
+                    .respContent(call.content())
+                    .elapsed(endTime - startTime)
+                    .build();
+        }
     }
 
     @Override

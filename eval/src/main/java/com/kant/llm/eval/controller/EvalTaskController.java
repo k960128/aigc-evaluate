@@ -4,7 +4,6 @@ import com.kant.llm.eval.common.convention.Result;
 import com.kant.llm.eval.common.web.Results;
 import com.kant.llm.eval.dto.req.CreateEvalTaskRequest;
 import com.kant.llm.eval.service.EvalTaskService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -36,6 +35,20 @@ public class EvalTaskController {
     public Result<Boolean> submitEvalTask(@RequestParam("taskId") Long taskId) {
         Boolean b = evalTaskService.submitEvalTask(taskId);
         return Results.success(b);
+    }
+
+    /**
+     * 终止评测任务当前批次
+     *
+     * <p>停止后会保留已完成样本结果，未开始样本不再执行；如需重新评测，需要重新提交任务。</p>
+     *
+     * @param taskId 评测任务ID
+     * @return 停止请求处理结果
+     */
+    @PostMapping("/stop")
+    public Result<Boolean> stopEvalTask(@RequestParam("taskId") Long taskId) {
+        Boolean stopped = evalTaskService.stopEvalTask(taskId);
+        return Results.success(stopped);
     }
 
     /**

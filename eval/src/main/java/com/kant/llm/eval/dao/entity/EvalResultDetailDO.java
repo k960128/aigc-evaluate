@@ -55,7 +55,7 @@ public class EvalResultDetailDO {
     /** 人工复核分数 */
     private BigDecimal manualScore;
 
-    /** 状态：0-未处理, 1-已自动评分, 2-已人工核验 */
+    /** 状态：0-未处理, 1-已自动评分, 2-已人工核验, 3-执行失败, 4-已终止 */
     private Integer status;
 
     /** 错误信息 */
