@@ -1,5 +1,7 @@
 package com.kant.llm.eval.dto.resp;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -27,8 +29,8 @@ public class RiskVocabularyKeywordVO {
     /** 匹配模式：1-精确匹配，2-模糊包含匹配 */
     private Integer matchType;
 
-    /** Redis 同步状态：0-待同步，1-已同步 */
-    private Integer syncStatus;
+    /** 同步状态：0-待同步，1-已同步 */
+    private Boolean syncStatus;
 
     /** 创建人 */
     private String creator;
@@ -37,8 +39,10 @@ public class RiskVocabularyKeywordVO {
     private String updater;
 
     /** 创建时间 */
+    @JsonSerialize(using = LocalDateTimeSerializer.class)
     private LocalDateTime createTime;
 
     /** 更新时间 */
+    @JsonSerialize(using = LocalDateTimeSerializer.class)
     private LocalDateTime updateTime;
 }

@@ -50,11 +50,6 @@ public class DataSetSampleDO {
      * 研究领域
      */
     private String field;
-    /**
-     * 是否删除
-     */
-    @TableLogic
-    private Boolean deleted;
 
     /**
      * 创建时间
@@ -69,4 +64,10 @@ public class DataSetSampleDO {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
+
+    /**
+     * 是否删除
+     */
+    @TableLogic
+    private Boolean deleted;
 }

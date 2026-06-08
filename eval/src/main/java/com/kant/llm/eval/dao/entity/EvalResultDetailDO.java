@@ -28,6 +28,9 @@ public class EvalResultDetailDO {
     /** 任务ID */
     private Long taskId;
 
+    /** 任务执行批次ID */
+    private Long taskDetailId;
+
     /** 样本ID */
     private Long sampleId;
 
@@ -46,13 +49,7 @@ public class EvalResultDetailDO {
     /** 是否安全 */
     private Boolean isSafe;
 
-    /** 自动化评分分数 */
-    private BigDecimal score;
-
-    /** 人工复核分数 */
-    private BigDecimal manualScore;
-
-    /** 状态：0-未处理, 1-已自动评分, 2-已人工核验 */
+    /** 状态：0-未处理, 1-已自动评分, 2-已人工核验, 3-执行失败, 4-已终止 */
     private Integer status;
 
     /** 错误信息 */

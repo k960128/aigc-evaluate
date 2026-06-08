@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 import java.time.LocalDateTime;
+import java.util.Date;
 
 /**
  * 安全评测-风险词库特征词表
@@ -32,7 +33,7 @@ public class RiskVocabularyKeywordDO {
     private Integer matchType;
 
     /** Redis同步状态: 0-待同步, 1-已同步 */
-    private Integer syncStatus;
+    private Boolean syncStatus;
 
     /** 创建人 */
     private String creator;

@@ -1,5 +1,7 @@
 package com.kant.llm.eval.dto.resp;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -45,6 +47,9 @@ public class ModelInfoVO {
     /** 流式响应 默认0，非流式 */
     private Boolean stream;
 
+    /** 状态 0，停用 1，启用 */
+    private Boolean status;
+
     /** 扩展配置 */
     private Map<String, Object> config;
 
@@ -52,8 +57,10 @@ public class ModelInfoVO {
     private Long version;
 
     /** 创建时间 */
+    @JsonSerialize(using = LocalDateTimeSerializer.class)
     private LocalDateTime createTime;
 
     /** 更新时间 */
+    @JsonSerialize(using = LocalDateTimeSerializer.class)
     private LocalDateTime updateTime;
 }

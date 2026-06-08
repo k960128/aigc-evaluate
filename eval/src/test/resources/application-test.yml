@@ -35,3 +35,8 @@ spring:
 
 app:
   demo-mode: false
+
+rocketmq:
+  name-server: 47.103.193.177:9876
+  producer:
+    group: aigc-eval-producer-group

@@ -23,6 +23,7 @@
         <dashscope.version>2.13.0</dashscope.version>
         <commons-lang3.version>3.12.0</commons-lang3.version>
         <commons-compress.version>1.26.1</commons-compress.version>
+        <sa-token.version>1.45.0</sa-token.version>
     </properties>
 
     <dependencies>
@@ -84,6 +85,12 @@
         </dependency>
 
         <dependency>
+            <groupId>org.apache.rocketmq</groupId>
+            <artifactId>rocketmq-spring-boot-starter</artifactId>
+            <version>${rocketmq-spring-boot-starter.version}</version>
+        </dependency>
+
+        <dependency>
             <groupId>cn.hutool</groupId>
             <artifactId>hutool-all</artifactId>
             <version>${hutool-all.version}</version>
@@ -136,6 +143,12 @@
             <version>${fastjson.version}</version>
         </dependency>
 
+        <!-- Jackson Java 8 时间类型支持 -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-lang3</artifactId>
@@ -158,6 +171,27 @@
             <groupId>com.hankcs</groupId>
             <artifactId>aho-corasick-double-array-trie</artifactId>
             <version>1.2.3</version>
+        </dependency>
+
+
+        <!-- 认证鉴权 -sa-token -->
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-spring-boot3-starter</artifactId>
+            <version>${sa-token.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-redis-template</artifactId>
+            <version>${sa-token.version}</version>
+        </dependency>
+
+        <!-- Faker 核心依赖 -->
+        <dependency>
+            <groupId>com.github.javafaker</groupId>
+            <artifactId>javafaker</artifactId>
+            <version>1.0.2</version>
         </dependency>
     </dependencies>
 
