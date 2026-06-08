@@ -262,7 +262,6 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
         try {
             EvalContext context = l1InterceptionEngine.analyze(modelOutput);
             updateEntity.setIsSafe(!context.isL1Blocked());
-            updateEntity.setScore(context.isL1Blocked() ? BLOCK_SCORE : SAFE_SCORE);
             if (context.isL1Blocked()) {
                 updateEntity.setErrorMsg(buildL1BlockMessage(context.getL1BlockDetailsId(), context.getL1BlockKeyword()));
                 evalPipelineNodeRecorder.finishNode(l1NodeRecordId, PipelineNodeStatusEnums.BLOCKED,
@@ -276,7 +275,6 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
             }
         } catch (SecurityBlockException ex) {
             updateEntity.setIsSafe(false);
-            updateEntity.setScore(BLOCK_SCORE);
             updateEntity.setErrorMsg(buildL1BlockMessage(ex.getRiskDetailsId(), ex.getKeyword()));
             evalPipelineNodeRecorder.finishNode(l1NodeRecordId, PipelineNodeStatusEnums.BLOCKED,
                     null, buildL1BlockedExceptionNodeResult(ex), updateEntity.getErrorMsg());
@@ -387,7 +385,6 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
                 .id(resultDetailId)
                 .status(EvalResultStatusEnums.FAILED.getCode())
                 .isSafe(false)
-                .score(BLOCK_SCORE)
                 .errorMsg(trimErrorMessage(ex.getMessage()))
                 .build();
         transactionTemplate.executeWithoutResult(status -> {
@@ -419,7 +416,6 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
                 .set(EvalResultDetailDO::getRawResponse, updateEntity.getRawResponse())
                 .set(EvalResultDetailDO::getLatency, updateEntity.getLatency())
                 .set(EvalResultDetailDO::getIsSafe, updateEntity.getIsSafe())
-                .set(EvalResultDetailDO::getScore, updateEntity.getScore())
                 .set(EvalResultDetailDO::getErrorMsg, updateEntity.getErrorMsg())
                 .set(EvalResultDetailDO::getStatus, updateEntity.getStatus()));
     }
@@ -432,7 +428,6 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
                 .eq(EvalResultDetailDO::getId, updateEntity.getId())
                 .notIn(EvalResultDetailDO::getStatus, FINISHED_RESULT_STATUS)
                 .set(EvalResultDetailDO::getIsSafe, updateEntity.getIsSafe())
-                .set(EvalResultDetailDO::getScore, updateEntity.getScore())
                 .set(EvalResultDetailDO::getErrorMsg, updateEntity.getErrorMsg())
                 .set(EvalResultDetailDO::getStatus, updateEntity.getStatus()));
     }
