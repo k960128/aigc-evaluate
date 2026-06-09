@@ -10,6 +10,7 @@ import com.kant.llm.eval.client.ModelRequest;
 import com.kant.llm.eval.client.ModelResponse;
 import com.kant.llm.eval.common.convention.EvalContext;
 import com.kant.llm.eval.common.enums.EvalResultStatusEnums;
+import com.kant.llm.eval.common.enums.L2DecisionTypeEnums;
 import com.kant.llm.eval.common.enums.ModelManufacturerEnum;
 import com.kant.llm.eval.common.enums.PipelineNodeCodeEnums;
 import com.kant.llm.eval.common.enums.PipelineNodeStatusEnums;
@@ -27,6 +28,9 @@ import com.kant.llm.eval.engine.L1InterceptionEngine;
 import com.kant.llm.eval.mq.EvalMqTopics;
 import com.kant.llm.eval.mq.message.EvalSampleExecutionMessage;
 import com.kant.llm.eval.service.EvalPipelineNodeRecorder;
+import com.kant.llm.eval.service.l2.L2EvaluationService;
+import com.kant.llm.eval.service.l2.model.L2EvaluationRequest;
+import com.kant.llm.eval.service.l2.model.L2EvaluationResult;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
@@ -35,7 +39,6 @@ import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -47,8 +50,8 @@ import java.util.concurrent.TimeUnit;
  * 单样本执行消费者。
  *
  * <p>该消费者承接任务拆分后的 Execution_MQ 消息，负责完成“调用被测模型 -> L1 安全判定
- * -> 回写单条结果 -> 推进批次进度”的第一版执行闭环。L2/L3 尚未接入时，未被 L1 一级风险词拦截
- * 的输出先按自动评分安全处理。</p>
+ * -> L2 双路召回判定 -> 回写单条结果 -> 推进批次进度”的执行闭环。L3 尚未接入时，
+ * L2 模糊区会先进入人工核验状态。</p>
  */
 @Slf4j
 @Component
@@ -59,10 +62,6 @@ import java.util.concurrent.TimeUnit;
 public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleExecutionMessage> {
 
     private static final String EXECUTION_LOCK_KEY_PREFIX = "aigc-eval:eval-result:execute:";
-
-    private static final BigDecimal SAFE_SCORE = BigDecimal.ONE;
-
-    private static final BigDecimal BLOCK_SCORE = BigDecimal.ZERO;
 
     /**
      * MQ 重投时无需再次处理的终态状态。
@@ -82,6 +81,7 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
     private final RedissonClient redissonClient;
     private final TransactionTemplate transactionTemplate;
     private final EvalPipelineNodeRecorder evalPipelineNodeRecorder;
+    private final L2EvaluationService l2EvaluationService;
 
     public EvalSampleExecutionConsumer(EvalResultDetailMapper evalResultDetailMapper,
                                        EvalTaskDetailMapper evalTaskDetailMapper,
@@ -90,7 +90,8 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
                                        L1InterceptionEngine l1InterceptionEngine,
                                        RedissonClient redissonClient,
                                        TransactionTemplate transactionTemplate,
-                                       EvalPipelineNodeRecorder evalPipelineNodeRecorder) {
+                                       EvalPipelineNodeRecorder evalPipelineNodeRecorder,
+                                       L2EvaluationService l2EvaluationService) {
         this.evalResultDetailMapper = evalResultDetailMapper;
         this.evalTaskDetailMapper = evalTaskDetailMapper;
         this.modelInfoMapper = modelInfoMapper;
@@ -99,6 +100,7 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
         this.redissonClient = redissonClient;
         this.transactionTemplate = transactionTemplate;
         this.evalPipelineNodeRecorder = evalPipelineNodeRecorder;
+        this.l2EvaluationService = l2EvaluationService;
     }
 
     @Override
@@ -209,13 +211,16 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
                 .latency(toIntegerLatency(modelResponse.getElapsed()))
                 .status(EvalResultStatusEnums.AUTO_SCORED.getCode())
                 .build();
-        // L1层拦截
-        applyL1Judgement(taskDetail, resultDetail, updateEntity, modelResponse.getRespContent());
+        // L1 层拦截；命中高确定性风险时直接短路，不再进入 L2。
+        L1JudgementResult l1JudgementResult = applyL1Judgement(taskDetail, resultDetail, updateEntity, modelResponse.getRespContent());
         // L1 判定完成后再次确认批次状态；若用户已停止，丢弃本次结果，不推进样本最终态。
         if (isTaskStopped(message.getTaskDetailId())) {
             log.info("评测任务批次已在模型调用期间被终止，丢弃模型返回结果，taskDetailId: {}, resultDetailId: {}",
                     message.getTaskDetailId(), resultDetail.getId());
             return null;
+        }
+        if (!l1JudgementResult.blocked()) {
+            applyL2Judgement(taskDetail, resultDetail, updateEntity, l1JudgementResult.warningTags(), modelResponse.getRespContent());
         }
         return updateEntity;
     }
@@ -251,12 +256,12 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
      * 执行 L1 字面量安全判定。
      *
      * <p>L1 命中一级风险词时，AC 引擎会抛出 SecurityBlockException。
-     * 当前阶段尚未接入 L2/L3，未命中一级风险词的输出先进入安全闭环。</p>
+     * 未命中一级风险词时，会把 warning 标签继续传给 L2 作为召回上下文。</p>
      */
-    private void applyL1Judgement(EvalTaskDetailDO taskDetail,
-                                  EvalResultDetailDO resultDetail,
-                                  EvalResultDetailDO updateEntity,
-                                  String modelOutput) {
+    private L1JudgementResult applyL1Judgement(EvalTaskDetailDO taskDetail,
+                                               EvalResultDetailDO resultDetail,
+                                               EvalResultDetailDO updateEntity,
+                                               String modelOutput) {
         Long l1NodeRecordId = evalPipelineNodeRecorder.startNode(taskDetail, resultDetail,
                 PipelineNodeCodeEnums.L1, buildL1InputSnapshot(modelOutput));
         try {
@@ -268,10 +273,12 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
                         buildL1OutputSnapshot(context), buildL1NodeResult(context, "BLOCKED"), updateEntity.getErrorMsg());
                 log.info("评测样本 L1 判定命中拦截，resultDetailId: {}, riskDetailsId: {}, keyword: {}",
                         updateEntity.getId(), context.getL1BlockDetailsId(), context.getL1BlockKeyword());
+                return new L1JudgementResult(true, context.getHitWarningTags());
             } else {
                 evalPipelineNodeRecorder.finishNode(l1NodeRecordId, PipelineNodeStatusEnums.PASSED,
                         buildL1OutputSnapshot(context), buildL1NodeResult(context, "PASSED"), null);
                 log.info("评测样本 L1 判定通过，resultDetailId: {}", updateEntity.getId());
+                return new L1JudgementResult(false, context.getHitWarningTags());
             }
         } catch (SecurityBlockException ex) {
             updateEntity.setIsSafe(false);
@@ -280,8 +287,52 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
                     null, buildL1BlockedExceptionNodeResult(ex), updateEntity.getErrorMsg());
             log.info("评测样本 L1 判定抛出拦截异常，resultDetailId: {}, riskDetailsId: {}, keyword: {}",
                     updateEntity.getId(), ex.getRiskDetailsId(), ex.getKeyword());
+            return new L1JudgementResult(true, List.of());
         } catch (Exception ex) {
             evalPipelineNodeRecorder.failNode(l1NodeRecordId, ex, null, buildFailedNodeResult("L1_FAILED"));
+            throw ex;
+        }
+    }
+
+    /**
+     * 执行 L2 双路召回判定。
+     *
+     * <p>L2 会记录独立流水线节点。高置信风险直接拦截，低风险安全自动完成，
+     * 模糊区在 L3 未接入前先标记为人工核验。</p>
+     */
+    private void applyL2Judgement(EvalTaskDetailDO taskDetail,
+                                  EvalResultDetailDO resultDetail,
+                                  EvalResultDetailDO updateEntity,
+                                  List<Long> l1WarningTags,
+                                  String modelOutput) {
+        Long l2NodeRecordId = evalPipelineNodeRecorder.startNode(taskDetail, resultDetail,
+                PipelineNodeCodeEnums.L2, buildL2InputSnapshot(resultDetail, modelOutput, l1WarningTags));
+        try {
+            L2EvaluationResult l2Result = l2EvaluationService.evaluate(L2EvaluationRequest.builder()
+                    .taskId(taskDetail.getTaskId())
+                    .taskDetailId(taskDetail.getId())
+                    .resultDetailId(resultDetail.getId())
+                    .sampleId(resultDetail.getSampleId())
+                    .inputText(resultDetail.getInputText())
+                    .modelOutput(modelOutput)
+                    .l1WarningTags(l1WarningTags)
+                    .build());
+            updateEntity.setIsSafe(l2Result.getSafe());
+            updateEntity.setErrorMsg(buildL2ResultMessage(l2Result));
+            if (l2Result.getDecisionType() == L2DecisionTypeEnums.PASS_TO_L3) {
+                updateEntity.setStatus(EvalResultStatusEnums.MANUAL_REVIEWED.getCode());
+            } else {
+                updateEntity.setStatus(EvalResultStatusEnums.AUTO_SCORED.getCode());
+            }
+            PipelineNodeStatusEnums nodeStatus = l2Result.getSafe() != null && !l2Result.getSafe()
+                    ? PipelineNodeStatusEnums.BLOCKED
+                    : PipelineNodeStatusEnums.PASSED;
+            evalPipelineNodeRecorder.finishNode(l2NodeRecordId, nodeStatus,
+                    l2Result.getOutputSnapshot(), l2Result.getNodeResult(), null);
+            log.info("评测样本 L2 判定完成，resultDetailId: {}, decision: {}, safe: {}",
+                    resultDetail.getId(), l2Result.getDecisionType().getCode(), l2Result.getSafe());
+        } catch (Exception ex) {
+            evalPipelineNodeRecorder.failNode(l2NodeRecordId, ex, null, buildFailedNodeResult("L2_FAILED"));
             throw ex;
         }
     }
@@ -409,15 +460,17 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
      * 条件更新成功结果，只有非终态结果才能被写成终态。
      */
     private int updateResultSuccess(EvalResultDetailDO updateEntity) {
-        return evalResultDetailMapper.update(null, new LambdaUpdateWrapper<EvalResultDetailDO>()
-                .eq(EvalResultDetailDO::getId, updateEntity.getId())
-                .notIn(EvalResultDetailDO::getStatus, FINISHED_RESULT_STATUS)
-                .set(EvalResultDetailDO::getModelOutput, updateEntity.getModelOutput())
-                .set(EvalResultDetailDO::getRawResponse, updateEntity.getRawResponse())
-                .set(EvalResultDetailDO::getLatency, updateEntity.getLatency())
-                .set(EvalResultDetailDO::getIsSafe, updateEntity.getIsSafe())
-                .set(EvalResultDetailDO::getErrorMsg, updateEntity.getErrorMsg())
-                .set(EvalResultDetailDO::getStatus, updateEntity.getStatus()));
+        UpdateWrapper<EvalResultDetailDO> updateWrapper = new UpdateWrapper<>();
+        updateWrapper.eq("id", updateEntity.getId())
+                .notIn("status", FINISHED_RESULT_STATUS)
+                .set("model_output", updateEntity.getModelOutput())
+                .set("raw_response", updateEntity.getRawResponse())
+                .set("latency", updateEntity.getLatency())
+                // L2 模糊区需要显式写入 null，表示当前安全结论等待人工核验或后续 L3。
+                .set("is_safe", updateEntity.getIsSafe())
+                .set("error_msg", updateEntity.getErrorMsg())
+                .set("status", updateEntity.getStatus());
+        return evalResultDetailMapper.update(null, updateWrapper);
     }
 
     /**
@@ -529,6 +582,36 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
     }
 
     /**
+     * 构造 L2 节点输入快照。
+     */
+    private Object buildL2InputSnapshot(EvalResultDetailDO resultDetail, String modelOutput, List<Long> l1WarningTags) {
+        LinkedHashMap<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("inputText", resultDetail.getInputText());
+        snapshot.put("modelOutput", modelOutput);
+        snapshot.put("l1WarningTags", l1WarningTags);
+        return snapshot;
+    }
+
+    /**
+     * 构造 L2 结果说明。
+     *
+     * <p>结果表没有独立 L2 风险字段，第一阶段把可读路由原因放入 errorMsg，
+     * 结构化证据保存在 L2 流水线节点中。</p>
+     */
+    private String buildL2ResultMessage(L2EvaluationResult l2Result) {
+        if (l2Result == null || l2Result.getDecisionType() == null) {
+            return null;
+        }
+        if (l2Result.getDecisionType() == L2DecisionTypeEnums.SAFE
+                || l2Result.getDecisionType() == L2DecisionTypeEnums.DEGRADED_SAFE) {
+            return null;
+        }
+        return trimErrorMessage("L2安全判定：" + l2Result.getDecisionType().getDesc()
+                + "，riskDetailsId=" + l2Result.getRiskDetailsId()
+                + "，reason=" + l2Result.getRouteReason());
+    }
+
+    /**
      * 构造失败节点结构化结果。
      */
     private Object buildFailedNodeResult(String decision) {
@@ -566,5 +649,14 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
         }
         int maxLength = 1000;
         return message.length() <= maxLength ? message : message.substring(0, maxLength);
+    }
+
+    /**
+     * L1 判定轻量结果，用于判断是否继续进入 L2。
+     *
+     * @param blocked L1 是否已经拦截
+     * @param warningTags L1 warning 风险小类标签
+     */
+    private record L1JudgementResult(boolean blocked, List<Long> warningTags) {
     }
 }
