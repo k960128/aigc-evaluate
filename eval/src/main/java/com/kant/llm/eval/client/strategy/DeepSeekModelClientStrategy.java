@@ -15,6 +15,8 @@ import org.springframework.ai.deepseek.DeepSeekChatOptions;
 import org.springframework.ai.deepseek.api.DeepSeekApi;
 
 import java.util.Locale;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 public class DeepSeekModelClientStrategy implements ModelClientStrategy {
@@ -29,6 +31,14 @@ public class DeepSeekModelClientStrategy implements ModelClientStrategy {
             Faker faker = new Faker(Locale.CHINA);
             // 生成模拟数据
             long startTime = System.currentTimeMillis();
+            // 200 - 20000的随机数
+            int random = ThreadLocalRandom.current().nextInt(200, 20001);
+            try {
+                // 模拟API调用
+                TimeUnit.MILLISECONDS.sleep(random);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
             long endTime = System.currentTimeMillis();
             return ModelResponse.builder()
                     .modelId(modelRequest.getModelInfo().getModelId())
