@@ -54,18 +54,34 @@ public class L2FeatureHit {
     /** ES 召回排名。 */
     private Integer esRank;
 
-    /** ES 原始分或归一化分。 */
+    /**
+     * ES 原始分或归一化分。
+     *
+     * <p>真实 ES 接入后可放 BM25/归一化分；MySQL Mock 召回中放轻量文本匹配分。</p>
+     */
     private BigDecimal esScore;
 
     /** Milvus 召回排名。 */
     private Integer milvusRank;
 
-    /** Milvus 相似度。 */
+    /**
+     * Milvus 相似度。
+     *
+     * <p>真实 Milvus 接入后表示向量相似度；MySQL Mock 召回中使用略低于 ES 分的模拟相似度。</p>
+     */
     private BigDecimal milvusSimilarity;
 
-    /** RRF 融合分。 */
+    /**
+     * RRF 融合分。
+     *
+     * <p>由 L2EvaluationService 根据 ES/Milvus 排名计算，用于选择进入 Reranker 的候选。</p>
+     */
     private BigDecimal rrfScore;
 
-    /** Reranker 精排分。 */
+    /**
+     * Reranker 精排分。
+     *
+     * <p>真实 Reranker 接入后表示模型相关性分；当前降级实现会优先沿用 Mock 召回预置分。</p>
+     */
     private BigDecimal rerankScore;
 }

@@ -25,7 +25,12 @@ public class L2RiskDetailHit {
     /** 风险大类名称。 */
     private String categoryName;
 
-    /** 小类聚合分。 */
+    /**
+     * 小类聚合分。
+     *
+     * <p>该分数不是单个模型输出，而是由最高 rerank 分、UNSAFE 命中数、强 ES 命中、
+     * 高 Milvus 相似、最高风险等级和 SAFE_EXCEPTION 扣分共同计算得到。</p>
+     */
     private BigDecimal detailScore;
 
     /** 该小类下最高风险等级。 */

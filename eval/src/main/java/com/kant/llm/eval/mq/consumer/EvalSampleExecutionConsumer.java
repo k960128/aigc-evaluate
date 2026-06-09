@@ -219,6 +219,10 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
                     message.getTaskDetailId(), resultDetail.getId());
             return null;
         }
+        // L2 只在 L1 未拦截时执行：
+        // 1. L1 已经命中高确定性黑词时，样本已经有明确违规结论，继续召回会造成重复判定。
+        // 2. L1 未拦截但命中 warning 标签时，warningTags 会作为 L2 查询上下文，帮助召回相邻风险小类。
+        // 3. L2 的三种结果分别对应：高置信违规、低风险安全、模糊区人工核验。
         if (!l1JudgementResult.blocked()) {
             applyL2Judgement(taskDetail, resultDetail, updateEntity, l1JudgementResult.warningTags(), modelResponse.getRespContent());
         }
@@ -305,6 +309,8 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
                                   EvalResultDetailDO updateEntity,
                                   List<Long> l1WarningTags,
                                   String modelOutput) {
+        // L2 作为独立流水线节点记录，原因是它有完整的召回证据、阈值快照和路由结果。
+        // 即使最终样本只写一个 is_safe/status，排查时仍可从 eval_pipeline_node_detail 回放本次判定细节。
         Long l2NodeRecordId = evalPipelineNodeRecorder.startNode(taskDetail, resultDetail,
                 PipelineNodeCodeEnums.L2, buildL2InputSnapshot(resultDetail, modelOutput, l1WarningTags));
         try {
@@ -319,11 +325,16 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
                     .build());
             updateEntity.setIsSafe(l2Result.getSafe());
             updateEntity.setErrorMsg(buildL2ResultMessage(l2Result));
+            // L3 尚未接入，本阶段把 PASS_TO_L3 映射到人工核验终态。
+            // 这里仍然推进批次 finished_count，避免模糊样本卡住整个批次。
             if (l2Result.getDecisionType() == L2DecisionTypeEnums.PASS_TO_L3) {
                 updateEntity.setStatus(EvalResultStatusEnums.MANUAL_REVIEWED.getCode());
             } else {
                 updateEntity.setStatus(EvalResultStatusEnums.AUTO_SCORED.getCode());
             }
+            // 流水线节点状态只表达 L2 节点是否放行：
+            // - safe=false：L2 已阻断，节点记 BLOCKED。
+            // - safe=true 或 safe=null：节点本身执行成功，记 PASSED；safe=null 的人工核验信息在 node_result 中体现。
             PipelineNodeStatusEnums nodeStatus = l2Result.getSafe() != null && !l2Result.getSafe()
                     ? PipelineNodeStatusEnums.BLOCKED
                     : PipelineNodeStatusEnums.PASSED;

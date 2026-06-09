@@ -72,6 +72,9 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
 
     @Override
     public L2EvaluationResult evaluate(L2EvaluationRequest request) {
+        // 第一阶段先使用代码内默认阈值，保证上线路径简单可控。
+        // 后续若接配置中心或数据库阈值表，只需要替换这里的阈值来源，
+        // 下面的召回、融合、精排、路由流程可以保持不变。
         L2ThresholdProperties thresholds = L2ThresholdProperties.defaults();
         String queryText = buildQueryText(request);
         String queryTextDigest = sha256(queryText);
@@ -88,6 +91,11 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
                     .build();
         }
 
+        // L2 主链路分为四步：
+        // 1. 双路召回：ES 偏字面匹配，Milvus 偏语义相似。
+        // 2. RRF 融合：把两路 rank 合并到 featureId 维度，避免同一证据重复计数。
+        // 3. Reranker：真实模型未接入时用降级分；Mock 模式会保留召回侧预置分。
+        // 4. 小类聚合和阈值路由：最终以 riskDetailsId 作为 L2 决策粒度。
         List<L2FeatureHit> fusedCandidates = fuseByRrf(recallResult, thresholds);
         applyRerankScore(queryText, fusedCandidates);
         List<L2RiskDetailHit> riskDetailHits = aggregateRiskDetails(fusedCandidates, thresholds);
@@ -126,6 +134,9 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
 
     /**
      * 使用 RRF 融合 ES 和 Milvus 召回结果。
+     *
+     * <p>RRF 只依赖排名，不依赖 ES/Milvus 原始分值的量纲，因此适合在两个检索系统
+     * 分数不可直接比较时做第一阶段融合。</p>
      */
     private List<L2FeatureHit> fuseByRrf(L2RecallResult recallResult, L2ThresholdProperties thresholds) {
         Map<Long, L2FeatureHit> hitMap = new LinkedHashMap<>();
@@ -150,6 +161,8 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
                 continue;
             }
             int rank = i + 1;
+            // 标准 RRF 公式：1 / (k + rank)。k 越大，头部排名优势越平滑。
+            // 当前 k=60，让 ES/Milvus 的前几名都能进入候选，但不会让单一路召回完全支配结果。
             BigDecimal rrfScore = BigDecimal.ONE.divide(
                     BigDecimal.valueOf((long) rrfK + rank), SCORE_SCALE, RoundingMode.HALF_UP);
             L2FeatureHit merged = hitMap.computeIfAbsent(hit.getFeatureId(), ignored -> copyFeatureHit(hit));
@@ -195,6 +208,9 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
 
     /**
      * 调用 Reranker 并将精排分回填到候选上。
+     *
+     * <p>这里不关心 Reranker 的具体实现，可以是真实模型、规则模型，也可以是当前默认降级实现。
+     * L2 后续只消费统一的 rerankScore。</p>
      */
     private void applyRerankScore(String queryText, List<L2FeatureHit> candidates) {
         if (candidates.isEmpty()) {
@@ -228,6 +244,9 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
 
     /**
      * 构造单个风险小类聚合结果。
+     *
+     * <p>聚合分以最高 rerank 分为主体，再叠加证据数量、强 ES 命中、高 Milvus 相似和风险等级。
+     * 安全例外会扣分，用于降低“拒答、安全科普、合规讨论”等场景的误杀概率。</p>
      */
     private L2RiskDetailHit buildRiskDetailHit(Long riskDetailsId, List<L2FeatureHit> featureHits, L2ThresholdProperties thresholds) {
         BigDecimal maxRerankScore = featureHits.stream()
@@ -247,10 +266,15 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
                 .max(Integer::compareTo)
                 .orElse(0);
         BigDecimal detailScore = maxRerankScore
+                // 多条 UNSAFE 证据应提升置信度，但使用 log1p 避免同质特征堆叠导致分数膨胀。
                 .add(logWeight(unsafeHitCount, UNSAFE_HIT_WEIGHT))
+                // ES 前排或高分命中说明文本证据很直接，适合做高置信拦截增强项。
                 .add(STRONG_ES_WEIGHT.multiply(BigDecimal.valueOf(strongEsHitCount)))
+                // Milvus 高相似说明语义上接近风险案例，适合作为泛化召回增强项。
                 .add(HIGH_MILVUS_WEIGHT.multiply(BigDecimal.valueOf(highMilvusHitCount)))
+                // 风险等级越高，同等证据下越倾向保守处理。
                 .add(MAX_RISK_LEVEL_WEIGHT.multiply(BigDecimal.valueOf(maxRiskLevel)))
+                // SAFE_EXCEPTION 命中说明文本可能是拒答、科普、合规讨论，需要降低误报。
                 .subtract(SAFE_EXCEPTION_WEIGHT.multiply(BigDecimal.valueOf(safeExceptionHitCount)))
                 .max(BigDecimal.ZERO);
         L2FeatureHit first = featureHits.getFirst();
@@ -271,6 +295,10 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
 
     /**
      * 根据聚合结果执行 L2 阈值路由。
+     *
+     * <p>路由结果故意保持三态：
+     * UNSAFE 直接阻断，SAFE 自动通过，PASS_TO_L3 表示证据不足以自动裁决。
+     * 由于当前 L3 尚未实现，PASS_TO_L3 在执行消费者中会落为人工核验。</p>
      */
     private L2EvaluationResult routeDecision(List<L2RiskDetailHit> riskDetailHits,
                                              L2RecallResult recallResult,
@@ -283,6 +311,8 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
         String routeReason;
 
         if (topHit == null) {
+            // 没有任何小类命中时，需要区分“召回系统不可用”和“召回系统可用但确实无命中”。
+            // 两者最终都可安全放行，但前者在日志中标记 DEGRADED_SAFE，便于后续监控召回可用性。
             decisionType = Boolean.TRUE.equals(recallResult.getDegraded())
                     ? L2DecisionTypeEnums.DEGRADED_SAFE
                     : L2DecisionTypeEnums.SAFE;
@@ -327,6 +357,11 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
 
     /**
      * 判断是否满足高置信违规短路。
+     *
+     * <p>违规短路有两条路径：
+     * 1. 小类聚合分超过 unsafe 阈值且存在 UNSAFE 证据；
+     * 2. 单条强证据同时满足高 rerank、高风险等级、强 ES 或高 Milvus。
+     * 第二条用于保护“少量但非常明确”的高危命中不被聚合分低估。</p>
      */
     private boolean isUnsafeShortcut(L2RiskDetailHit hit, L2ThresholdProperties thresholds) {
         boolean detailScoreUnsafe = nullToZero(hit.getDetailScore()).compareTo(thresholds.getDetailUnsafeThreshold()) >= 0
@@ -341,6 +376,9 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
 
     /**
      * 判断是否满足低风险安全短路。
+     *
+     * <p>没有 UNSAFE 命中时直接安全；有 UNSAFE 命中但最高精排分和小类聚合分都很低时，
+     * 认为证据不足，允许低风险安全短路。</p>
      */
     private boolean isSafeShortcut(L2RiskDetailHit hit, L2ThresholdProperties thresholds) {
         BigDecimal maxRerankScore = safeList(hit.getFeatureHits()).stream()
@@ -392,6 +430,8 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
     }
 
     private boolean isStrongEsHit(L2FeatureHit hit) {
+        // ES 强命中强调“字面证据直接”：
+        // 前 5 名、payload/keyword 类型或较高 ES 分都可作为强证据来源。
         return hit.getEsRank() != null && hit.getEsRank() <= 5
                 && (RiskFeatureTypeEnums.PAYLOAD.getCode().equals(hit.getFeatureType())
                 || RiskFeatureTypeEnums.KEYWORD.getCode().equals(hit.getFeatureType())
@@ -399,10 +439,12 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
     }
 
     private boolean isHighMilvusHit(L2FeatureHit hit, L2ThresholdProperties thresholds) {
+        // Milvus 高相似命中强调“语义证据接近”，阈值由 L2ThresholdProperties 固化快照记录。
         return nullToZero(hit.getMilvusSimilarity()).compareTo(thresholds.getMilvusHighSimilarity()) >= 0;
     }
 
     private boolean isHighRisk(L2FeatureHit hit) {
+        // riskLevel>=3 表示高风险或致命风险，只有这类证据才允许单条强证据直接触发违规短路。
         return hit.getRiskLevel() != null && hit.getRiskLevel() >= 3;
     }
 
