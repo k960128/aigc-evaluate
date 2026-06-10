@@ -57,6 +57,11 @@ rag:
 
 app:
   demo-mode: false
+  l2:
+    # L2 召回客户端开关：
+    # true  = 使用 MySQL Mock 召回，直接读取 risk_attack_feature，适合本地/开发验证；
+    # false = 使用空召回降级客户端，适合验证无 ES/Milvus 时主链路是否仍可运行。
+    mock-recall-enabled: true
 
 rocketmq:
   name-server: 47.103.193.177:9876
