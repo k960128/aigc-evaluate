@@ -1,9 +1,10 @@
 package com.kant.llm.eval.service.l2.client;
 
+import com.kant.llm.eval.common.condition.ConditionalOnL2RecallMode;
+import com.kant.llm.eval.common.config.L2RecallModeProperties.RecallMode;
 import com.kant.llm.eval.service.l2.model.L2RecallRequest;
 import com.kant.llm.eval.service.l2.model.L2RecallResult;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -14,13 +15,14 @@ import java.util.List;
  * <p>当前不强依赖真实 ES/Milvus 配置，因此默认返回空召回结果，
  * 让主评测链路可以先完成 L2 节点闭环。</p>
  *
- * <p>当 {@code app.l2.mock-recall-enabled=false} 时注册该 Bean。
+ * <p>当 {@code app.l2.recall-mode=empty}，或未配置 recall-mode 且
+ * {@code app.l2.mock-recall-enabled=false} 时注册该 Bean。
  * 它表示“没有任何召回证据”，不是“召回服务异常”：返回结果中的 degraded=true
  * 会进入 L2 低风险/降级日志分支，保证应用在没有外部检索系统时仍能启动。</p>
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "app.l2", name = "mock-recall-enabled", havingValue = "false")
+@ConditionalOnL2RecallMode(mode = RecallMode.EMPTY)
 public class DefaultL2RecallClient implements L2RecallClient {
 
     @Override

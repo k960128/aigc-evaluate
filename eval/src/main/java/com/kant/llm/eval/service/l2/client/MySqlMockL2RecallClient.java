@@ -1,6 +1,8 @@
 package com.kant.llm.eval.service.l2.client;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.kant.llm.eval.common.condition.ConditionalOnL2RecallMode;
+import com.kant.llm.eval.common.config.L2RecallModeProperties.RecallMode;
 import com.kant.llm.eval.common.enums.RiskFeaturePolarityEnums;
 import com.kant.llm.eval.dao.entity.RiskAttackFeatureDO;
 import com.kant.llm.eval.dao.entity.RiskCategoryDO;
@@ -16,7 +18,6 @@ import com.kant.llm.eval.service.l2.model.L2RecallResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -39,13 +40,14 @@ import java.util.stream.Collectors;
  * <p>用于在 ES、Milvus、Reranker 尚未真实接入时，从 MySQL 知识库事实源中做轻量文本召回，
  * 让 L2 高危拦截、低风险放行和人工核验分支都可以被本地验证。</p>
  *
- * <p>当 {@code app.l2.mock-recall-enabled=true} 或未配置该开关时注册该 Bean。
+ * <p>当 {@code app.l2.recall-mode=mysql-mock}，或未配置 recall-mode 且
+ * {@code app.l2.mock-recall-enabled=true} 时注册该 Bean。
  * 该实现仍然遵守 {@link L2RecallClient} 接口，后续切到真实 ES/Milvus 客户端时，
  * L2EvaluationService 不需要改动。</p>
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "app.l2", name = "mock-recall-enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnL2RecallMode(mode = RecallMode.MYSQL_MOCK)
 @RequiredArgsConstructor
 public class MySqlMockL2RecallClient implements L2RecallClient {
 

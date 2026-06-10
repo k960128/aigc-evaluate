@@ -58,10 +58,25 @@ rag:
 app:
   demo-mode: false
   l2:
-    # L2 召回客户端开关：
-    # true  = 使用 MySQL Mock 召回，直接读取 risk_attack_feature，适合本地/开发验证；
-    # false = 使用空召回降级客户端，适合验证无 ES/Milvus 时主链路是否仍可运行。
+    # L2 召回模式：
+    # mysql-mock = 使用 MySQL Mock 召回，适合开发验证；
+    # empty      = 使用空召回降级客户端，适合验证无外部检索依赖时主链路可用；
+    # real       = 使用真实 ES + PGVector 召回。
+    recall-mode: mysql-mock
+    # 兼容旧开关：当 recall-mode 未配置时，true 等价 mysql-mock，false 等价 empty。
     mock-recall-enabled: true
+    es:
+      uris:
+        - http://47.103.193.177:9200
+      username: elastic
+      password: G3a5tB7nD9f1
+      index-name: l2_risk_attack_feature_v1
+      connect-timeout: 3000
+      socket-timeout: 10000
+    index-sync:
+      enabled: false
+      fixed-delay-ms: 30000
+      batch-size: 50
 
 rocketmq:
   name-server: 47.103.193.177:9876
