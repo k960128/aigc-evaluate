@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS vector_store (
   id UUID PRIMARY KEY,
   content TEXT,
   metadata JSON,
-  embedding VECTOR(1536)
+  embedding VECTOR(1024)
 );
 
 CREATE INDEX IF NOT EXISTS vector_store_embedding_hnsw_idx
