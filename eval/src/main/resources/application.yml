@@ -33,6 +33,28 @@ spring:
     resources:
       add-mappings: false
 
+rag:
+  vector:
+    type: pg  # 可选 milvus / pg
+    pg:
+      url: jdbc:postgresql://47.103.193.177:5432/aigc_eval
+      username: postgres
+      password: G3a5tB7nD9f1
+      driver-class-name: org.postgresql.Driver
+      initialize-schema: false
+      schema-name: public
+      table-name: vector_store
+      dimensions: 1536
+      max-document-batch-size: 1000
+    milvus:
+      host: 127.0.0.1
+      port: 19530
+      database-name: default
+      collection-name: vector_store
+      initialize-schema: false
+      embedding-dimension: 1536
+
+
 app:
   demo-mode: false
 
