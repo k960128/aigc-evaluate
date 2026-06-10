@@ -3,7 +3,6 @@ package com.kant.llm.eval.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.kant.llm.eval.common.convention.Result;
-import com.kant.llm.eval.common.exception.ServiceException;
 import com.kant.llm.eval.common.web.Results;
 import com.kant.llm.eval.dao.entity.DataSetDO;
 import com.kant.llm.eval.dao.entity.DataSetSampleDO;
@@ -125,7 +124,7 @@ public class DataSetController {
 
         LambdaQueryWrapper<DataSetSampleDO> queryWrapper = new LambdaQueryWrapper<>();
         if (request.getDatasetId() != null) {
-            queryWrapper.eq(DataSetSampleDO::getDatasetId, convertDatasetId(request.getDatasetId()));
+            queryWrapper.eq(DataSetSampleDO::getDatasetId, request.getDatasetId());
         }
         queryWrapper.orderByDesc(DataSetSampleDO::getCreateTime);
 
@@ -145,9 +144,8 @@ public class DataSetController {
      */
     @GetMapping("/sample/list")
     public Result<List<DataSetSampleVO>> listSamples(@RequestParam("datasetId") Long datasetId) {
-        Integer datasetIdValue = convertDatasetId(datasetId);
         List<DataSetSampleVO> voList = dataSetSampleService.list(new LambdaQueryWrapper<DataSetSampleDO>()
-                        .eq(DataSetSampleDO::getDatasetId, datasetIdValue)
+                        .eq(DataSetSampleDO::getDatasetId, datasetId)
                         .orderByDesc(DataSetSampleDO::getCreateTime))
                 .stream()
                 .map(this::convertToSampleVO)
@@ -183,26 +181,9 @@ public class DataSetController {
         return DataSetSampleVO.builder()
                 .id(entity.getId())
                 .datasetId(entity.getDatasetId())
-                .inputText(entity.getInputText())
-                .answerText(entity.getAnswerText())
-                .scoreRule(entity.getScoreRule())
-                .field(entity.getField())
+                .question(entity.getQuestion())
                 .createTime(entity.getCreateTime())
                 .updateTime(entity.getUpdateTime())
                 .build();
-    }
-
-    /**
-     * 将请求参数中的数据集 ID 转换为样本表使用的字段类型。
-     *
-     * @param datasetId 请求参数中的数据集 ID
-     * @return 样本表查询使用的数据集 ID
-     */
-    private Integer convertDatasetId(Long datasetId) {
-        try {
-            return Math.toIntExact(datasetId);
-        } catch (ArithmeticException ex) {
-            throw new ServiceException("数据集ID超出支持范围：" + datasetId);
-        }
     }
 }

@@ -29,27 +29,12 @@ public class DataSetSampleDO {
     /**
      * 关联数据集ID
      **/
-    private Integer datasetId;
+    private Long datasetId;
 
     /**
-     * 输入文本
+     * 评测集题目
      */
-    private String inputText;
-
-    /**
-     * 标准答案
-     */
-    private String answerText;
-
-    /**
-     * 评分规则
-     */
-    private String scoreRule;
-
-    /**
-     * 研究领域
-     */
-    private String field;
+    private String question;
 
     /**
      * 创建时间

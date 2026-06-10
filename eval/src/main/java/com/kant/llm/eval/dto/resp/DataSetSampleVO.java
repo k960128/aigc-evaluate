@@ -24,19 +24,10 @@ public class DataSetSampleVO {
     private Long id;
 
     /** 数据集 ID，表示该样本所属的数据集。 */
-    private Integer datasetId;
+    private Long datasetId;
 
-    /** 输入文本，表示评测时提交给模型的问题或提示词内容。 */
-    private String inputText;
-
-    /** 标准答案文本，表示样本对应的参考答案或期望输出。 */
-    private String answerText;
-
-    /** 评分规则，表示该样本用于评测结果判定的规则说明。 */
-    private String scoreRule;
-
-    /** 研究领域，表示样本所属的专业领域或业务场景。 */
-    private String field;
+    /** 评测集题目，表示评测时提交给模型的问题或提示词内容。 */
+    private String question;
 
     /** 创建时间，表示样本记录首次创建的时间。 */
     @JsonSerialize(using = LocalDateTimeSerializer.class)

@@ -34,7 +34,7 @@ public class EvalResultDetailVO {
     private Long sampleId;
 
     /** 样本所属数据集 ID。 */
-    private Integer datasetId;
+    private Long datasetId;
 
     /** 原始问题，表示提交给模型的输入文本。 */
     private String inputText;
