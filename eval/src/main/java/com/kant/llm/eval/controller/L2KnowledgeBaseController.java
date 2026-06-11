@@ -226,7 +226,7 @@ public class L2KnowledgeBaseController {
      * @param request 创建请求
      * @return 是否创建成功
      */
-    @PostMapping("/features")
+    @PostMapping("/features/create")
     public Result<Boolean> createFeature(@RequestBody CreateL2KnowledgeFeatureRequest request) {
         RiskAttackFeatureDO entity = new RiskAttackFeatureDO();
         BeanUtils.copyProperties(request, entity);
@@ -251,7 +251,7 @@ public class L2KnowledgeBaseController {
      * @param request 更新请求
      * @return 是否更新成功
      */
-    @PutMapping("/features")
+    @PutMapping("/features/update")
     public Result<Boolean> updateFeature(@RequestBody UpdateL2KnowledgeFeatureRequest request) {
         RiskAttackFeatureDO entity = new RiskAttackFeatureDO();
         BeanUtils.copyProperties(request, entity);
