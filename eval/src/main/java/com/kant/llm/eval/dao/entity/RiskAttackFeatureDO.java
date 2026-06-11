@@ -77,6 +77,9 @@ public class RiskAttackFeatureDO {
     /** Milvus 同步状态：0-待同步，1-已同步，2-同步失败。 */
     private Integer milvusSyncStatus;
 
+    /** pg 同步状态：0-待同步，1-已同步，2-同步失败。 */
+    private Integer pgSyncStatus;
+
     /** 业务状态：0-禁用，1-启用。 */
     private Integer status;
 

@@ -84,6 +84,25 @@ public class EmbeddingModelClient {
     }
 
     /**
+     * 获取当前启用的 Spring AI EmbeddingModel。
+     *
+     * <p>真实向量库复用同一个懒加载模型，避免写入和查询使用不同的 embedding 配置。</p>
+     *
+     * @return Spring AI embedding 模型实例
+     */
+    public EmbeddingModel getEmbeddingModel() {
+        return getEmbeddingModelHolder().embeddingModel();
+    }
+
+    /**
+     * 获取当前启用 embedding 模型的向量维度。
+     *
+     * @return 已配置的向量维度，未配置时返回 null
+     */
+    public Integer getDimension() {
+        return getEmbeddingModelHolder().embeddingModelInfoDO().getDimension();
+    }
+    /**
      * 调用模型执行单文本向量化。
      *
      * @param holder 嵌入模型持有器

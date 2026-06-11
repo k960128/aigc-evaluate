@@ -1,0 +1,101 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0
+  },
+  "mappings": {
+    "dynamic": false,
+    "properties": {
+      "featureId": {
+        "type": "long"
+      },
+      "riskDetailsId": {
+        "type": "long"
+      },
+      "categoryId": {
+        "type": "long"
+      },
+      "featureCode": {
+        "type": "keyword",
+        "ignore_above": 256
+      },
+      "featureText": {
+        "type": "text",
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 512
+          }
+        }
+      },
+      "normalizedText": {
+        "type": "text",
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 512
+          }
+        }
+      },
+      "featureType": {
+        "type": "keyword",
+        "ignore_above": 64
+      },
+      "polarity": {
+        "type": "keyword",
+        "ignore_above": 64
+      },
+      "riskLevel": {
+        "type": "integer"
+      },
+      "language": {
+        "type": "keyword",
+        "ignore_above": 32
+      },
+      "tags": {
+        "type": "text",
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 512
+          }
+        }
+      },
+      "source": {
+        "type": "keyword",
+        "ignore_above": 128
+      },
+      "weight": {
+        "type": "scaled_float",
+        "scaling_factor": 1000
+      },
+      "contentHash": {
+        "type": "keyword",
+        "ignore_above": 128
+      },
+      "version": {
+        "type": "integer"
+      },
+      "status": {
+        "type": "integer"
+      },
+      "createTime": {
+        "type": "date",
+        "format": "yyyy-MM-dd HH:mm:ss||strict_date_optional_time||epoch_millis"
+      },
+      "updateTime": {
+        "type": "date",
+        "format": "yyyy-MM-dd HH:mm:ss||strict_date_optional_time||epoch_millis"
+      }
+    }
+  },
+  "aliases": {
+    "l2_risk_attack_feature": {}
+  }
+}

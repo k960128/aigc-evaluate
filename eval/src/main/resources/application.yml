@@ -9,6 +9,8 @@ spring:
     multipart:
       max-file-size: 50MB
       max-request-size: 100MB
+
+# 数据库配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     type: com.zaxxer.hikari.HikariDataSource
@@ -23,6 +25,13 @@ spring:
       minimum-idle: 5
       pool-name: LLMEvalHikariPool
 
+# Elasticsearch 配置
+  elasticsearch:
+    uris: http://47.103.193.177:9200
+    username: elastic
+    password: G3a5tB7nD9f1
+
+# Redis 配置
   data:
     redis:
       host: 47.103.193.177
@@ -33,14 +42,28 @@ spring:
     resources:
       add-mappings: false
 
-app:
-  demo-mode: false
+# RAG 配置
+rag:
+  vector:
+    type: pg # 预留，后续支持Milvus和pg
+    pg:
+      url: jdbc:postgresql://47.103.193.177:5432/aigc_eval
+      username: postgres
+      password: G3a5tB7nD9f1
+      driver-class-name: org.postgresql.Driver
+      initialize-schema: false
+      schema-name: public
+      table-name: vector_store
+      dimensions: 1024
+      max-document-batch-size: 10
 
+# RocketMQ 配置
 rocketmq:
   name-server: 47.103.193.177:9876
   producer:
     group: aigc-eval-producer-group
 
+# Sa-Token 配置
 sa-token:
   token-name: satoken
   timeout: 604800

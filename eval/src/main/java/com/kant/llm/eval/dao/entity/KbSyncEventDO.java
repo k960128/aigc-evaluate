@@ -53,6 +53,9 @@ public class KbSyncEventDO {
     /** Milvus 处理状态：0-待处理，1-成功，2-失败。 */
     private Integer milvusStatus;
 
+    /** PG 处理状态：0-待处理，1-成功，2-失败。 */
+    private Integer pgStatus;
+
     /** 重试次数。 */
     private Integer retryCount;
 
