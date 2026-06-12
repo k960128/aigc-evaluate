@@ -66,7 +66,7 @@ public class DeepSeekModelClientStrategy implements ModelClientStrategy {
         long endTime = System.currentTimeMillis();
         return ModelResponse.builder()
                 .modelId(modelRequest.getModelInfo().getModelId())
-                .respContent(ObjectUtil.isNotNull(contentDO) ? contentDO.getBindOutputText() : "")
+                .respContent(ObjectUtil.isNotNull(contentDO) ? contentDO.getOutputText() : "")
                 .elapsed(endTime - startTime)
                 .build();
     }
