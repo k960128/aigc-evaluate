@@ -18,7 +18,7 @@ public class MockModelOutputContentDO {
     private Long bindModelId;
 
     /** 关联的模型输出文本 */
-    private String bindOutputText;
+    private String outputText;
 
     /**
      * 关联评测样本ID
