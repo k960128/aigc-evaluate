@@ -15,6 +15,15 @@ public interface ModelClientStrategy {
     ModelResponse call(ModelRequest modelRequest);
 
     /**
+     * 模拟调用大模型
+     * @param modelRequest 模型请求参数
+     * @return 模型响应结果
+     */
+    default ModelResponse mockCall(MockModelRequest modelRequest){
+        return null;
+    }
+
+    /**
      * 大模型厂商标识
      */
     ModelManufacturerEnum getManufacturer();

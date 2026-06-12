@@ -3,11 +3,7 @@ package com.kant.llm.eval.mq.consumer;
 import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
-import com.kant.llm.eval.client.ModelClientStrategy;
-import com.kant.llm.eval.client.ModelClientStrategyFactory;
-import com.kant.llm.eval.client.ModelInfo;
-import com.kant.llm.eval.client.ModelRequest;
-import com.kant.llm.eval.client.ModelResponse;
+import com.kant.llm.eval.client.*;
 import com.kant.llm.eval.common.convention.EvalContext;
 import com.kant.llm.eval.common.enums.EvalResultStatusEnums;
 import com.kant.llm.eval.common.enums.L2DecisionTypeEnums;
@@ -28,6 +24,7 @@ import com.kant.llm.eval.engine.L1InterceptionEngine;
 import com.kant.llm.eval.mq.EvalMqTopics;
 import com.kant.llm.eval.mq.message.EvalSampleExecutionMessage;
 import com.kant.llm.eval.service.EvalPipelineNodeRecorder;
+import com.kant.llm.eval.service.MockModelOutputContentService;
 import com.kant.llm.eval.service.l2.L2EvaluationService;
 import com.kant.llm.eval.service.l2.model.L2EvaluationRequest;
 import com.kant.llm.eval.service.l2.model.L2EvaluationResult;
@@ -82,6 +79,7 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
     private final TransactionTemplate transactionTemplate;
     private final EvalPipelineNodeRecorder evalPipelineNodeRecorder;
     private final L2EvaluationService l2EvaluationService;
+    private final MockModelOutputContentService mockModelOutputContentService;
 
     public EvalSampleExecutionConsumer(EvalResultDetailMapper evalResultDetailMapper,
                                        EvalTaskDetailMapper evalTaskDetailMapper,
@@ -91,7 +89,8 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
                                        RedissonClient redissonClient,
                                        TransactionTemplate transactionTemplate,
                                        EvalPipelineNodeRecorder evalPipelineNodeRecorder,
-                                       L2EvaluationService l2EvaluationService) {
+                                       L2EvaluationService l2EvaluationService,
+                                       MockModelOutputContentService mockModelOutputContentService) {
         this.evalResultDetailMapper = evalResultDetailMapper;
         this.evalTaskDetailMapper = evalTaskDetailMapper;
         this.modelInfoMapper = modelInfoMapper;
@@ -101,6 +100,7 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
         this.transactionTemplate = transactionTemplate;
         this.evalPipelineNodeRecorder = evalPipelineNodeRecorder;
         this.l2EvaluationService = l2EvaluationService;
+        this.mockModelOutputContentService = mockModelOutputContentService;
     }
 
     @Override
@@ -181,9 +181,11 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
         ModelResponse modelResponse;
         try {
             // 开始调用大模型
-            modelResponse = strategy.call(ModelRequest.builder()
+            modelResponse = strategy.mockCall(MockModelRequest.builder()
                     .modelInfo(modelInfo)
                     .inputText(resultDetail.getInputText())
+                    .mockModelOutputContentService(mockModelOutputContentService)
+                    .sampleId(resultDetail.getSampleId())
                     .build());
             evalPipelineNodeRecorder.finishNode(modelCallNodeRecordId, PipelineNodeStatusEnums.PASSED,
                     buildModelCallOutputSnapshot(modelResponse), buildModelCallNodeResult(modelResponse), null);

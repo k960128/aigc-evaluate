@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 
 @Data
 @TableName("mock_model_output_content")
-public class MockModelOutputContent {
+public class MockModelOutputContentDO {
 
     /** 主键ID */
     @TableId(type = IdType.AUTO)
