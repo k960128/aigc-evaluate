@@ -345,26 +345,7 @@ public class L2KnowledgeSyncServiceImpl implements L2KnowledgeSyncService {
     private EsDocumentChunk buildEsDocument(RiskAttackFeatureDO feature) {
         EsDocumentChunk doc = new EsDocumentChunk();
         doc.setId(String.valueOf(feature.getId()));
-        doc.setFeatureId(feature.getId());
-        doc.setRiskDetailsId(feature.getRiskDetailsId());
-        doc.setCategoryId(feature.getCategoryId());
-        doc.setFeatureCode(feature.getFeatureCode());
-        doc.setFeatureText(feature.getFeatureText());
-        doc.setNormalizedText(feature.getNormalizedText());
-        doc.setFeatureType(feature.getFeatureType());
-        doc.setPolarity(feature.getPolarity());
-        doc.setRiskLevel(feature.getRiskLevel());
-        doc.setLanguage(feature.getLanguage());
-        doc.setTags(feature.getTags());
-        doc.setSource(feature.getSource());
-        doc.setWeight(feature.getWeight());
-        doc.setContentHash(feature.getContentHash());
-        doc.setVersion(feature.getVersion());
-        doc.setStatus(feature.getStatus());
-        doc.setCreateTime(formatDateTime(feature.getCreateTime()));
-        doc.setUpdateTime(formatDateTime(feature.getUpdateTime()));
         doc.setContent(resolveFeatureText(feature));
-        doc.setMetadata(buildVectorMetadata(feature));
         return doc;
     }
 
