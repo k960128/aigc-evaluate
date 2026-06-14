@@ -29,6 +29,9 @@ public class RiskAttackFeatureDO {
     /** 关联 risk_details.id，L2 聚合和后续 L3 回查都以该字段为核心粒度。 */
     private Long riskDetailsId;
 
+    /** 冗余归属小类名称 **/
+    private String riskDetailsName;
+
     /** 冗余风险大类 ID，便于检索过滤和统计。 */
     private Long categoryId;
 
