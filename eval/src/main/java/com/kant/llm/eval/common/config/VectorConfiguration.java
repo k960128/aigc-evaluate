@@ -1,5 +1,8 @@
 package com.kant.llm.eval.common.config;
 
+import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
+import com.alibaba.cloud.ai.dashscope.rerank.DashScopeRerankModel;
+import com.alibaba.cloud.ai.dashscope.rerank.DashScopeRerankOptions;
 import com.kant.llm.eval.embedding.EmbeddingModelClient;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
@@ -16,8 +19,8 @@ import static org.springframework.ai.vectorstore.pgvector.PgVectorStore.PgDistan
 import static org.springframework.ai.vectorstore.pgvector.PgVectorStore.PgIndexType.HNSW;
 
 /**
- 自动装配pg数据源和jdbcTemplate模板
- 手动注册vector
+ * 自动装配pg数据源和jdbcTemplate模板
+ * 手动注册vector
  */
 @Configuration
 public class VectorConfiguration {
@@ -53,7 +56,7 @@ public class VectorConfiguration {
 
     @Bean(name = "vectorStore")
     public VectorStore vectorStore(@Qualifier("pgJdbcTemplate") JdbcTemplate jdbcTemplate,
-                                        EmbeddingModelClient embeddingModelClient) {
+                                   EmbeddingModelClient embeddingModelClient) {
         return PgVectorStore.builder(jdbcTemplate, embeddingModelClient.getEmbeddingModel())
                 .dimensions(dimensions)
                 .distanceType(COSINE_DISTANCE)
@@ -63,5 +66,17 @@ public class VectorConfiguration {
                 .vectorTableName(tableName)
                 .maxDocumentBatchSize(maxDocumentBatchSize)
                 .build();
+    }
+
+    @Bean(name = "rerankModel")
+    public DashScopeRerankModel rerankModel() {
+        return new DashScopeRerankModel(DashScopeApi
+                .builder()
+                .apiKey("sk-3398a71a31f04728a19922dcbb8af1f9")
+                .build(),
+                DashScopeRerankOptions.builder()
+                        .model("qwen3-rerank")
+                        .topN(5)
+                        .build());
     }
 }
