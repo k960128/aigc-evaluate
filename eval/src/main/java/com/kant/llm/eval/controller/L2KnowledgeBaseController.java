@@ -15,6 +15,9 @@ import com.kant.llm.eval.dto.req.L2KnowledgeFeaturePageRequest;
 import com.kant.llm.eval.dto.req.L2KnowledgeRulePageRequest;
 import com.kant.llm.eval.dto.req.UpdateL2KnowledgeFeatureRequest;
 import com.kant.llm.eval.dto.req.UpdateL2KnowledgeRuleRequest;
+import com.kant.llm.eval.dto.resp.KbSyncEventVO;
+import com.kant.llm.eval.dto.resp.RiskAttackFeatureVO;
+import com.kant.llm.eval.dto.resp.RiskDetailRuleVO;
 import com.kant.llm.eval.service.KbSyncEventService;
 import com.kant.llm.eval.service.RiskAttackFeatureService;
 import com.kant.llm.eval.service.RiskDetailRuleService;
@@ -35,6 +38,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.stream.Collectors;
 
 /**
  * L2 知识库管理接口。
@@ -72,7 +76,7 @@ public class L2KnowledgeBaseController {
      * @return 风险小类判定规则分页结果
      */
     @PostMapping("/rules/page")
-    public Result<Page<RiskDetailRuleDO>> pageRules(@RequestBody L2KnowledgeRulePageRequest request) {
+    public Result<Page<RiskDetailRuleVO>> pageRules(@RequestBody L2KnowledgeRulePageRequest request) {
         L2KnowledgeRulePageRequest queryRequest = request == null ? new L2KnowledgeRulePageRequest() : request;
         LambdaQueryWrapper<RiskDetailRuleDO> queryWrapper = new LambdaQueryWrapper<>();
         if (queryRequest.getRiskDetailsId() != null) {
@@ -89,9 +93,14 @@ public class L2KnowledgeBaseController {
         }
         queryWrapper.orderByAsc(RiskDetailRuleDO::getRiskDetailsId)
                 .orderByDesc(RiskDetailRuleDO::getUpdateTime);
-        return Results.success(riskDetailRuleService.page(
+        Page<RiskDetailRuleDO> pageResult = riskDetailRuleService.page(
                 new Page<>(pageCurrent(queryRequest.getCurrent()), pageSize(queryRequest.getSize())),
-                queryWrapper));
+                queryWrapper);
+        Page<RiskDetailRuleVO> voPage = new Page<>(pageResult.getCurrent(), pageResult.getSize(), pageResult.getTotal());
+        voPage.setRecords(pageResult.getRecords().stream()
+                .map(this::convertToRuleVO)
+                .collect(Collectors.toList()));
+        return Results.success(voPage);
     }
 
     /**
@@ -101,8 +110,8 @@ public class L2KnowledgeBaseController {
      * @return 风险小类判定规则详情
      */
     @GetMapping("/rules/{id}")
-    public Result<RiskDetailRuleDO> getRule(@PathVariable Long id) {
-        return Results.success(riskDetailRuleService.getById(id));
+    public Result<RiskDetailRuleVO> getRule(@PathVariable Long id) {
+        return Results.success(convertToRuleVO(riskDetailRuleService.getById(id)));
     }
 
     /**
@@ -166,7 +175,7 @@ public class L2KnowledgeBaseController {
      * @return 攻击特征分页结果
      */
     @PostMapping("/features/page")
-    public Result<Page<RiskAttackFeatureDO>> pageFeatures(@RequestBody L2KnowledgeFeaturePageRequest request) {
+    public Result<Page<RiskAttackFeatureVO>> pageFeatures(@RequestBody L2KnowledgeFeaturePageRequest request) {
         L2KnowledgeFeaturePageRequest queryRequest = request == null ? new L2KnowledgeFeaturePageRequest() : request;
         LambdaQueryWrapper<RiskAttackFeatureDO> queryWrapper = new LambdaQueryWrapper<>();
         if (queryRequest.getCategoryId() != null) {
@@ -204,9 +213,14 @@ public class L2KnowledgeBaseController {
         }
         queryWrapper.orderByAsc(RiskAttackFeatureDO::getRiskDetailsId)
                 .orderByDesc(RiskAttackFeatureDO::getUpdateTime);
-        return Results.success(riskAttackFeatureService.page(
+        Page<RiskAttackFeatureDO> pageResult = riskAttackFeatureService.page(
                 new Page<>(pageCurrent(queryRequest.getCurrent()), pageSize(queryRequest.getSize())),
-                queryWrapper));
+                queryWrapper);
+        Page<RiskAttackFeatureVO> voPage = new Page<>(pageResult.getCurrent(), pageResult.getSize(), pageResult.getTotal());
+        voPage.setRecords(pageResult.getRecords().stream()
+                .map(this::convertToFeatureVO)
+                .collect(Collectors.toList()));
+        return Results.success(voPage);
     }
 
     /**
@@ -216,8 +230,8 @@ public class L2KnowledgeBaseController {
      * @return 攻击特征详情
      */
     @GetMapping("/features/{id}")
-    public Result<RiskAttackFeatureDO> getFeature(@PathVariable Long id) {
-        return Results.success(riskAttackFeatureService.getById(id));
+    public Result<RiskAttackFeatureVO> getFeature(@PathVariable Long id) {
+        return Results.success(convertToFeatureVO(riskAttackFeatureService.getById(id)));
     }
 
     /**
@@ -300,7 +314,7 @@ public class L2KnowledgeBaseController {
      * @return 同步事件分页结果
      */
     @PostMapping("/sync-events/page")
-    public Result<Page<KbSyncEventDO>> pageSyncEvents(@RequestBody L2KbSyncEventPageRequest request) {
+    public Result<Page<KbSyncEventVO>> pageSyncEvents(@RequestBody L2KbSyncEventPageRequest request) {
         L2KbSyncEventPageRequest queryRequest = request == null ? new L2KbSyncEventPageRequest() : request;
         LambdaQueryWrapper<KbSyncEventDO> queryWrapper = new LambdaQueryWrapper<>();
         if (StringUtils.hasText(queryRequest.getEventId())) {
@@ -325,9 +339,14 @@ public class L2KnowledgeBaseController {
             queryWrapper.eq(KbSyncEventDO::getPgStatus, queryRequest.getPgStatus());
         }
         queryWrapper.orderByDesc(KbSyncEventDO::getCreateTime);
-        return Results.success(kbSyncEventService.page(
+        Page<KbSyncEventDO> pageResult = kbSyncEventService.page(
                 new Page<>(pageCurrent(queryRequest.getCurrent()), pageSize(queryRequest.getSize())),
-                queryWrapper));
+                queryWrapper);
+        Page<KbSyncEventVO> voPage = new Page<>(pageResult.getCurrent(), pageResult.getSize(), pageResult.getTotal());
+        voPage.setRecords(pageResult.getRecords().stream()
+                .map(this::convertToSyncEventVO)
+                .collect(Collectors.toList()));
+        return Results.success(voPage);
     }
 
     /**
@@ -337,8 +356,35 @@ public class L2KnowledgeBaseController {
      * @return 同步事件详情
      */
     @GetMapping("/sync-events/{id}")
-    public Result<KbSyncEventDO> getSyncEvent(@PathVariable Long id) {
-        return Results.success(kbSyncEventService.getById(id));
+    public Result<KbSyncEventVO> getSyncEvent(@PathVariable Long id) {
+        return Results.success(convertToSyncEventVO(kbSyncEventService.getById(id)));
+    }
+
+    private RiskDetailRuleVO convertToRuleVO(RiskDetailRuleDO entity) {
+        if (entity == null) {
+            return null;
+        }
+        RiskDetailRuleVO vo = new RiskDetailRuleVO();
+        BeanUtils.copyProperties(entity, vo);
+        return vo;
+    }
+
+    private RiskAttackFeatureVO convertToFeatureVO(RiskAttackFeatureDO entity) {
+        if (entity == null) {
+            return null;
+        }
+        RiskAttackFeatureVO vo = new RiskAttackFeatureVO();
+        BeanUtils.copyProperties(entity, vo);
+        return vo;
+    }
+
+    private KbSyncEventVO convertToSyncEventVO(KbSyncEventDO entity) {
+        if (entity == null) {
+            return null;
+        }
+        KbSyncEventVO vo = new KbSyncEventVO();
+        BeanUtils.copyProperties(entity, vo);
+        return vo;
     }
 
     private int pageCurrent(Integer current) {

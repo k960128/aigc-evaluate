@@ -6,14 +6,17 @@ import com.kant.llm.eval.common.convention.Result;
 import com.kant.llm.eval.common.web.Results;
 import com.kant.llm.eval.dao.entity.RiskCategoryDO;
 import com.kant.llm.eval.dao.entity.RiskDetailsDO;
+import com.kant.llm.eval.dto.resp.RiskCategoryVO;
 import com.kant.llm.eval.dto.resp.RiskDetailsVO;
 import com.kant.llm.eval.service.RiskCategoryService;
 import com.kant.llm.eval.service.RiskDetailsService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.BeanUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 安全评测 - 风险分类管理接口
@@ -30,7 +33,7 @@ public class RiskCategoryController {
      * 分页查询风险分类
      */
     @GetMapping("/page")
-    public Result<Page<RiskCategoryDO>> page(
+    public Result<Page<RiskCategoryVO>> page(
             @RequestParam(defaultValue = "1") Integer current,
             @RequestParam(defaultValue = "10") Integer size,
             @RequestParam(required = false) String categoryName,
@@ -45,14 +48,19 @@ public class RiskCategoryController {
         }
         queryWrapper.orderByAsc(RiskCategoryDO::getSortOrder);
 
-        return Results.success(riskCategoryService.page(new Page<>(current, size), queryWrapper));
+        Page<RiskCategoryDO> pageResult = riskCategoryService.page(new Page<>(current, size), queryWrapper);
+        Page<RiskCategoryVO> voPage = new Page<>(pageResult.getCurrent(), pageResult.getSize(), pageResult.getTotal());
+        voPage.setRecords(pageResult.getRecords().stream()
+                .map(this::convertToCategoryVO)
+                .collect(Collectors.toList()));
+        return Results.success(voPage);
     }
 
     /**
      * 查询所有风险分类（不分页）
      */
     @GetMapping("/list")
-    public Result<List<RiskCategoryDO>> list(
+    public Result<List<RiskCategoryVO>> list(
             @RequestParam(required = false) Integer status) {
 
         LambdaQueryWrapper<RiskCategoryDO> queryWrapper = new LambdaQueryWrapper<>();
@@ -61,15 +69,18 @@ public class RiskCategoryController {
         }
         queryWrapper.orderByAsc(RiskCategoryDO::getSortOrder);
 
-        return Results.success(riskCategoryService.list(queryWrapper));
+        List<RiskCategoryVO> voList = riskCategoryService.list(queryWrapper).stream()
+                .map(this::convertToCategoryVO)
+                .collect(Collectors.toList());
+        return Results.success(voList);
     }
 
     /**
      * 根据ID查询风险分类详情
      */
     @GetMapping("/{id}")
-    public Result<RiskCategoryDO> getById(@PathVariable Long id) {
-        return Results.success(riskCategoryService.getById(id));
+    public Result<RiskCategoryVO> getById(@PathVariable Long id) {
+        return Results.success(convertToCategoryVO(riskCategoryService.getById(id)));
     }
 
     /**
@@ -102,7 +113,7 @@ public class RiskCategoryController {
      * 分页查询风险明细
      */
     @GetMapping("/details/page")
-    public Result<Page<RiskDetailsDO>> detailsPage(
+    public Result<Page<RiskDetailsVO>> detailsPage(
             @RequestParam(defaultValue = "1") Integer current,
             @RequestParam(defaultValue = "10") Integer size,
             @RequestParam(required = false) Long categoryId,
@@ -121,7 +132,12 @@ public class RiskCategoryController {
         }
         queryWrapper.orderByAsc(RiskDetailsDO::getSortOrder);
 
-        return Results.success(riskDetailsService.page(new Page<>(current, size), queryWrapper));
+        Page<RiskDetailsDO> pageResult = riskDetailsService.page(new Page<>(current, size), queryWrapper);
+        Page<RiskDetailsVO> voPage = new Page<>(pageResult.getCurrent(), pageResult.getSize(), pageResult.getTotal());
+        voPage.setRecords(pageResult.getRecords().stream()
+                .map(this::convertToDetailsVO)
+                .collect(Collectors.toList()));
+        return Results.success(voPage);
     }
 
     /**
@@ -136,8 +152,8 @@ public class RiskCategoryController {
      * 根据ID查询风险明细详情
      */
     @GetMapping("/details/{id}")
-    public Result<RiskDetailsDO> getDetailsById(@PathVariable Long id) {
-        return Results.success(riskDetailsService.getById(id));
+    public Result<RiskDetailsVO> getDetailsById(@PathVariable Long id) {
+        return Results.success(convertToDetailsVO(riskDetailsService.getById(id)));
     }
 
     /**
@@ -162,5 +178,23 @@ public class RiskCategoryController {
     @DeleteMapping("/details/{id}")
     public Result<Boolean> deleteDetails(@PathVariable Long id) {
         return Results.success(riskDetailsService.removeById(id));
+    }
+
+    private RiskCategoryVO convertToCategoryVO(RiskCategoryDO entity) {
+        if (entity == null) {
+            return null;
+        }
+        RiskCategoryVO vo = new RiskCategoryVO();
+        BeanUtils.copyProperties(entity, vo);
+        return vo;
+    }
+
+    private RiskDetailsVO convertToDetailsVO(RiskDetailsDO entity) {
+        if (entity == null) {
+            return null;
+        }
+        RiskDetailsVO vo = new RiskDetailsVO();
+        BeanUtils.copyProperties(entity, vo);
+        return vo;
     }
 }
