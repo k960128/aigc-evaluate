@@ -40,6 +40,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -419,6 +420,7 @@ public class L2KnowledgeBaseController {
      * 后续如果下沉到 Service，可把这段逻辑统一迁移到知识库领域服务。</p>
      */
     private void fillFeatureTextDefaults(RiskAttackFeatureDO entity) {
+        entity.setFeatureCode(UUID.randomUUID().toString());
         if (!StringUtils.hasText(entity.getNormalizedText()) && StringUtils.hasText(entity.getFeatureText())) {
             entity.setNormalizedText(entity.getFeatureText());
         }
