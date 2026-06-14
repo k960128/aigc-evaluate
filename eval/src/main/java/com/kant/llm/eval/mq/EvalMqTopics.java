@@ -13,4 +13,10 @@ public final class EvalMqTopics {
 
     /** 单样本执行 Topic：后续接入被测模型调用与 L1/L2/L3 漏斗判定。 */
     public static final String EXECUTION = "Execution_MQ";
+
+    /** L2 知识库一键同步批次 Topic：消费端负责扫描待同步知识并拆成单条同步事件。 */
+    public static final String L2_KB_SYNC_BATCH = "L2KbSyncBatch_MQ";
+
+    /** L2 知识库单条同步事件 Topic：消费端负责写入 ES 和 PG 向量库。 */
+    public static final String L2_KB_SYNC_EVENT = "L2KbSyncEvent_MQ";
 }

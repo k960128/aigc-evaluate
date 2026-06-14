@@ -16,9 +16,11 @@ import com.kant.llm.eval.dto.req.L2KnowledgeRulePageRequest;
 import com.kant.llm.eval.dto.req.UpdateL2KnowledgeFeatureRequest;
 import com.kant.llm.eval.dto.req.UpdateL2KnowledgeRuleRequest;
 import com.kant.llm.eval.dto.resp.KbSyncEventVO;
+import com.kant.llm.eval.dto.resp.L2KnowledgeSyncSubmitVO;
 import com.kant.llm.eval.dto.resp.RiskAttackFeatureVO;
 import com.kant.llm.eval.dto.resp.RiskDetailRuleVO;
 import com.kant.llm.eval.service.KbSyncEventService;
+import com.kant.llm.eval.service.L2KnowledgeSyncService;
 import com.kant.llm.eval.service.RiskAttackFeatureService;
 import com.kant.llm.eval.service.RiskDetailRuleService;
 import lombok.RequiredArgsConstructor;
@@ -68,6 +70,8 @@ public class L2KnowledgeBaseController {
     private final RiskAttackFeatureService riskAttackFeatureService;
 
     private final KbSyncEventService kbSyncEventService;
+
+    private final L2KnowledgeSyncService l2KnowledgeSyncService;
 
     /**
      * 分页查询 L2 风险小类判定规则。
@@ -358,6 +362,18 @@ public class L2KnowledgeBaseController {
     @GetMapping("/sync-events/{id}")
     public Result<KbSyncEventVO> getSyncEvent(@PathVariable Long id) {
         return Results.success(convertToSyncEventVO(kbSyncEventService.getById(id)));
+    }
+
+    /**
+     * 一键提交 L2 知识库索引同步任务。
+     *
+     * <p>接口只负责把同步批次投递到 RocketMQ，真正的待同步知识扫描、事件拆分、ES/PG 写入都在消费者异步完成。</p>
+     *
+     * @return 同步任务提交结果
+     */
+    @PostMapping("/sync")
+    public Result<L2KnowledgeSyncSubmitVO> syncPendingKnowledge() {
+        return Results.success(l2KnowledgeSyncService.submitPendingSync());
     }
 
     private RiskDetailRuleVO convertToRuleVO(RiskDetailRuleDO entity) {

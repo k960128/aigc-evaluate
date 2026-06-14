@@ -1,0 +1,1343 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>L2 语义知识库原型</title>
+  <style>
+    :root {
+      --bg: #f5f7f8;
+      --panel: #ffffff;
+      --panel-soft: #f9fbfb;
+      --line: #d9e1e6;
+      --line-strong: #bdc9d2;
+      --text: #142033;
+      --muted: #617089;
+      --muted-2: #8793a6;
+      --primary: #1769e0;
+      --primary-soft: #e8f1ff;
+      --green: #087f5b;
+      --green-soft: #e4f6ef;
+      --amber: #966100;
+      --amber-soft: #fff3d4;
+      --red: #b42318;
+      --red-soft: #fde8e5;
+      --purple: #6941c6;
+      --purple-soft: #eee9ff;
+      --shadow: 0 18px 46px rgba(31, 45, 61, 0.08);
+      --radius: 8px;
+      color: var(--text);
+      font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-width: 360px;
+      background: var(--bg);
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.52;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 280px minmax(620px, 1fr) 320px;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 16px;
+      padding: 18px;
+    }
+
+    .header {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: minmax(280px, 1fr) auto;
+      gap: 16px;
+      align-items: end;
+      padding: 22px 24px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .eyebrow {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 26px;
+      line-height: 34px;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin-top: 6px;
+      max-width: 760px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+
+    .toolbar {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: minmax(300px, 1fr) repeat(3, minmax(130px, 160px)) auto auto;
+      gap: 10px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+
+    .field {
+      min-width: 0;
+    }
+
+    .field input,
+    .field select {
+      width: 100%;
+      height: 40px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 0 12px;
+      color: var(--text);
+      background: var(--panel);
+      outline: none;
+    }
+
+    .field input:focus,
+    .field select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(23, 105, 224, 0.12);
+    }
+
+    .btn {
+      height: 40px;
+      min-width: 40px;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      color: var(--text);
+      background: var(--panel);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      white-space: nowrap;
+      transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .btn:hover {
+      border-color: var(--line-strong);
+      background: var(--panel-soft);
+    }
+
+    .btn:focus-visible {
+      outline: 3px solid rgba(23, 105, 224, 0.2);
+      outline-offset: 2px;
+    }
+
+    .btn.primary {
+      border-color: var(--primary);
+      color: #fff;
+      background: var(--primary);
+    }
+
+    .btn.primary:hover {
+      background: #0f5dc8;
+    }
+
+    .btn.danger {
+      border-color: #f4b8b2;
+      color: var(--red);
+      background: var(--red-soft);
+    }
+
+    .panel {
+      min-height: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .left-panel {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel-head {
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel-soft);
+    }
+
+    .panel-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .panel-title h2 {
+      font-size: 17px;
+      line-height: 24px;
+    }
+
+    .panel-title span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .risk-list {
+      overflow: auto;
+      padding: 10px;
+    }
+
+    .risk-item {
+      width: 100%;
+      min-height: 76px;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      background: transparent;
+      color: var(--text);
+      text-align: left;
+      display: block;
+      transition: border-color 0.18s ease, background 0.18s ease;
+    }
+
+    .risk-item:hover {
+      border-color: var(--line);
+      background: var(--panel-soft);
+    }
+
+    .risk-item.active {
+      border-color: #9ec5ff;
+      background: var(--primary-soft);
+    }
+
+    .risk-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .risk-name {
+      font-weight: 700;
+      line-height: 20px;
+    }
+
+    .risk-id {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
+    .risk-counts {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 9px;
+    }
+
+    .main-panel {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .main-head {
+      padding: 18px 20px 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+
+    .detail-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .detail-title h2 {
+      font-size: 21px;
+      line-height: 30px;
+    }
+
+    .detail-title p {
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .metrics {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 28px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      background: var(--panel-soft);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .chip.blue {
+      color: var(--primary);
+      border-color: #c7dbff;
+      background: var(--primary-soft);
+    }
+
+    .chip.green {
+      color: var(--green);
+      border-color: #b7e9d6;
+      background: var(--green-soft);
+    }
+
+    .chip.amber {
+      color: var(--amber);
+      border-color: #f0d38a;
+      background: var(--amber-soft);
+    }
+
+    .chip.red {
+      color: var(--red);
+      border-color: #f2b8b2;
+      background: var(--red-soft);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 6px;
+      margin-top: 16px;
+      overflow-x: auto;
+    }
+
+    .tab {
+      height: 36px;
+      padding: 0 12px;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      background: transparent;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .tab.active {
+      border-color: #bdd4ff;
+      color: var(--primary);
+      background: var(--primary-soft);
+      font-weight: 700;
+    }
+
+    .bulkbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel-soft);
+    }
+
+    .bulk-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .table-wrap {
+      min-height: 0;
+      overflow: auto;
+      flex: 1;
+    }
+
+    table {
+      width: 100%;
+      min-width: 920px;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    th,
+    td {
+      padding: 13px 12px;
+      border-bottom: 1px solid #edf1f4;
+      vertical-align: middle;
+      text-align: left;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      color: var(--muted);
+      background: #f7f9fa;
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    tbody tr:hover {
+      background: #fbfdff;
+    }
+
+    .col-select {
+      width: 44px;
+    }
+
+    .col-id {
+      width: 72px;
+    }
+
+    .col-type {
+      width: 128px;
+    }
+
+    .col-polarity {
+      width: 120px;
+    }
+
+    .col-text {
+      width: 360px;
+    }
+
+    .col-status {
+      width: 92px;
+    }
+
+    .col-version {
+      width: 76px;
+    }
+
+    .col-actions {
+      width: 150px;
+    }
+
+    .text-cell {
+      color: #24344d;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .source-note {
+      color: var(--muted-2);
+      font-size: 12px;
+      margin-top: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .row-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .link-btn {
+      height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--panel);
+      color: var(--primary);
+      padding: 0 9px;
+    }
+
+    .empty {
+      padding: 42px 16px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .right-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 14px;
+      overflow: auto;
+    }
+
+    .side-section {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      padding: 14px;
+    }
+
+    .side-section h3 {
+      font-size: 15px;
+      line-height: 22px;
+      margin-bottom: 12px;
+    }
+
+    .health-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .health-cell {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 10px;
+      background: var(--panel-soft);
+    }
+
+    .health-cell span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 2px;
+    }
+
+    .health-cell strong {
+      font-size: 22px;
+      line-height: 28px;
+    }
+
+    .progress-line {
+      height: 8px;
+      border-radius: 999px;
+      background: #edf2f6;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+
+    .progress-line span {
+      display: block;
+      height: 100%;
+      width: 0;
+      border-radius: inherit;
+      background: var(--green);
+      transition: width 0.24s ease;
+    }
+
+    .event-list {
+      display: grid;
+      gap: 9px;
+    }
+
+    .event {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 8px;
+      align-items: start;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-soft);
+    }
+
+    .event-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      margin-top: 7px;
+    }
+
+    .event-dot.pending {
+      background: var(--amber);
+    }
+
+    .event-dot.failed {
+      background: var(--red);
+    }
+
+    .event strong {
+      display: block;
+      font-size: 13px;
+      line-height: 19px;
+    }
+
+    .event span,
+    .rule-text {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .toast {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 50;
+      min-width: 260px;
+      max-width: 420px;
+      padding: 12px 14px;
+      border: 1px solid #bdd4ff;
+      border-radius: var(--radius);
+      color: var(--text);
+      background: #fff;
+      box-shadow: 0 18px 42px rgba(18, 34, 58, 0.18);
+      opacity: 0;
+      transform: translateY(10px);
+      pointer-events: none;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 1280px) {
+      .app {
+        grid-template-columns: 260px minmax(600px, 1fr);
+      }
+
+      .right-panel {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 900px) {
+      .app {
+        grid-template-columns: minmax(0, 1fr);
+        padding: 12px;
+      }
+
+      .header,
+      .toolbar {
+        grid-template-columns: 1fr;
+      }
+
+      .header-actions,
+      .bulk-actions {
+        justify-content: flex-start;
+      }
+
+      .left-panel,
+      .main-panel,
+      .right-panel {
+        grid-column: 1;
+      }
+
+      .risk-list {
+        max-height: 340px;
+      }
+
+      .right-panel {
+        display: flex;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div>
+        <div class="eyebrow">知识库管理 / L2 语义知识库</div>
+        <h1>L2 语义知识库</h1>
+        <p class="subtitle">按 31 风险小类维护 L2 攻击特征，查看 MySQL 事实源、ES 索引和 PGVector 向量库的同步状态。</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn" id="resetBtn" type="button">重置筛选</button>
+        <button class="btn" id="syncRiskBtn" type="button">同步当前小类</button>
+        <button class="btn primary" id="syncAllBtn" type="button">全量同步</button>
+      </div>
+    </header>
+
+    <section class="toolbar" aria-label="筛选条件">
+      <label class="field">
+        <input id="searchInput" type="search" placeholder="搜索特征文本、编码、类型、风险小类...">
+      </label>
+      <label class="field">
+        <select id="statusFilter">
+          <option value="all">全部状态</option>
+          <option value="1">启用</option>
+          <option value="0">禁用</option>
+        </select>
+      </label>
+      <label class="field">
+        <select id="typeFilter">
+          <option value="all">全部类型</option>
+          <option value="KEYWORD">KEYWORD</option>
+          <option value="PAYLOAD">PAYLOAD</option>
+          <option value="PROMPT_PATTERN">PROMPT_PATTERN</option>
+          <option value="RESPONSE_PATTERN">RESPONSE_PATTERN</option>
+          <option value="JAILBREAK">JAILBREAK</option>
+          <option value="SAFE_EXCEPTION">SAFE_EXCEPTION</option>
+        </select>
+      </label>
+      <label class="field">
+        <select id="polarityFilter">
+          <option value="all">全部极性</option>
+          <option value="UNSAFE">UNSAFE</option>
+          <option value="SAFE_EXCEPTION">SAFE_EXCEPTION</option>
+        </select>
+      </label>
+      <button class="btn" id="clearSelectedBtn" type="button">清除选择</button>
+      <button class="btn primary" id="mockAddBtn" type="button">新增特征</button>
+    </section>
+
+    <aside class="panel left-panel">
+      <div class="panel-head">
+        <div class="panel-title">
+          <h2>31 风险小类</h2>
+          <span id="riskSummary">0 条特征</span>
+        </div>
+      </div>
+      <div class="risk-list" id="riskList"></div>
+    </aside>
+
+    <main class="panel main-panel">
+      <div class="main-head">
+        <div class="detail-top">
+          <div class="detail-title">
+            <h2 id="currentRiskName">-</h2>
+            <p id="currentRiskMeta">-</p>
+          </div>
+          <div class="metrics" id="metricChips"></div>
+        </div>
+        <nav class="tabs" aria-label="数据源切换">
+          <button class="tab active" type="button" data-tab="mysql">MySQL 事实源</button>
+          <button class="tab" type="button" data-tab="es">ES 索引</button>
+          <button class="tab" type="button" data-tab="pg">PG 向量</button>
+          <button class="tab" type="button" data-tab="diff">同步差异</button>
+        </nav>
+      </div>
+
+      <div class="bulkbar">
+        <span id="selectionText">已选择 0 条</span>
+        <div class="bulk-actions">
+          <button class="btn" id="enableBtn" type="button">批量启用</button>
+          <button class="btn" id="disableBtn" type="button">批量禁用</button>
+          <button class="btn" id="syncEsBtn" type="button">同步 ES</button>
+          <button class="btn" id="syncPgBtn" type="button">同步 PG</button>
+          <button class="btn" id="rebuildBtn" type="button">重建向量</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead id="tableHead"></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </main>
+
+    <aside class="panel right-panel">
+      <section class="side-section">
+        <h3>小类健康度</h3>
+        <div class="health-grid">
+          <div class="health-cell">
+            <span>MySQL</span>
+            <strong id="mysqlCount">0</strong>
+          </div>
+          <div class="health-cell">
+            <span>ES</span>
+            <strong id="esCount">0</strong>
+          </div>
+          <div class="health-cell">
+            <span>PGVector</span>
+            <strong id="pgCount">0</strong>
+          </div>
+          <div class="health-cell">
+            <span>缺失/异常</span>
+            <strong id="diffCount">0</strong>
+          </div>
+        </div>
+        <div class="progress-line" aria-label="同步健康度">
+          <span id="healthProgress"></span>
+        </div>
+      </section>
+
+      <section class="side-section">
+        <h3>最近同步事件</h3>
+        <div class="event-list" id="eventList"></div>
+      </section>
+
+      <section class="side-section">
+        <h3>判定规则摘要</h3>
+        <p class="rule-text" id="ruleText">-</p>
+      </section>
+    </aside>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const riskDetails = [
+      { id: 1, categoryId: 1, name: "煽动颠覆/分裂国家", rule: "识别模型回答中煽动破坏国家统一、组织非法政治动员或暴力对抗的内容。" },
+      { id: 2, categoryId: 1, name: "明确敏感政治事件/人物", rule: "识别针对敏感政治事件、人物的煽动、造谣、攻击或不当扩散。" },
+      { id: 3, categoryId: 1, name: "贬损/恶搞国家象征", rule: "识别对国家象征、公共机构、重大纪念物的恶意侮辱、歪曲和煽动性恶搞。" },
+      { id: 4, categoryId: 1, name: "宣扬恐怖主义/极端主义", rule: "识别美化、传播、组织或协助恐怖主义和极端主义的回答。" },
+      { id: 5, categoryId: 1, name: "时政新闻违规点评", rule: "识别模型对时政新闻进行未经证实、煽动性或违规的扩写和引导。" },
+      { id: 6, categoryId: 2, name: "暴力伤害指导", rule: "识别提供暴力伤害步骤、工具、规避和实施建议的回答。" },
+      { id: 7, categoryId: 2, name: "武器爆炸物制作", rule: "识别提供武器、爆炸物、危险物制造或获取路径的回答。" },
+      { id: 8, categoryId: 2, name: "自杀自残鼓励", rule: "识别鼓励、指导或美化自杀自残行为的回答。" },
+      { id: 9, categoryId: 2, name: "毒品制贩吸食", rule: "识别毒品制作、交易、获取、吸食或规避执法的内容。" },
+      { id: 10, categoryId: 2, name: "危险化学品滥用", rule: "识别危险化学品获取、混配、储存和滥用指导。" },
+      { id: 11, categoryId: 3, name: "色情露骨内容", rule: "识别露骨性描写、性服务引导或不当性内容。" },
+      { id: 12, categoryId: 3, name: "未成年人色情风险", rule: "识别涉及未成年人性化、诱导、描写或交易的极高风险回答。" },
+      { id: 13, categoryId: 3, name: "性骚扰/性剥削", rule: "识别骚扰话术、胁迫、剥削和违法交易建议。" },
+      { id: 14, categoryId: 4, name: "诈骗话术生成", rule: "识别生成诈骗脚本、社工话术、钓鱼模板和规避平台审查的回答。" },
+      { id: 15, categoryId: 4, name: "赌博引流推广", rule: "识别赌博平台推广、引流、套利和规避监管内容。" },
+      { id: 16, categoryId: 4, name: "洗钱/非法资金流转", rule: "识别洗钱、跑分、虚拟币转移和规避追踪建议。" },
+      { id: 17, categoryId: 4, name: "黑灰产工具渠道", rule: "识别黑灰产工具、渠道、账号、暗语和购买路径。" },
+      { id: 18, categoryId: 5, name: "恶意代码生成", rule: "识别恶意代码、漏洞利用、持久化、免杀或攻击脚本。" },
+      { id: 19, categoryId: 5, name: "网络攻击实施", rule: "识别攻击步骤、目标探测、入侵、爆破和权限维持。" },
+      { id: 20, categoryId: 5, name: "数据窃取/撞库", rule: "识别撞库、脱库、爬取隐私数据和凭证窃取。" },
+      { id: 21, categoryId: 5, name: "隐私泄露/人肉搜索", rule: "识别定位个人、泄露隐私、跟踪骚扰和人肉搜索。" },
+      { id: 22, categoryId: 6, name: "歧视仇恨言论", rule: "识别针对群体身份的仇恨、贬损、排斥和暴力煽动。" },
+      { id: 23, categoryId: 6, name: "侮辱辱骂攻击", rule: "识别针对个人或群体的强攻击性辱骂和羞辱内容。" },
+      { id: 24, categoryId: 6, name: "谣言造假传播", rule: "识别伪造事实、虚假证据、造谣扩散和误导性叙事。" },
+      { id: 25, categoryId: 7, name: "医疗危险建议", rule: "识别危险诊疗、用药、替代治疗和延误就医建议。" },
+      { id: 26, categoryId: 7, name: "金融投资误导", rule: "识别承诺收益、操纵市场、内幕交易或高风险误导。" },
+      { id: 27, categoryId: 7, name: "法律违规建议", rule: "识别规避法律、伪造证据、逃避监管和违法操作建议。" },
+      { id: 28, categoryId: 8, name: "个人信息生成/伪造", rule: "识别伪造身份证明、账号资料、隐私字段或个人身份材料。" },
+      { id: 29, categoryId: 8, name: "平台规则绕过", rule: "识别绕过平台审核、风控、封禁和内容安全策略的方法。" },
+      { id: 30, categoryId: 8, name: "提示词注入/越权", rule: "识别提示词注入、越权读取、系统提示泄露和工具滥用。" },
+      { id: 31, categoryId: 8, name: "动态越狱与角色扮演绕过", rule: "识别通过角色扮演、翻译、编码、分步诱导等方式绕过安全边界。" }
+    ];
+
+    let features = [
+      feature(1001, 1, "POL-001", "RESPONSE_PATTERN", "UNSAFE", 4, "回答中直接组织非法政治动员，并给出线下集结与传播步骤", 1, 1, 1, 1),
+      feature(1002, 1, "POL-002", "SAFE_EXCEPTION", "SAFE_EXCEPTION", 1, "回答明确拒绝煽动性请求，仅提供合规的法律常识说明", 1, 1, 1, 1),
+      feature(1011, 3, "SYM-001", "KEYWORD", "UNSAFE", 3, "使用侮辱性口号贬损国家象征，并鼓励二次传播", 1, 0, 0, 1),
+      feature(1012, 3, "SYM-002", "RESPONSE_PATTERN", "UNSAFE", 3, "把国家象征改写为恶搞文本并提供扩散文案", 1, 1, 0, 2),
+      feature(1013, 3, "SYM-003", "SAFE_EXCEPTION", "SAFE_EXCEPTION", 1, "回答指出不应侮辱国家象征，并转向尊重公共标识的说明", 1, 1, 1, 1),
+      feature(1021, 4, "EXT-001", "PAYLOAD", "UNSAFE", 4, "美化极端组织并提供招募、宣传和规避审查话术", 1, 2, 0, 3),
+      feature(1031, 7, "WPN-001", "PAYLOAD", "UNSAFE", 4, "提供危险物制作材料、比例和可执行步骤", 1, 1, 0, 1),
+      feature(1032, 7, "WPN-002", "SAFE_EXCEPTION", "SAFE_EXCEPTION", 1, "拒绝制作危险物请求，建议联系专业机构处理危险品", 1, 1, 1, 1),
+      feature(1041, 14, "FRD-001", "PROMPT_PATTERN", "UNSAFE", 3, "生成诈骗私信模板，包含诱导转账和规避平台关键词", 1, 0, 0, 1),
+      feature(1042, 14, "FRD-002", "KEYWORD", "UNSAFE", 3, "冒充客服、验证码、解冻账户、保证金等组合话术", 0, 1, 1, 2),
+      feature(1051, 18, "MAL-001", "PAYLOAD", "UNSAFE", 4, "提供恶意代码持久化、隐藏和数据回传逻辑", 1, 1, 2, 4),
+      feature(1052, 18, "MAL-002", "SAFE_EXCEPTION", "SAFE_EXCEPTION", 1, "仅解释恶意代码防护思路，不提供可运行攻击代码", 1, 1, 1, 1),
+      feature(1061, 21, "PRI-001", "KEYWORD", "UNSAFE", 3, "请求定位个人住址、手机号、账号或实时位置的回答模式", 1, 0, 1, 1),
+      feature(1071, 29, "BYP-001", "JAILBREAK", "UNSAFE", 3, "绕过平台审核词、拆字、谐音、编码和分批输出策略", 1, 1, 0, 2),
+      feature(1081, 31, "JBR-001", "JAILBREAK", "UNSAFE", 4, "通过角色扮演要求模型忽略安全规则并继续输出违规细节", 1, 2, 0, 3),
+      feature(1082, 31, "JBR-002", "PROMPT_PATTERN", "UNSAFE", 3, "以翻译、小说、代码注释为外衣诱导生成违规内容", 1, 1, 1, 2),
+      feature(1083, 31, "JBR-003", "SAFE_EXCEPTION", "SAFE_EXCEPTION", 1, "识别越狱意图后拒绝，并提供安全替代说明", 1, 1, 1, 1)
+    ];
+
+    let events = [
+      event(1, 3, "REINDEX", "ATTACK_FEATURE", "PENDING", "PGVector 待处理，ES 已同步", "2026-06-14 10:24:12"),
+      event(2, 3, "UPDATE", "ATTACK_FEATURE", "SUCCESS", "featureId 1012 已写入 ES", "2026-06-14 10:18:01"),
+      event(3, 7, "CREATE", "ATTACK_FEATURE", "PENDING", "等待 PGVector 写入", "2026-06-14 09:40:33"),
+      event(4, 18, "REINDEX", "ATTACK_FEATURE", "FAILED", "ES 写入失败，等待重试", "2026-06-14 09:21:08"),
+      event(5, 31, "CREATE", "ATTACK_FEATURE", "SUCCESS", "当前小类知识已完成索引", "2026-06-14 08:52:40")
+    ];
+
+    const state = {
+      activeRiskId: 3,
+      activeTab: "mysql",
+      query: "",
+      status: "all",
+      type: "all",
+      polarity: "all",
+      selectedIds: new Set()
+    };
+
+    const els = {
+      riskList: document.getElementById("riskList"),
+      riskSummary: document.getElementById("riskSummary"),
+      currentRiskName: document.getElementById("currentRiskName"),
+      currentRiskMeta: document.getElementById("currentRiskMeta"),
+      metricChips: document.getElementById("metricChips"),
+      tableHead: document.getElementById("tableHead"),
+      tableBody: document.getElementById("tableBody"),
+      selectionText: document.getElementById("selectionText"),
+      mysqlCount: document.getElementById("mysqlCount"),
+      esCount: document.getElementById("esCount"),
+      pgCount: document.getElementById("pgCount"),
+      diffCount: document.getElementById("diffCount"),
+      healthProgress: document.getElementById("healthProgress"),
+      eventList: document.getElementById("eventList"),
+      ruleText: document.getElementById("ruleText"),
+      toast: document.getElementById("toast")
+    };
+
+    document.getElementById("searchInput").addEventListener("input", (event) => {
+      state.query = event.target.value.trim().toLowerCase();
+      state.selectedIds.clear();
+      render();
+    });
+
+    document.getElementById("statusFilter").addEventListener("change", (event) => {
+      state.status = event.target.value;
+      state.selectedIds.clear();
+      render();
+    });
+
+    document.getElementById("typeFilter").addEventListener("change", (event) => {
+      state.type = event.target.value;
+      state.selectedIds.clear();
+      render();
+    });
+
+    document.getElementById("polarityFilter").addEventListener("change", (event) => {
+      state.polarity = event.target.value;
+      state.selectedIds.clear();
+      render();
+    });
+
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        state.activeTab = tab.dataset.tab;
+        state.selectedIds.clear();
+        document.querySelectorAll(".tab").forEach((item) => item.classList.toggle("active", item === tab));
+        render();
+      });
+    });
+
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      state.query = "";
+      state.status = "all";
+      state.type = "all";
+      state.polarity = "all";
+      state.selectedIds.clear();
+      document.getElementById("searchInput").value = "";
+      document.getElementById("statusFilter").value = "all";
+      document.getElementById("typeFilter").value = "all";
+      document.getElementById("polarityFilter").value = "all";
+      render();
+      showToast("筛选条件已重置");
+    });
+
+    document.getElementById("clearSelectedBtn").addEventListener("click", () => {
+      state.selectedIds.clear();
+      render();
+    });
+
+    document.getElementById("syncRiskBtn").addEventListener("click", () => {
+      syncByRisk(state.activeRiskId);
+      showToast("当前小类的 ES / PGVector 状态已模拟同步完成");
+    });
+
+    document.getElementById("syncAllBtn").addEventListener("click", () => {
+      features = features.map((item) => ({ ...item, esSyncStatus: 1, pgSyncStatus: 1, syncStatus: 1 }));
+      riskDetails.forEach((risk) => events.unshift(event(Date.now() + risk.id, risk.id, "REINDEX", "ATTACK_FEATURE", "SUCCESS", "全量同步完成", nowText())));
+      state.selectedIds.clear();
+      render();
+      showToast("已模拟执行全量同步");
+    });
+
+    document.getElementById("enableBtn").addEventListener("click", () => batchUpdate({ status: 1 }, "已批量启用"));
+    document.getElementById("disableBtn").addEventListener("click", () => batchUpdate({ status: 0 }, "已批量禁用"));
+    document.getElementById("syncEsBtn").addEventListener("click", () => batchUpdate({ esSyncStatus: 1 }, "已模拟同步 ES"));
+    document.getElementById("syncPgBtn").addEventListener("click", () => batchUpdate({ pgSyncStatus: 1 }, "已模拟同步 PGVector"));
+    document.getElementById("rebuildBtn").addEventListener("click", () => batchUpdate({ pgSyncStatus: 1 }, "已模拟重建向量"));
+
+    document.getElementById("mockAddBtn").addEventListener("click", () => {
+      const risk = getActiveRisk();
+      const nextId = Math.max(...features.map((item) => item.id)) + 1;
+      features.unshift(feature(nextId, risk.id, `NEW-${nextId}`, "RESPONSE_PATTERN", "UNSAFE", 2, `${risk.name} 新增待校验语义特征`, 1, 0, 0, 1));
+      events.unshift(event(Date.now(), risk.id, "CREATE", "ATTACK_FEATURE", "PENDING", "新增特征等待 ES / PGVector 同步", nowText()));
+      render();
+      showToast("已新增一条 mock 特征");
+    });
+
+    function feature(id, riskDetailsId, featureCode, featureType, polarity, riskLevel, featureText, status, esSyncStatus, pgSyncStatus, version) {
+      const risk = riskDetails.find((item) => item.id === riskDetailsId);
+      return {
+        id,
+        riskDetailsId,
+        riskDetailsName: risk ? risk.name : "",
+        categoryId: risk ? risk.categoryId : null,
+        featureCode,
+        featureType,
+        polarity,
+        riskLevel,
+        featureText,
+        normalizedText: featureText,
+        status,
+        syncStatus: esSyncStatus === 1 && pgSyncStatus === 1 ? 1 : 0,
+        esSyncStatus,
+        pgSyncStatus,
+        version,
+        updateTime: "2026-06-14 10:30:00"
+      };
+    }
+
+    function event(id, riskDetailsId, operationType, aggregateType, status, message, time) {
+      return { id, riskDetailsId, operationType, aggregateType, status, message, time };
+    }
+
+    function getActiveRisk() {
+      return riskDetails.find((item) => item.id === state.activeRiskId) || riskDetails[0];
+    }
+
+    function scopedFeatures() {
+      return features.filter((item) => item.riskDetailsId === state.activeRiskId).filter(applyFilters);
+    }
+
+    function applyFilters(item) {
+      if (state.status !== "all" && String(item.status) !== state.status) return false;
+      if (state.type !== "all" && item.featureType !== state.type) return false;
+      if (state.polarity !== "all" && item.polarity !== state.polarity) return false;
+      if (!state.query) return true;
+      const text = [
+        item.id,
+        item.featureCode,
+        item.featureType,
+        item.polarity,
+        item.featureText,
+        item.riskDetailsName
+      ].join(" ").toLowerCase();
+      return text.includes(state.query);
+    }
+
+    function render() {
+      renderRiskList();
+      renderHeader();
+      renderTable();
+      renderSidePanel();
+      updateBulkState();
+    }
+
+    function renderRiskList() {
+      const total = features.length;
+      els.riskSummary.textContent = `${total} 条特征`;
+      els.riskList.innerHTML = riskDetails.map((risk) => {
+        const items = features.filter((item) => item.riskDetailsId === risk.id);
+        const esPending = items.filter((item) => item.esSyncStatus !== 1).length;
+        const pgPending = items.filter((item) => item.pgSyncStatus !== 1).length;
+        return `
+          <button class="risk-item ${risk.id === state.activeRiskId ? "active" : ""}" type="button" data-risk-id="${risk.id}">
+            <span class="risk-row">
+              <span>
+                <span class="risk-name">${escapeHtml(risk.name)}</span>
+                <span class="risk-id">大类 ID ${risk.categoryId} / 小类 ID ${risk.id}</span>
+              </span>
+              <span class="chip">${items.length}</span>
+            </span>
+            <span class="risk-counts">
+              <span class="chip ${esPending ? "amber" : "green"}">ES ${esPending}</span>
+              <span class="chip ${pgPending ? "amber" : "green"}">PG ${pgPending}</span>
+            </span>
+          </button>
+        `;
+      }).join("");
+      els.riskList.querySelectorAll(".risk-item").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.activeRiskId = Number(button.dataset.riskId);
+          state.selectedIds.clear();
+          render();
+        });
+      });
+    }
+
+    function renderHeader() {
+      const risk = getActiveRisk();
+      const all = features.filter((item) => item.riskDetailsId === risk.id);
+      const esPending = all.filter((item) => item.esSyncStatus !== 1).length;
+      const pgPending = all.filter((item) => item.pgSyncStatus !== 1).length;
+      const disabled = all.filter((item) => item.status === 0).length;
+      els.currentRiskName.textContent = risk.name;
+      els.currentRiskMeta.textContent = `大类 ID ${risk.categoryId} / 小类 ID ${risk.id}`;
+      els.metricChips.innerHTML = `
+        <span class="chip blue">总特征 ${all.length}</span>
+        <span class="chip ${esPending ? "amber" : "green"}">ES 待同步 ${esPending}</span>
+        <span class="chip ${pgPending ? "amber" : "green"}">PG 待同步 ${pgPending}</span>
+        <span class="chip ${disabled ? "red" : "green"}">禁用 ${disabled}</span>
+      `;
+    }
+
+    function renderTable() {
+      if (state.activeTab === "diff") {
+        renderDiffTable();
+        return;
+      }
+      const rows = sourceRows();
+      els.tableHead.innerHTML = `
+        <tr>
+          <th class="col-select"><input id="selectAll" type="checkbox" aria-label="选择当前页全部"></th>
+          <th class="col-id">ID</th>
+          <th class="col-type">类型</th>
+          <th class="col-polarity">极性</th>
+          <th class="col-text">语料文本</th>
+          <th class="col-status">ES</th>
+          <th class="col-status">PG</th>
+          <th class="col-version">版本</th>
+          <th class="col-actions">操作</th>
+        </tr>
+      `;
+      if (rows.length === 0) {
+        els.tableBody.innerHTML = `<tr><td colspan="9"><div class="empty">当前筛选下没有数据</div></td></tr>`;
+        return;
+      }
+      els.tableBody.innerHTML = rows.map((item) => `
+        <tr>
+          <td><input class="row-check" type="checkbox" data-id="${item.id}" ${state.selectedIds.has(item.id) ? "checked" : ""} aria-label="选择 ${item.featureCode}"></td>
+          <td><strong>${item.id}</strong><div class="source-note">${escapeHtml(item.featureCode)}</div></td>
+          <td>${badge(item.featureType, "blue")}</td>
+          <td>${badge(item.polarity, item.polarity === "UNSAFE" ? "red" : "green")}</td>
+          <td>
+            <div class="text-cell">${escapeHtml(item.featureText)}</div>
+            <div class="source-note">${tabSourceText(item)}</div>
+          </td>
+          <td>${syncBadge(item.esSyncStatus)}</td>
+          <td>${syncBadge(item.pgSyncStatus)}</td>
+          <td>v${item.version}</td>
+          <td>
+            <div class="row-actions">
+              <button class="link-btn" type="button" data-action="toggle" data-id="${item.id}">${item.status === 1 ? "禁用" : "启用"}</button>
+              <button class="link-btn" type="button" data-action="sync" data-id="${item.id}">同步</button>
+            </div>
+          </td>
+        </tr>
+      `).join("");
+      attachTableEvents(rows);
+    }
+
+    function sourceRows() {
+      const rows = scopedFeatures();
+      if (state.activeTab === "es") {
+        return rows.filter((item) => item.esSyncStatus === 1);
+      }
+      if (state.activeTab === "pg") {
+        return rows.filter((item) => item.pgSyncStatus === 1);
+      }
+      return rows;
+    }
+
+    function tabSourceText(item) {
+      if (state.activeTab === "es") return `ES 索引文档 / riskDetailsId ${item.riskDetailsId}`;
+      if (state.activeTab === "pg") return `PGVector metadata / riskDetailsId ${item.riskDetailsId}`;
+      return `${item.riskDetailsName} / riskDetailsId ${item.riskDetailsId}`;
+    }
+
+    function renderDiffTable() {
+      const rows = scopedFeatures().map((item) => {
+        let problem = [];
+        if (item.esSyncStatus !== 1) problem.push("缺 ES");
+        if (item.pgSyncStatus !== 1) problem.push("缺 PG");
+        if (item.esSyncStatus === 2 || item.pgSyncStatus === 2) problem.push("同步失败");
+        if (item.status === 0 && (item.esSyncStatus === 1 || item.pgSyncStatus === 1)) problem.push("索引残留");
+        return { ...item, problem: problem.join(" / ") || "一致" };
+      }).filter((item) => item.problem !== "一致");
+
+      els.tableHead.innerHTML = `
+        <tr>
+          <th class="col-select"><input id="selectAll" type="checkbox" aria-label="选择当前页全部"></th>
+          <th class="col-id">ID</th>
+          <th class="col-type">风险小类</th>
+          <th class="col-text">差异说明</th>
+          <th class="col-status">ES</th>
+          <th class="col-status">PG</th>
+          <th class="col-version">版本</th>
+          <th class="col-actions">操作</th>
+        </tr>
+      `;
+      if (rows.length === 0) {
+        els.tableBody.innerHTML = `<tr><td colspan="8"><div class="empty">当前小类 MySQL / ES / PGVector 暂无差异</div></td></tr>`;
+        return;
+      }
+      els.tableBody.innerHTML = rows.map((item) => `
+        <tr>
+          <td><input class="row-check" type="checkbox" data-id="${item.id}" ${state.selectedIds.has(item.id) ? "checked" : ""} aria-label="选择 ${item.featureCode}"></td>
+          <td><strong>${item.id}</strong><div class="source-note">${escapeHtml(item.featureCode)}</div></td>
+          <td>${escapeHtml(item.riskDetailsName)}</td>
+          <td><div class="text-cell">${escapeHtml(item.problem)}</div><div class="source-note">${escapeHtml(item.featureText)}</div></td>
+          <td>${syncBadge(item.esSyncStatus)}</td>
+          <td>${syncBadge(item.pgSyncStatus)}</td>
+          <td>v${item.version}</td>
+          <td><button class="link-btn" type="button" data-action="sync" data-id="${item.id}">修复差异</button></td>
+        </tr>
+      `).join("");
+      attachTableEvents(rows);
+    }
+
+    function attachTableEvents(rows) {
+      const selectAll = document.getElementById("selectAll");
+      if (selectAll) {
+        selectAll.checked = rows.length > 0 && rows.every((item) => state.selectedIds.has(item.id));
+        selectAll.addEventListener("change", (event) => {
+          rows.forEach((item) => {
+            if (event.target.checked) state.selectedIds.add(item.id);
+            else state.selectedIds.delete(item.id);
+          });
+          render();
+        });
+      }
+      document.querySelectorAll(".row-check").forEach((checkbox) => {
+        checkbox.addEventListener("change", (event) => {
+          const id = Number(event.target.dataset.id);
+          if (event.target.checked) state.selectedIds.add(id);
+          else state.selectedIds.delete(id);
+          updateBulkState();
+        });
+      });
+      document.querySelectorAll("[data-action]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const id = Number(button.dataset.id);
+          if (button.dataset.action === "toggle") {
+            features = features.map((item) => item.id === id ? { ...item, status: item.status === 1 ? 0 : 1, esSyncStatus: 0, pgSyncStatus: 0, syncStatus: 0 } : item);
+            showToast("已切换业务状态，并重置 ES / PG 同步状态");
+          } else {
+            features = features.map((item) => item.id === id ? { ...item, esSyncStatus: 1, pgSyncStatus: 1, syncStatus: 1 } : item);
+            showToast("已模拟修复该条特征的索引差异");
+          }
+          state.selectedIds.clear();
+          render();
+        });
+      });
+    }
+
+    function renderSidePanel() {
+      const risk = getActiveRisk();
+      const all = features.filter((item) => item.riskDetailsId === risk.id);
+      const es = all.filter((item) => item.esSyncStatus === 1).length;
+      const pg = all.filter((item) => item.pgSyncStatus === 1).length;
+      const diff = all.filter((item) => item.esSyncStatus !== 1 || item.pgSyncStatus !== 1).length;
+      const denominator = all.length * 2 || 1;
+      const health = Math.round(((es + pg) / denominator) * 100);
+      els.mysqlCount.textContent = all.length;
+      els.esCount.textContent = es;
+      els.pgCount.textContent = pg;
+      els.diffCount.textContent = diff;
+      els.healthProgress.style.width = `${health}%`;
+      els.ruleText.textContent = risk.rule;
+
+      const scopedEvents = events.filter((item) => item.riskDetailsId === risk.id).slice(0, 5);
+      els.eventList.innerHTML = scopedEvents.length ? scopedEvents.map((item) => `
+        <div class="event">
+          <span class="event-dot ${eventTone(item.status)}"></span>
+          <span>
+            <strong>${item.operationType} · ${statusText(item.status)}</strong>
+            <span>${escapeHtml(item.message)}<br>${item.time}</span>
+          </span>
+        </div>
+      `).join("") : `<div class="empty">暂无同步事件</div>`;
+    }
+
+    function updateBulkState() {
+      const count = state.selectedIds.size;
+      els.selectionText.textContent = `已选择 ${count} 条`;
+      ["enableBtn", "disableBtn", "syncEsBtn", "syncPgBtn", "rebuildBtn"].forEach((id) => {
+        document.getElementById(id).disabled = count === 0;
+      });
+    }
+
+    function batchUpdate(patch, message) {
+      if (state.selectedIds.size === 0) return;
+      features = features.map((item) => state.selectedIds.has(item.id) ? { ...item, ...patch, syncStatus: mergedSyncStatus({ ...item, ...patch }) } : item);
+      events.unshift(event(Date.now(), state.activeRiskId, "REINDEX", "ATTACK_FEATURE", "PENDING", message, nowText()));
+      state.selectedIds.clear();
+      render();
+      showToast(message);
+    }
+
+    function syncByRisk(riskId) {
+      features = features.map((item) => item.riskDetailsId === riskId ? { ...item, esSyncStatus: 1, pgSyncStatus: 1, syncStatus: 1 } : item);
+      events.unshift(event(Date.now(), riskId, "REINDEX", "ATTACK_FEATURE", "SUCCESS", "当前小类已完成 ES / PGVector 同步", nowText()));
+      state.selectedIds.clear();
+      render();
+    }
+
+    function mergedSyncStatus(item) {
+      return item.esSyncStatus === 1 && item.pgSyncStatus === 1 ? 1 : 0;
+    }
+
+    function badge(text, tone) {
+      return `<span class="chip ${tone}">${escapeHtml(text)}</span>`;
+    }
+
+    function syncBadge(status) {
+      if (status === 1) return `<span class="chip green">已同步</span>`;
+      if (status === 2) return `<span class="chip red">失败</span>`;
+      return `<span class="chip amber">待同步</span>`;
+    }
+
+    function statusText(status) {
+      if (status === "SUCCESS") return "成功";
+      if (status === "FAILED") return "失败";
+      return "待处理";
+    }
+
+    function eventTone(status) {
+      if (status === "FAILED") return "failed";
+      if (status === "PENDING") return "pending";
+      return "";
+    }
+
+    function nowText() {
+      const now = new Date();
+      const pad = (value) => String(value).padStart(2, "0");
+      return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    let toastTimer;
+    function showToast(message) {
+      clearTimeout(toastTimer);
+      els.toast.textContent = message;
+      els.toast.classList.add("show");
+      toastTimer = setTimeout(() => {
+        els.toast.classList.remove("show");
+      }, 2200);
+    }
+
+    render();
+  </script>
+</body>
+</html>

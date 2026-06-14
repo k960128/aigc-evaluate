@@ -5,6 +5,7 @@ import co.elastic.clients.elasticsearch._types.Refresh;
 import co.elastic.clients.elasticsearch.core.*;
 import co.elastic.clients.elasticsearch.indices.CreateIndexRequest;
 import co.elastic.clients.elasticsearch.indices.ExistsRequest;
+import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kant.llm.eval.common.constant.EsDocumentChunk;
 import jakarta.annotation.PostConstruct;
@@ -190,6 +191,28 @@ public class ElasticSearchService {
         log.debug("Indexed doc id={}", doc.getId());
     }
 
+    /**
+     * 根据文档 ID 删除单条 ES 索引。
+     */
+    public void deleteById(String id) throws Exception {
+        if (id == null) {
+            throw new IllegalArgumentException("Document ID cannot be null");
+        }
+        try {
+            DeleteRequest request = DeleteRequest.of(b -> b
+                    .index(INDEX_NAME)
+                    .id(id)
+                    .refresh(Refresh.True));
+            client.delete(request);
+            log.debug("Deleted doc id={}", id);
+        } catch (ElasticsearchException ex) {
+            if (ex.status() != 404) {
+                throw ex;
+            }
+            log.debug("ES doc id={} not found, skip delete", id);
+        }
+    }
+
     public void bulkIndex(List<EsDocumentChunk> docs, String indexName) throws Exception {
         if (docs == null || docs.isEmpty()) return;
 
@@ -247,13 +270,11 @@ public class ElasticSearchService {
      * 中文检索：ik_max_word / ik_smart 切换
      */
     public List<EsDocumentChunk> searchByKeyword(String keyword, int size, boolean useSmartAnalyzer, String indexName) throws Exception {
-        String field = useSmartAnalyzer ? FIELD_CONTENT + ".smart" : FIELD_CONTENT;
-
         SearchRequest request = SearchRequest.of(b -> b
                 .index(indexName)
                 .query(q -> q
                         .match(m -> m
-                                .field(field)
+                                .field(FIELD_CONTENT)
                                 .query(keyword)
                         )
                 )
