@@ -73,9 +73,14 @@ public class MySqlMockL2RecallClient implements L2RecallClient {
         try {
             // 本客户端的定位是“无 ES/Milvus 时的本地验证适配器”，因此直接读取 MySQL 事实源。
             // 真实召回接入后，可以保留该类作为 dev/mock profile，生产环境切换到真实客户端。
+            LambdaQueryWrapper<RiskAttackFeatureDO> queryWrapper = new LambdaQueryWrapper<RiskAttackFeatureDO>()
+                    .eq(RiskAttackFeatureDO::getStatus, 1);
+            if (request.getTargetRiskDetailsId() != null) {
+                // 题目绑定风险小类时，Mock 召回也按相同边界过滤，确保默认模式和真实模式的业务语义一致。
+                queryWrapper.eq(RiskAttackFeatureDO::getRiskDetailsId, request.getTargetRiskDetailsId());
+            }
             List<RiskAttackFeatureDO> features = riskAttackFeatureMapper.selectList(
-                    new LambdaQueryWrapper<RiskAttackFeatureDO>()
-                            .eq(RiskAttackFeatureDO::getStatus, 1)
+                    queryWrapper
                             .orderByAsc(RiskAttackFeatureDO::getRiskDetailsId)
                             .orderByAsc(RiskAttackFeatureDO::getId));
             if (features == null || features.isEmpty()) {
@@ -104,8 +109,8 @@ public class MySqlMockL2RecallClient implements L2RecallClient {
             // 后续 RRF 会按 featureId 合并两路来源。
             List<L2FeatureHit> esHits = buildHits(scoredFeatures, detailMap, categoryMap, severityMap, true, request.getEsTopK());
             List<L2FeatureHit> milvusHits = buildHits(scoredFeatures, detailMap, categoryMap, severityMap, false, request.getMilvusTopK());
-            log.info("L2 MySQL Mock 召回完成，features: {}, esHits: {}, milvusHits: {}",
-                    features.size(), esHits.size(), milvusHits.size());
+            log.info("L2 MySQL Mock 召回完成，targetRiskDetailsId: {}, features: {}, esHits: {}, milvusHits: {}",
+                    request.getTargetRiskDetailsId(), features.size(), esHits.size(), milvusHits.size());
             return L2RecallResult.builder()
                     .esHits(esHits)
                     .milvusHits(milvusHits)

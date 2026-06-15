@@ -37,6 +37,18 @@ public class DataSetSampleDO {
     private String question;
 
     /**
+     * 题目绑定的风险小类 ID。
+     *
+     * <p>L2 真实召回会优先按该字段过滤 ES/PGVector 知识库，避免评测某一类风险时召回到其他风险小类。</p>
+     */
+    private Long riskDetailsId;
+
+    /**
+     * 题目绑定的风险小类名称。
+     */
+    private String riskDetailsName;
+
+    /**
      * 创建时间
      */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")

@@ -126,6 +126,9 @@ public class DataSetController {
         if (request.getDatasetId() != null) {
             queryWrapper.eq(DataSetSampleDO::getDatasetId, request.getDatasetId());
         }
+        if (request.getRiskDetailsId() != null) {
+            queryWrapper.eq(DataSetSampleDO::getRiskDetailsId, request.getRiskDetailsId());
+        }
         queryWrapper.orderByDesc(DataSetSampleDO::getCreateTime);
 
         Page<DataSetSampleDO> pageResult = dataSetSampleService.page(new Page<>(current, size), queryWrapper);
@@ -182,6 +185,7 @@ public class DataSetController {
                 .id(entity.getId())
                 .datasetId(entity.getDatasetId())
                 .question(entity.getQuestion())
+                .riskDetailsId(entity.getRiskDetailsId())
                 .createTime(entity.getCreateTime())
                 .updateTime(entity.getUpdateTime())
                 .build();

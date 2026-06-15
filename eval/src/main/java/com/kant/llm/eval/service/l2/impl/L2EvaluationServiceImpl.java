@@ -80,6 +80,7 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
         String queryTextDigest = sha256(queryText);
         L2RecallResult recallResult = l2RecallClient.recall(L2RecallRequest.builder()
                 .queryText(queryText)
+                .targetRiskDetailsId(request.getTargetRiskDetailsId())
                 .esTopK(thresholds.getEsTopK())
                 .milvusTopK(thresholds.getMilvusTopK())
                 .build());
@@ -96,12 +97,15 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
         // 2. RRF 融合：把两路 rank 合并到 featureId 维度，避免同一证据重复计数。
         // 3. Reranker：真实模型未接入时用降级分；Mock 模式会保留召回侧预置分。
         // 4. 小类聚合和阈值路由：最终以 riskDetailsId 作为 L2 决策粒度。
-        List<L2FeatureHit> fusedCandidates = fuseByRrf(recallResult, thresholds);
+        List<L2FeatureHit> fusedCandidates = filterByTargetRiskDetailsId(
+                fuseByRrf(recallResult, thresholds), request.getTargetRiskDetailsId());
         applyRerankScore(queryText, fusedCandidates);
         List<L2RiskDetailHit> riskDetailHits = aggregateRiskDetails(fusedCandidates, thresholds);
-        L2EvaluationResult routedResult = routeDecision(riskDetailHits, recallResult, thresholds, queryTextDigest);
-        log.info("L2 判定完成，resultDetailId: {}, decision: {}, riskDetailsId: {}, routeReason: {}",
-                request.getResultDetailId(), routedResult.getDecisionType().getCode(),
+        L2EvaluationResult routedResult = routeDecision(riskDetailHits, recallResult, thresholds, queryTextDigest,
+                request.getTargetRiskDetailsId());
+        log.info("L2 判定完成，resultDetailId: {}, targetRiskDetailsId: {}, decision: {}, riskDetailsId: {}, routeReason: {}",
+                request.getResultDetailId(), request.getTargetRiskDetailsId(),
+                routedResult.getDecisionType().getCode(),
                 routedResult.getRiskDetailsId(), routedResult.getRouteReason());
         return routedResult;
     }
@@ -146,6 +150,26 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
                 .sorted(Comparator.comparing(L2FeatureHit::getRrfScore, Comparator.nullsLast(Comparator.reverseOrder())))
                 .limit(thresholds.getRrfTopN())
                 .toList();
+    }
+
+    /**
+     * 按题目绑定的风险小类再次收窄候选。
+     *
+     * <p>ES/PGVector/Mock 召回都会尽量在检索层过滤，但这里仍保留一层主流程防线：
+     * 只要题目给出了 targetRiskDetailsId，后续 Reranker、聚合和路由就只看该小类证据。</p>
+     */
+    private List<L2FeatureHit> filterByTargetRiskDetailsId(List<L2FeatureHit> candidates, Long targetRiskDetailsId) {
+        if (targetRiskDetailsId == null) {
+            return candidates;
+        }
+        List<L2FeatureHit> filteredCandidates = safeList(candidates).stream()
+                .filter(hit -> Objects.equals(hit.getRiskDetailsId(), targetRiskDetailsId))
+                .toList();
+        if (filteredCandidates.size() != safeList(candidates).size()) {
+            log.info("L2 按目标风险小类过滤 RRF 候选，targetRiskDetailsId: {}, before: {}, after: {}",
+                    targetRiskDetailsId, safeList(candidates).size(), filteredCandidates.size());
+        }
+        return filteredCandidates;
     }
 
     /**
@@ -303,7 +327,8 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
     private L2EvaluationResult routeDecision(List<L2RiskDetailHit> riskDetailHits,
                                              L2RecallResult recallResult,
                                              L2ThresholdProperties thresholds,
-                                             String queryTextDigest) {
+                                             String queryTextDigest,
+                                             Long targetRiskDetailsId) {
         L2RiskDetailHit topHit = riskDetailHits.isEmpty() ? null : riskDetailHits.getFirst();
         L2DecisionTypeEnums decisionType;
         Boolean safe;
@@ -339,8 +364,10 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
         }
 
         Long riskDetailsId = topHit == null ? null : topHit.getRiskDetailsId();
-        Map<String, Object> outputSnapshot = buildOutputSnapshot(decisionType, queryTextDigest, thresholds, riskDetailHits, routeReason);
-        Map<String, Object> nodeResult = buildNodeResult(decisionType, safe, score, riskDetailsId, routeReason);
+        Map<String, Object> outputSnapshot = buildOutputSnapshot(decisionType, queryTextDigest, thresholds,
+                riskDetailHits, routeReason, targetRiskDetailsId);
+        Map<String, Object> nodeResult = buildNodeResult(decisionType, safe, score, riskDetailsId,
+                routeReason, targetRiskDetailsId);
         return L2EvaluationResult.builder()
                 .decisionType(decisionType)
                 .safe(safe)
@@ -398,10 +425,12 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
                                                     String queryTextDigest,
                                                     L2ThresholdProperties thresholds,
                                                     List<L2RiskDetailHit> riskDetailHits,
-                                                    String routeReason) {
+                                                    String routeReason,
+                                                    Long targetRiskDetailsId) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("decision", decisionType.getCode());
         snapshot.put("queryTextDigest", queryTextDigest);
+        snapshot.put("targetRiskDetailsId", targetRiskDetailsId);
         snapshot.put("thresholds", thresholds);
         snapshot.put("riskDetailHits", riskDetailHits);
         snapshot.put("routeReason", routeReason);
@@ -415,11 +444,13 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
                                                 Boolean safe,
                                                 BigDecimal score,
                                                 Long riskDetailsId,
-                                                String routeReason) {
+                                                String routeReason,
+                                                Long targetRiskDetailsId) {
         Map<String, Object> nodeResult = new LinkedHashMap<>();
         nodeResult.put("decision", decisionType.getCode());
         nodeResult.put("safe", safe);
         nodeResult.put("score", score);
+        nodeResult.put("targetRiskDetailsId", targetRiskDetailsId);
         nodeResult.put("riskDetailsId", riskDetailsId);
         nodeResult.put("routeReason", routeReason);
         return nodeResult;

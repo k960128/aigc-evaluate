@@ -130,6 +130,7 @@ public class EvalTaskSplitConsumer implements RocketMQListener<EvalTaskSplitMess
                     .taskDetailId(taskDetail.getId())
                     .sampleId(sample.getId())
                     .inputText(sample.getQuestion())
+                    .riskDetailsId(sample.getRiskDetailsId())
                     .status(EvalResultStatusEnums.PENDING.getCode())
                     .build();
             try {

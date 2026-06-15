@@ -575,6 +575,7 @@ public class EvalTaskServiceImpl implements EvalTaskService {
                 .taskDetailId(resultDetail.getTaskDetailId())
                 .sampleId(resultDetail.getSampleId())
                 .datasetId(sample == null ? null : sample.getDatasetId())
+                .riskDetailsId(resultDetail.getRiskDetailsId())
                 .inputText(resultDetail.getInputText())
                 .modelOutput(resultDetail.getModelOutput())
                 .rawResponse(resultDetail.getRawResponse())

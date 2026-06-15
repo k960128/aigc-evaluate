@@ -82,10 +82,11 @@ public class EsPgL2RecallClient implements L2RecallClient {
             return emptyResult(false);
         }
         String queryText = request.getQueryText();
+        Long targetRiskDetailsId = request.getTargetRiskDetailsId();
         int esTopK = resolveTopK(request.getEsTopK());
         int vectorTopK = resolveTopK(request.getMilvusTopK());
-        log.info("开始 L2 真实混合召回，esTopK: {}, pgVectorTopK: {}, queryLength: {}",
-                esTopK, vectorTopK, queryText.length());
+        log.info("开始 L2 真实混合召回，targetRiskDetailsId: {}, esTopK: {}, pgVectorTopK: {}, queryLength: {}",
+                targetRiskDetailsId, esTopK, vectorTopK, queryText.length());
 
         boolean esFailed = false;
         boolean vectorFailed = false;
@@ -93,8 +94,9 @@ public class EsPgL2RecallClient implements L2RecallClient {
         List<Document> vectorRawHits;
 
         try {
-            esRawHits = elasticSearchService.searchRiskAttackFeatures(queryText, esTopK);
-            log.info("L2 ES 真实召回完成，rawHits: {}", esRawHits.size());
+            esRawHits = elasticSearchService.searchRiskAttackFeatures(queryText, esTopK, targetRiskDetailsId);
+            log.info("L2 ES 真实召回完成，targetRiskDetailsId: {}, rawHits: {}",
+                    targetRiskDetailsId, esRawHits.size());
         } catch (Exception ex) {
             esFailed = true;
             esRawHits = List.of();
@@ -105,7 +107,7 @@ public class EsPgL2RecallClient implements L2RecallClient {
             vectorRawHits = vectorStore.similaritySearch(SearchRequest.builder()
                     .query(queryText)
                     .topK(vectorTopK)
-                    .filterExpression(ACTIVE_FEATURE_FILTER)
+                    .filterExpression(buildVectorFilterExpression(targetRiskDetailsId))
                     .build());
             if (vectorRawHits == null) {
                 vectorRawHits = List.of();
@@ -113,7 +115,8 @@ public class EsPgL2RecallClient implements L2RecallClient {
             vectorRawHits = vectorRawHits.stream()
                     .limit(vectorTopK)
                     .toList();
-            log.info("L2 PGVector 真实召回完成，rawHits: {}", vectorRawHits.size());
+            log.info("L2 PGVector 真实召回完成，targetRiskDetailsId: {}, rawHits: {}",
+                    targetRiskDetailsId, vectorRawHits.size());
         } catch (Exception ex) {
             vectorFailed = true;
             vectorRawHits = List.of();
@@ -122,20 +125,30 @@ public class EsPgL2RecallClient implements L2RecallClient {
 
         boolean degraded = esFailed || vectorFailed;
         if (esRawHits.isEmpty() && vectorRawHits.isEmpty()) {
-            log.info("L2 真实混合召回无命中，degraded: {}", degraded);
+            log.info("L2 真实混合召回无命中，targetRiskDetailsId: {}, degraded: {}",
+                    targetRiskDetailsId, degraded);
             return emptyResult(degraded);
         }
 
         LookupContext lookupContext = buildLookupContext(esRawHits, vectorRawHits);
         List<L2FeatureHit> esHits = toEsHits(esRawHits, lookupContext);
         List<L2FeatureHit> vectorHits = toVectorHits(vectorRawHits, lookupContext);
-        log.info("L2 真实混合召回结果构造完成，esHits: {}, milvusHits(pgVector): {}, degraded: {}",
-                esHits.size(), vectorHits.size(), degraded);
+        log.info("L2 真实混合召回结果构造完成，targetRiskDetailsId: {}, esHits: {}, milvusHits(pgVector): {}, degraded: {}",
+                targetRiskDetailsId, esHits.size(), vectorHits.size(), degraded);
         return L2RecallResult.builder()
                 .esHits(esHits)
                 .milvusHits(vectorHits)
                 .degraded(degraded)
                 .build();
+    }
+
+    private String buildVectorFilterExpression(Long targetRiskDetailsId) {
+        if (targetRiskDetailsId == null) {
+            return ACTIVE_FEATURE_FILTER;
+        }
+        // Spring AI VectorStore filterExpression 使用 metadata 字段名表达过滤条件。
+        // riskDetailsId 来自 PGVector Document.metadata，必须和同步写入时的 key 保持一致。
+        return ACTIVE_FEATURE_FILTER + " && riskDetailsId == " + targetRiskDetailsId;
     }
 
     private List<L2FeatureHit> toEsHits(List<EsDocumentChunk> rawHits, LookupContext lookupContext) {

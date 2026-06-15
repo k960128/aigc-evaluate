@@ -27,6 +27,13 @@ public class L2EvaluationRequest {
     /** 数据集样本 ID。 */
     private Long sampleId;
 
+    /**
+     * 题目绑定的目标风险小类 ID。
+     *
+     * <p>当该字段存在时，L2 召回只在该 risk_details_id 下检索知识特征，避免跨风险类型误召回。</p>
+     */
+    private Long targetRiskDetailsId;
+
     /** 用户原始输入或数据集样本输入。 */
     private String inputText;
 

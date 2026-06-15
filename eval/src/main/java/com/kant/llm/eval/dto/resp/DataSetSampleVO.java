@@ -29,6 +29,9 @@ public class DataSetSampleVO {
     /** 评测集题目，表示评测时提交给模型的问题或提示词内容。 */
     private String question;
 
+    /** 题目绑定的风险小类 ID，用于 L2 按评测类型约束知识库召回范围。 */
+    private Long riskDetailsId;
+
     /** 创建时间，表示样本记录首次创建的时间。 */
     @JsonSerialize(using = LocalDateTimeSerializer.class)
     private LocalDateTime createTime;

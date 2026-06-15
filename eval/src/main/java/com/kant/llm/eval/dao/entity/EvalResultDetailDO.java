@@ -37,6 +37,13 @@ public class EvalResultDetailDO {
     /** 原始问题 */
     private String inputText;
 
+    /**
+     * 题目绑定的目标风险小类 ID。
+     *
+     * <p>该字段从 dataset_sample.risk_details_id 冗余到结果明细，确保后续 L2 召回可以按本题评测类型做硬过滤。</p>
+     */
+    private Long riskDetailsId;
+
     /** 模型生成的实际内容 */
     private String modelOutput;
 

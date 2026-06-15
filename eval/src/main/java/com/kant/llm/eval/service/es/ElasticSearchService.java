@@ -313,21 +313,36 @@ public class ElasticSearchService {
      * L2 后续只消费统一的 featureId，因此 ES _id 仅作为兜底，不作为 RRF 合并依据。</p>
      */
     public List<EsDocumentChunk> searchRiskAttackFeatures(String queryText, int topK) throws Exception {
+        return searchRiskAttackFeatures(queryText, topK, null);
+    }
+
+    /**
+     * L2 攻击特征专用 ES 召回。
+     *
+     * <p>targetRiskDetailsId 来源于评测题目绑定的 risk_details_id。存在该字段时，
+     * ES 只在对应风险小类下召回知识特征，避免跨小类命中导致 L2 过度拦截。</p>
+     */
+    public List<EsDocumentChunk> searchRiskAttackFeatures(String queryText, int topK, Long targetRiskDetailsId) throws Exception {
         if (!org.springframework.util.StringUtils.hasText(queryText)) {
             return List.of();
         }
         int limit = topK <= 0 ? DEFAULT_TOP_K : topK;
-        log.info("开始 L2 ES 攻击特征召回，index: {}, topK: {}, queryLength: {}",
-                INDEX_NAME, limit, queryText.length());
+        log.info("开始 L2 ES 攻击特征召回，index: {}, topK: {}, targetRiskDetailsId: {}, queryLength: {}",
+                INDEX_NAME, limit, targetRiskDetailsId, queryText.length());
         SearchResponse<EsDocumentChunk> response = client.search(search -> search
                         .index(INDEX_NAME)
                         .size(limit)
                         .query(query -> query
-                                .bool(bool -> bool
-                                        .filter(filter -> filter.term(term -> term
-                                                .field("status")
-                                                .value(FieldValue.of(1L))))
-                                        .must(must -> must.multiMatch(multiMatch -> multiMatch
+                                .bool(bool -> {
+                                    bool.filter(filter -> filter.term(term -> term
+                                            .field("status")
+                                            .value(FieldValue.of(1L))));
+                                    if (targetRiskDetailsId != null) {
+                                        bool.filter(filter -> filter.term(term -> term
+                                                .field("riskDetailsId")
+                                                .value(FieldValue.of(targetRiskDetailsId))));
+                                    }
+                                    bool.must(must -> must.multiMatch(multiMatch -> multiMatch
                                                 .query(queryText)
                                                 .fields(
                                                         "featureText^3",
@@ -335,7 +350,9 @@ public class ElasticSearchService {
                                                         "featureCode^1.5",
                                                         "tags",
                                                         "content")
-                                                .operator(Operator.Or))))),
+                                                .operator(Operator.Or)));
+                                    return bool;
+                                })),
                 EsDocumentChunk.class);
 
         double maxScore = response.hits().maxScore() == null || response.hits().maxScore() <= 0D
@@ -361,7 +378,8 @@ public class ElasticSearchService {
                     .setScale(SCORE_SCALE, RoundingMode.HALF_UP));
             result.add(source);
         });
-        log.info("L2 ES 攻击特征召回完成，hits: {}, maxScore: {}", result.size(), maxScore);
+        log.info("L2 ES 攻击特征召回完成，targetRiskDetailsId: {}, hits: {}, maxScore: {}",
+                targetRiskDetailsId, result.size(), maxScore);
         return result;
     }
 }

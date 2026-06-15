@@ -321,6 +321,7 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
                     .taskDetailId(taskDetail.getId())
                     .resultDetailId(resultDetail.getId())
                     .sampleId(resultDetail.getSampleId())
+                    .targetRiskDetailsId(resultDetail.getRiskDetailsId())
                     .inputText(resultDetail.getInputText())
                     .modelOutput(modelOutput)
                     .l1WarningTags(l1WarningTags)
@@ -600,6 +601,7 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
     private Object buildL2InputSnapshot(EvalResultDetailDO resultDetail, String modelOutput, List<Long> l1WarningTags) {
         LinkedHashMap<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("inputText", resultDetail.getInputText());
+        snapshot.put("targetRiskDetailsId", resultDetail.getRiskDetailsId());
         snapshot.put("modelOutput", modelOutput);
         snapshot.put("l1WarningTags", l1WarningTags);
         return snapshot;

@@ -36,6 +36,9 @@ public class EvalResultDetailVO {
     /** 样本所属数据集 ID。 */
     private Long datasetId;
 
+    /** 题目绑定的目标风险小类 ID，用于说明 L2 本次召回过滤范围。 */
+    private Long riskDetailsId;
+
     /** 原始问题，表示提交给模型的输入文本。 */
     private String inputText;
 
