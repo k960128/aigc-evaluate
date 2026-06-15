@@ -62,6 +62,9 @@ app:
   l2:
     # mysql-mock：使用 MySQL Mock 召回；real：使用 ES + PGVector；empty：空召回降级
     recall-mode: real
+  l3:
+    # real：调用 JudgeConfiguration 中的裁判大模型；default：不调用模型，直接降级人工核验
+    judge-mode: real
 
 # RocketMQ 配置
 rocketmq:

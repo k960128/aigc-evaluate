@@ -1,12 +1,14 @@
 package com.kant.llm.eval.mq.consumer;
 
 import com.alibaba.fastjson2.JSON;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.kant.llm.eval.client.*;
 import com.kant.llm.eval.common.convention.EvalContext;
 import com.kant.llm.eval.common.enums.EvalResultStatusEnums;
 import com.kant.llm.eval.common.enums.L2DecisionTypeEnums;
+import com.kant.llm.eval.common.enums.L3DecisionTypeEnums;
 import com.kant.llm.eval.common.enums.ModelManufacturerEnum;
 import com.kant.llm.eval.common.enums.PipelineNodeCodeEnums;
 import com.kant.llm.eval.common.enums.PipelineNodeStatusEnums;
@@ -17,9 +19,11 @@ import com.kant.llm.eval.common.exception.ServiceException;
 import com.kant.llm.eval.dao.entity.EvalResultDetailDO;
 import com.kant.llm.eval.dao.entity.EvalTaskDetailDO;
 import com.kant.llm.eval.dao.entity.ModelInfoDO;
+import com.kant.llm.eval.dao.entity.RiskDetailRuleDO;
 import com.kant.llm.eval.dao.mapper.EvalResultDetailMapper;
 import com.kant.llm.eval.dao.mapper.EvalTaskDetailMapper;
 import com.kant.llm.eval.dao.mapper.ModelInfoMapper;
+import com.kant.llm.eval.dao.mapper.RiskDetailRuleMapper;
 import com.kant.llm.eval.engine.L1InterceptionEngine;
 import com.kant.llm.eval.mq.EvalMqTopics;
 import com.kant.llm.eval.mq.message.EvalSampleExecutionMessage;
@@ -28,6 +32,9 @@ import com.kant.llm.eval.service.MockModelOutputContentService;
 import com.kant.llm.eval.service.l2.L2EvaluationService;
 import com.kant.llm.eval.service.l2.model.L2EvaluationRequest;
 import com.kant.llm.eval.service.l2.model.L2EvaluationResult;
+import com.kant.llm.eval.service.l3.L3EvaluationService;
+import com.kant.llm.eval.service.l3.model.L3EvaluationRequest;
+import com.kant.llm.eval.service.l3.model.L3EvaluationResult;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
@@ -47,8 +54,8 @@ import java.util.concurrent.TimeUnit;
  * 单样本执行消费者。
  *
  * <p>该消费者承接任务拆分后的 Execution_MQ 消息，负责完成“调用被测模型 -> L1 安全判定
- * -> L2 双路召回判定 -> 回写单条结果 -> 推进批次进度”的执行闭环。L3 尚未接入时，
- * L2 模糊区会先进入人工核验状态。</p>
+ * -> L2 双路召回判定 -> L3 Judge 裁判层 -> 回写单条结果 -> 推进批次进度”的执行闭环。
+ * L3 只处理 L2 模糊区，明确违规和明确安全样本仍在 L2 结束。</p>
  */
 @Slf4j
 @Component
@@ -73,33 +80,39 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
     private final EvalResultDetailMapper evalResultDetailMapper;
     private final EvalTaskDetailMapper evalTaskDetailMapper;
     private final ModelInfoMapper modelInfoMapper;
+    private final RiskDetailRuleMapper riskDetailRuleMapper;
     private final ModelClientStrategyFactory modelClientStrategyFactory;
     private final L1InterceptionEngine l1InterceptionEngine;
     private final RedissonClient redissonClient;
     private final TransactionTemplate transactionTemplate;
     private final EvalPipelineNodeRecorder evalPipelineNodeRecorder;
     private final L2EvaluationService l2EvaluationService;
+    private final L3EvaluationService l3EvaluationService;
     private final MockModelOutputContentService mockModelOutputContentService;
 
     public EvalSampleExecutionConsumer(EvalResultDetailMapper evalResultDetailMapper,
                                        EvalTaskDetailMapper evalTaskDetailMapper,
                                        ModelInfoMapper modelInfoMapper,
+                                       RiskDetailRuleMapper riskDetailRuleMapper,
                                        ModelClientStrategyFactory modelClientStrategyFactory,
                                        L1InterceptionEngine l1InterceptionEngine,
                                        RedissonClient redissonClient,
                                        TransactionTemplate transactionTemplate,
                                        EvalPipelineNodeRecorder evalPipelineNodeRecorder,
                                        L2EvaluationService l2EvaluationService,
+                                       L3EvaluationService l3EvaluationService,
                                        MockModelOutputContentService mockModelOutputContentService) {
         this.evalResultDetailMapper = evalResultDetailMapper;
         this.evalTaskDetailMapper = evalTaskDetailMapper;
         this.modelInfoMapper = modelInfoMapper;
+        this.riskDetailRuleMapper = riskDetailRuleMapper;
         this.modelClientStrategyFactory = modelClientStrategyFactory;
         this.l1InterceptionEngine = l1InterceptionEngine;
         this.redissonClient = redissonClient;
         this.transactionTemplate = transactionTemplate;
         this.evalPipelineNodeRecorder = evalPipelineNodeRecorder;
         this.l2EvaluationService = l2EvaluationService;
+        this.l3EvaluationService = l3EvaluationService;
         this.mockModelOutputContentService = mockModelOutputContentService;
     }
 
@@ -328,26 +341,76 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
                     .build());
             updateEntity.setIsSafe(l2Result.getSafe());
             updateEntity.setErrorMsg(buildL2ResultMessage(l2Result));
-            // L3 尚未接入，本阶段把 PASS_TO_L3 映射到人工核验终态。
-            // 这里仍然推进批次 finished_count，避免模糊样本卡住整个批次。
-            if (l2Result.getDecisionType() == L2DecisionTypeEnums.PASS_TO_L3) {
-                updateEntity.setStatus(EvalResultStatusEnums.MANUAL_REVIEWED.getCode());
-            } else {
-                updateEntity.setStatus(EvalResultStatusEnums.AUTO_SCORED.getCode());
-            }
+            updateEntity.setStatus(EvalResultStatusEnums.AUTO_SCORED.getCode());
             // 流水线节点状态只表达 L2 节点是否放行：
             // - safe=false：L2 已阻断，节点记 BLOCKED。
-            // - safe=true 或 safe=null：节点本身执行成功，记 PASSED；safe=null 的人工核验信息在 node_result 中体现。
+            // - safe=true 或 safe=null：节点本身执行成功，记 PASSED；safe=null 表示继续进入 L3。
             PipelineNodeStatusEnums nodeStatus = l2Result.getSafe() != null && !l2Result.getSafe()
                     ? PipelineNodeStatusEnums.BLOCKED
                     : PipelineNodeStatusEnums.PASSED;
             evalPipelineNodeRecorder.finishNode(l2NodeRecordId, nodeStatus,
                     l2Result.getOutputSnapshot(), l2Result.getNodeResult(), null);
+            if (l2Result.getDecisionType() == L2DecisionTypeEnums.PASS_TO_L3) {
+                applyL3Judgement(taskDetail, resultDetail, updateEntity, l1WarningTags, modelOutput, l2Result);
+            }
             log.info("评测样本 L2 判定完成，resultDetailId: {}, decision: {}, safe: {}",
                     resultDetail.getId(), l2Result.getDecisionType().getCode(), l2Result.getSafe());
         } catch (Exception ex) {
             evalPipelineNodeRecorder.failNode(l2NodeRecordId, ex, null, buildFailedNodeResult("L2_FAILED"));
             throw ex;
+        }
+    }
+
+    /**
+     * 执行 L3 Judge 裁判层判定。
+     *
+     * <p>L3 只在 L2 PASS_TO_L3 时执行。第一阶段默认 Judge 会降级到人工核验；
+     * 后续接入真实 JudgeClient 后，这里仍然只负责节点记录和结果状态映射。</p>
+     */
+    private void applyL3Judgement(EvalTaskDetailDO taskDetail,
+                                  EvalResultDetailDO resultDetail,
+                                  EvalResultDetailDO updateEntity,
+                                  List<Long> l1WarningTags,
+                                  String modelOutput,
+                                  L2EvaluationResult l2Result) {
+        Long l3NodeRecordId = evalPipelineNodeRecorder.startNode(taskDetail, resultDetail,
+                PipelineNodeCodeEnums.L3, buildL3InputSnapshot(resultDetail, modelOutput, l1WarningTags, l2Result));
+        try {
+            L3EvaluationResult l3Result = l3EvaluationService.evaluate(L3EvaluationRequest.builder()
+                    .taskId(taskDetail.getTaskId())
+                    .taskDetailId(taskDetail.getId())
+                    .resultDetailId(resultDetail.getId())
+                    .sampleId(resultDetail.getSampleId())
+                    .targetRiskDetailsId(resultDetail.getRiskDetailsId())
+                    .inputText(resultDetail.getInputText())
+                    .modelOutput(modelOutput)
+                    .l1WarningTags(l1WarningTags)
+                    .l2Decision(l2Result.getDecisionType())
+                    .l2RouteReason(l2Result.getRouteReason())
+                    .l2RiskDetailHits(l2Result.getRiskDetailHits())
+                    .l2OutputSnapshot(l2Result.getOutputSnapshot())
+                    .l2NodeResult(l2Result.getNodeResult())
+                    .build());
+            updateEntity.setIsSafe(l3Result.getSafe());
+            updateEntity.setErrorMsg(buildL3ResultMessage(l3Result));
+            updateEntity.setStatus(l3Result.getSafe() == null
+                    ? EvalResultStatusEnums.MANUAL_REVIEWED.getCode()
+                    : EvalResultStatusEnums.AUTO_SCORED.getCode());
+            PipelineNodeStatusEnums nodeStatus = l3Result.getDecisionType() == L3DecisionTypeEnums.UNSAFE
+                    ? PipelineNodeStatusEnums.BLOCKED
+                    : PipelineNodeStatusEnums.PASSED;
+            evalPipelineNodeRecorder.finishNode(l3NodeRecordId, nodeStatus,
+                    l3Result.getOutputSnapshot(), l3Result.getNodeResult(), null);
+            log.info("评测样本 L3 判定完成，resultDetailId: {}, decision: {}, safe: {}, targetRiskDetailsId: {}",
+                    resultDetail.getId(), l3Result.getDecisionType().getCode(), l3Result.getSafe(),
+                    l3Result.getTargetRiskDetailsId());
+        } catch (Exception ex) {
+            updateEntity.setIsSafe(null);
+            updateEntity.setStatus(EvalResultStatusEnums.MANUAL_REVIEWED.getCode());
+            updateEntity.setErrorMsg(trimErrorMessage("L3执行异常，进入人工核验：" + ex.getMessage()));
+            evalPipelineNodeRecorder.failNode(l3NodeRecordId, ex, null, buildL3FailedNodeResult(resultDetail, l2Result, ex));
+            log.warn("评测样本 L3 判定异常，已转入人工核验，resultDetailId: {}, reason: {}",
+                    resultDetail.getId(), ex.getMessage(), ex);
         }
     }
 
@@ -608,6 +671,38 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
     }
 
     /**
+     * 构造 L3 节点输入快照。
+     */
+    private Object buildL3InputSnapshot(EvalResultDetailDO resultDetail,
+                                        String modelOutput,
+                                        List<Long> l1WarningTags,
+                                        L2EvaluationResult l2Result) {
+        LinkedHashMap<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("inputText", resultDetail.getInputText());
+        snapshot.put("modelOutput", modelOutput);
+        snapshot.put("targetRiskDetailsId", resultDetail.getRiskDetailsId());
+        snapshot.put("riskDetailRule", loadRiskDetailRuleSnapshot(resultDetail.getRiskDetailsId()));
+        snapshot.put("l1WarningTags", l1WarningTags);
+        snapshot.put("l2Decision", l2Result == null || l2Result.getDecisionType() == null
+                ? null : l2Result.getDecisionType().getCode());
+        snapshot.put("l2RouteReason", l2Result == null ? null : l2Result.getRouteReason());
+        snapshot.put("l2RiskDetailHits", l2Result == null ? null : l2Result.getRiskDetailHits());
+        snapshot.put("l2OutputSnapshot", l2Result == null ? null : l2Result.getOutputSnapshot());
+        snapshot.put("l2NodeResult", l2Result == null ? null : l2Result.getNodeResult());
+        return snapshot;
+    }
+
+    private RiskDetailRuleDO loadRiskDetailRuleSnapshot(Long targetRiskDetailsId) {
+        if (targetRiskDetailsId == null) {
+            return null;
+        }
+        return riskDetailRuleMapper.selectOne(new LambdaQueryWrapper<RiskDetailRuleDO>()
+                .eq(RiskDetailRuleDO::getRiskDetailsId, targetRiskDetailsId)
+                .eq(RiskDetailRuleDO::getStatus, 1)
+                .last("LIMIT 1"));
+    }
+
+    /**
      * 构造 L2 结果说明。
      *
      * <p>结果表没有独立 L2 风险字段，第一阶段把可读路由原因放入 errorMsg，
@@ -627,12 +722,44 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
     }
 
     /**
+     * 构造 L3 结果说明。
+     */
+    private String buildL3ResultMessage(L3EvaluationResult l3Result) {
+        if (l3Result == null || l3Result.getDecisionType() == null) {
+            return null;
+        }
+        if (l3Result.getDecisionType() == L3DecisionTypeEnums.SAFE) {
+            return null;
+        }
+        return trimErrorMessage("L3安全判定：" + l3Result.getDecisionType().getDesc()
+                + "，targetRiskDetailsId=" + l3Result.getTargetRiskDetailsId()
+                + "，riskDetailsId=" + l3Result.getRiskDetailsId()
+                + "，reason=" + l3Result.getRouteReason());
+    }
+
+    /**
      * 构造失败节点结构化结果。
      */
     private Object buildFailedNodeResult(String decision) {
         LinkedHashMap<String, Object> nodeResult = new LinkedHashMap<>();
         nodeResult.put("success", false);
         nodeResult.put("decision", decision);
+        return nodeResult;
+    }
+
+    /**
+     * 构造 L3 异常节点结构化结果。
+     */
+    private Object buildL3FailedNodeResult(EvalResultDetailDO resultDetail, L2EvaluationResult l2Result, Exception ex) {
+        LinkedHashMap<String, Object> nodeResult = new LinkedHashMap<>();
+        nodeResult.put("success", false);
+        nodeResult.put("decision", "L3_FAILED_MANUAL_REVIEW");
+        nodeResult.put("safe", null);
+        nodeResult.put("score", null);
+        nodeResult.put("targetRiskDetailsId", resultDetail == null ? null : resultDetail.getRiskDetailsId());
+        nodeResult.put("riskDetailsId", l2Result == null ? null : l2Result.getRiskDetailsId());
+        nodeResult.put("routeReason", "L3 执行异常，样本转入人工核验。");
+        nodeResult.put("error", ex == null ? null : ex.getMessage());
         return nodeResult;
     }
 

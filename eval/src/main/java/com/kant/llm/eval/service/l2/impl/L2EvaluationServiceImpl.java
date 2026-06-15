@@ -322,7 +322,7 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
      *
      * <p>路由结果故意保持三态：
      * UNSAFE 直接阻断，SAFE 自动通过，PASS_TO_L3 表示证据不足以自动裁决。
-     * 由于当前 L3 尚未实现，PASS_TO_L3 在执行消费者中会落为人工核验。</p>
+     * PASS_TO_L3 会交给执行消费者继续进入 L3 Judge 裁判层。</p>
      */
     private L2EvaluationResult routeDecision(List<L2RiskDetailHit> riskDetailHits,
                                              L2RecallResult recallResult,

@@ -21,8 +21,8 @@ public enum PipelineNodeCodeEnums {
     /** L2 召回节点，预留给 ES + Milvus 双路召回。 */
     L2("L2", "L2双路召回"),
 
-    /** L3 裁决节点，预留给 Judge LLM 认知裁决。 */
-    L3("L3", "L3认知裁决");
+    /** L3 Judge 裁判层，只处理 L2 模糊区并输出最终裁决或人工核验。 */
+    L3("L3", "L3 Judge 裁判层");
 
     private final String code;
 
