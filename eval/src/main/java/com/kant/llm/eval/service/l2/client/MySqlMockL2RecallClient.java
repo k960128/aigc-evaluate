@@ -1,6 +1,7 @@
 package com.kant.llm.eval.service.l2.client;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.kant.llm.eval.common.condition.ConditionalOnL2RecallMode;
 import com.kant.llm.eval.common.enums.RiskFeaturePolarityEnums;
 import com.kant.llm.eval.dao.entity.RiskAttackFeatureDO;
 import com.kant.llm.eval.dao.entity.RiskCategoryDO;
@@ -16,7 +17,6 @@ import com.kant.llm.eval.service.l2.model.L2RecallResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -40,8 +40,8 @@ import java.util.stream.Collectors;
  * 让 L2 高危拦截、低风险放行和人工核验分支都可以被本地验证。</p>
  */
 @Slf4j
-@Primary
 @Component
+@ConditionalOnL2RecallMode("mysql-mock")
 @RequiredArgsConstructor
 public class MySqlMockL2RecallClient implements L2RecallClient {
 

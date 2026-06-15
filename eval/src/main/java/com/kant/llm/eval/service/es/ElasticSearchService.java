@@ -1,7 +1,9 @@
 package com.kant.llm.eval.service.es;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch._types.FieldValue;
 import co.elastic.clients.elasticsearch._types.Refresh;
+import co.elastic.clients.elasticsearch._types.query_dsl.Operator;
 import co.elastic.clients.elasticsearch.core.*;
 import co.elastic.clients.elasticsearch.indices.CreateIndexRequest;
 import co.elastic.clients.elasticsearch.indices.ExistsRequest;
@@ -13,6 +15,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.io.StringReader;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,6 +36,10 @@ public class ElasticSearchService {
     private static final String INDEX_NAME = "risk_attack_feature";
 
     private static final String FIELD_CONTENT = "featureText";
+
+    private static final int DEFAULT_TOP_K = 30;
+
+    private static final int SCORE_SCALE = 6;
 
     public ElasticSearchService(ElasticsearchClient client) {
         this.client = client;
@@ -99,6 +107,11 @@ public class ElasticSearchService {
                              "ignore_above": 512
                            }
                          }
+                       },
+                       "content": {
+                         "type": "text",
+                         "analyzer": "ik_max_word",
+                         "search_analyzer": "ik_smart"
                        },
                        "featureType": {
                          "type": "keyword",
@@ -290,6 +303,65 @@ public class ElasticSearchService {
             }
         });
 
+        return result;
+    }
+
+    /**
+     * L2 攻击特征专用 ES 召回。
+     *
+     * <p>该方法只返回启用状态的知识特征，并将 ES BM25 原始分按本次 maxScore 归一化到 0-1。
+     * L2 后续只消费统一的 featureId，因此 ES _id 仅作为兜底，不作为 RRF 合并依据。</p>
+     */
+    public List<EsDocumentChunk> searchRiskAttackFeatures(String queryText, int topK) throws Exception {
+        if (!org.springframework.util.StringUtils.hasText(queryText)) {
+            return List.of();
+        }
+        int limit = topK <= 0 ? DEFAULT_TOP_K : topK;
+        log.info("开始 L2 ES 攻击特征召回，index: {}, topK: {}, queryLength: {}",
+                INDEX_NAME, limit, queryText.length());
+        SearchResponse<EsDocumentChunk> response = client.search(search -> search
+                        .index(INDEX_NAME)
+                        .size(limit)
+                        .query(query -> query
+                                .bool(bool -> bool
+                                        .filter(filter -> filter.term(term -> term
+                                                .field("status")
+                                                .value(FieldValue.of(1L))))
+                                        .must(must -> must.multiMatch(multiMatch -> multiMatch
+                                                .query(queryText)
+                                                .fields(
+                                                        "featureText^3",
+                                                        "normalizedText^3",
+                                                        "featureCode^1.5",
+                                                        "tags",
+                                                        "content")
+                                                .operator(Operator.Or))))),
+                EsDocumentChunk.class);
+
+        double maxScore = response.hits().maxScore() == null || response.hits().maxScore() <= 0D
+                ? 1D
+                : response.hits().maxScore();
+        List<EsDocumentChunk> result = new ArrayList<>();
+        response.hits().hits().forEach(hit -> {
+            EsDocumentChunk source = hit.source();
+            if (source == null) {
+                return;
+            }
+            if (source.getFeatureId() == null && org.springframework.util.StringUtils.hasText(hit.id())) {
+                try {
+                    source.setFeatureId(Long.valueOf(hit.id()));
+                } catch (NumberFormatException ex) {
+                    log.warn("L2 ES 命中文档无法从 _id 解析 featureId，_id: {}", hit.id());
+                }
+            }
+            double rawScore = hit.score() == null ? 0D : hit.score();
+            source.setScore(rawScore);
+            source.setNormalizedScore(BigDecimal.valueOf(rawScore / maxScore)
+                    .min(BigDecimal.ONE)
+                    .setScale(SCORE_SCALE, RoundingMode.HALF_UP));
+            result.add(source);
+        });
+        log.info("L2 ES 攻击特征召回完成，hits: {}, maxScore: {}", result.size(), maxScore);
         return result;
     }
 }

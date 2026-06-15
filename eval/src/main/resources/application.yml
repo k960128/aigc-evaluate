@@ -57,6 +57,12 @@ rag:
       dimensions: 1024
       max-document-batch-size: 10
 
+# L2 配置
+app:
+  l2:
+    # mysql-mock：使用 MySQL Mock 召回；real：使用 ES + PGVector；empty：空召回降级
+    recall-mode: real
+
 # RocketMQ 配置
 rocketmq:
   name-server: 47.103.193.177:9876

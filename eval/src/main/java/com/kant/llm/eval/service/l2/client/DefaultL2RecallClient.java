@@ -1,5 +1,6 @@
 package com.kant.llm.eval.service.l2.client;
 
+import com.kant.llm.eval.common.condition.ConditionalOnL2RecallMode;
 import com.kant.llm.eval.service.l2.model.L2RecallRequest;
 import com.kant.llm.eval.service.l2.model.L2RecallResult;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +16,7 @@ import java.util.List;
  */
 @Slf4j
 @Component
+@ConditionalOnL2RecallMode("empty")
 public class DefaultL2RecallClient implements L2RecallClient {
 
     @Override
