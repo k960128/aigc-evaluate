@@ -360,7 +360,7 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
             decisionType = L2DecisionTypeEnums.PASS_TO_L3;
             safe = null;
             score = null;
-            routeReason = "L2 召回证据处于模糊区，L3 暂未接入，本阶段进入人工核验。";
+            routeReason = buildPassToL3RouteReason(topHit);
         }
 
         Long riskDetailsId = topHit == null ? null : topHit.getRiskDetailsId();
@@ -413,9 +413,26 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
                 .filter(Objects::nonNull)
                 .max(Comparator.naturalOrder())
                 .orElse(BigDecimal.ZERO);
-        return hit.getUnsafeHitCount() == 0
-                || (maxRerankScore.compareTo(thresholds.getRerankLowThreshold()) < 0
-                && nullToZero(hit.getDetailScore()).compareTo(thresholds.getDetailSafeThreshold()) < 0);
+        boolean hasUnsafeEvidence = hit.getUnsafeHitCount() > 0;
+        boolean hasSafeExceptionEvidence = hit.getSafeExceptionHitCount() != null && hit.getSafeExceptionHitCount() > 0;
+        boolean lowRiskScore = maxRerankScore.compareTo(thresholds.getRerankLowThreshold()) < 0
+                && nullToZero(hit.getDetailScore()).compareTo(thresholds.getDetailSafeThreshold()) < 0;
+
+        if (hasSafeExceptionEvidence) {
+            log.info("L2 命中 SAFE_EXCEPTION，L2 不做拒答语义自动确认，转入 L3 裁判，riskDetailsId: {}",
+                    hit.getRiskDetailsId());
+            return false;
+        }
+        return !hasUnsafeEvidence || lowRiskScore;
+    }
+
+    private String buildPassToL3RouteReason(L2RiskDetailHit topHit) {
+        if (topHit != null
+                && topHit.getSafeExceptionHitCount() != null
+                && topHit.getSafeExceptionHitCount() > 0) {
+            return "L2 命中 SAFE_EXCEPTION。安全例外只作为降误杀证据，不在 L2 自动确认拒答语义，进入 L3 Judge 裁判层。";
+        }
+        return "L2 召回证据处于模糊区，进入 L3 Judge 裁判层。";
     }
 
     /**
@@ -433,6 +450,7 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
         snapshot.put("targetRiskDetailsId", targetRiskDetailsId);
         snapshot.put("thresholds", thresholds);
         snapshot.put("riskDetailHits", riskDetailHits);
+        snapshot.put("safeExceptionPolicy", "SAFE_EXCEPTION 只作为降误杀证据；命中后不在 L2 自动确认安全，转入 L3 Judge。");
         snapshot.put("routeReason", routeReason);
         return snapshot;
     }

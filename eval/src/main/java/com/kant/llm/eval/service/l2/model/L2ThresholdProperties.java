@@ -46,14 +46,14 @@ public class L2ThresholdProperties {
      */
     public static L2ThresholdProperties defaults() {
         return L2ThresholdProperties.builder()
-                .esTopK(30)
-                .milvusTopK(30)
+                .esTopK(5)
+                .milvusTopK(5)
                 .rrfK(60)
                 .rrfTopN(20)
                 .rerankHighThreshold(new BigDecimal("0.85"))
-                .rerankLowThreshold(new BigDecimal("0.45"))
+                .rerankLowThreshold(new BigDecimal("0.30"))
                 .detailUnsafeThreshold(new BigDecimal("0.85"))
-                .detailSafeThreshold(new BigDecimal("0.35"))
+                .detailSafeThreshold(new BigDecimal("0.30"))
                 .milvusHighSimilarity(new BigDecimal("0.82"))
                 .build();
     }
