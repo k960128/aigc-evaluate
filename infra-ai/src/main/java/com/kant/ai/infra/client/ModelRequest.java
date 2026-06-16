@@ -14,8 +14,6 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ModelRequest {
-
-
     /**
      * 模型信息
      */
@@ -34,4 +32,5 @@ public class ModelRequest {
 
     PromptTemplate promptTemplate;
 
+    private String mockModelOutput;
 }

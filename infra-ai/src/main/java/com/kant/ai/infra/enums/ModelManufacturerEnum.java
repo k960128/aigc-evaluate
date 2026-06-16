@@ -11,5 +11,6 @@ public enum ModelManufacturerEnum {
     SPARK,
     GLM,
     KIMI,
-    GPT
+    GPT,
+    MOCK
 }

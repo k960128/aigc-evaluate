@@ -192,12 +192,12 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
         ModelResponse modelResponse;
         try {
             // 开始调用大模型
-            modelResponse = strategy.mockCall(MockModelRequest.builder()
-                    .modelInfo(modelInfo)
+            modelResponse = strategy.call(ModelRequest.builder()
+                    .clientModelInfo(modelInfo)
                     .inputText(resultDetail.getInputText())
-                    .modelOutput(getMockOutput(modelInfo.getModelId(), resultDetail.getSampleId()))
-                    .sampleId(resultDetail.getSampleId())
+                    .mockModelOutput(getMockOutput(modelInfo.getModelId(), resultDetail.getSampleId()))
                     .build());
+
             evalPipelineNodeRecorder.finishNode(modelCallNodeRecordId, PipelineNodeStatusEnums.PASSED,
                     buildModelCallOutputSnapshot(modelResponse), buildModelCallNodeResult(modelResponse), null);
         } catch (Exception ex) {

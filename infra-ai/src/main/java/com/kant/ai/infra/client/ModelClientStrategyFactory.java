@@ -33,6 +33,7 @@ public class ModelClientStrategyFactory {
             case SPARK -> new SparkModelClientStrategy();
             case GLM -> new GlmModelClientStrategy();
             case GPT -> new GptModelClientStrategy();
+            case MOCK ->  new MockModelClientStrategy();
             default -> throw new ServiceException("不支持的大模型厂商标识：" + modelInfo.getManufacturerType());
         };
     }
