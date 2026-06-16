@@ -21,8 +21,8 @@ public class ModelClientStrategyFactory {
      * 根据大模型厂商标识获取模型客户端策略
      */
     public ModelClientStrategy getStrategy(ClientModelInfo modelInfo) {
-        return strategyMap.compute(modelInfo.getModelId(),
-                (key, strategy) -> createStrategy(modelInfo));
+        return strategyMap.computeIfAbsent(modelInfo.getModelId(),
+                (strategy) -> createStrategy(modelInfo));
     }
 
     private ModelClientStrategy createStrategy(ClientModelInfo modelInfo) {
@@ -33,7 +33,7 @@ public class ModelClientStrategyFactory {
             case SPARK -> new SparkModelClientStrategy();
             case GLM -> new GlmModelClientStrategy();
             case GPT -> new GptModelClientStrategy();
-            case MOCK ->  new MockModelClientStrategy();
+            case MOCK -> new MockModelClientStrategy();
             default -> throw new ServiceException("不支持的大模型厂商标识：" + modelInfo.getManufacturerType());
         };
     }
