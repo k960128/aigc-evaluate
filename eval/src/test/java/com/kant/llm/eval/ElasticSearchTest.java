@@ -1,8 +1,5 @@
 package com.kant.llm.eval;
 
-import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.elasticsearch.core.SearchRequest;
-import co.elastic.clients.elasticsearch.core.SearchResponse;
 import com.kant.llm.eval.common.constant.EsDocumentChunk;
 import com.kant.llm.eval.service.es.ElasticSearchService;
 import lombok.extern.slf4j.Slf4j;

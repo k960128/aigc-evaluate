@@ -2,9 +2,9 @@ package com.kant.llm.eval.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.kant.llm.eval.common.convention.Result;
+import com.kant.framework.convention.Result;
 import com.kant.llm.eval.common.enums.KbSyncStatusEnums;
-import com.kant.llm.eval.common.web.Results;
+import com.kant.framework.web.Results;
 import com.kant.llm.eval.dao.entity.KbSyncEventDO;
 import com.kant.llm.eval.dao.entity.RiskAttackFeatureDO;
 import com.kant.llm.eval.dao.entity.RiskDetailRuleDO;

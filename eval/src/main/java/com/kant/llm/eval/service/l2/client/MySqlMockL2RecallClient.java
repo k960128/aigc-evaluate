@@ -1,7 +1,7 @@
 package com.kant.llm.eval.service.l2.client;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.kant.llm.eval.common.condition.ConditionalOnL2RecallMode;
+import com.kant.framework.condition.ConditionalOnL2RecallMode;
 import com.kant.llm.eval.common.enums.RiskFeaturePolarityEnums;
 import com.kant.llm.eval.dao.entity.RiskAttackFeatureDO;
 import com.kant.llm.eval.dao.entity.RiskCategoryDO;

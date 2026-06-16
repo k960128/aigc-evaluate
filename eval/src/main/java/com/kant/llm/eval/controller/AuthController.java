@@ -2,8 +2,10 @@ package com.kant.llm.eval.controller;
 
 import cn.dev33.satoken.stp.SaTokenInfo;
 import cn.dev33.satoken.stp.StpUtil;
-import com.kant.llm.eval.common.convention.Result;
-import com.kant.llm.eval.common.web.Results;
+
+import com.kant.framework.convention.Result;
+import com.kant.framework.web.Results;
+
 import com.kant.llm.eval.dto.req.LoginRequest;
 import com.kant.llm.eval.service.UserService;
 import lombok.RequiredArgsConstructor;

@@ -3,15 +3,13 @@ package com.kant.llm.eval.common.config;
 import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
 import com.alibaba.cloud.ai.dashscope.rerank.DashScopeRerankModel;
 import com.alibaba.cloud.ai.dashscope.rerank.DashScopeRerankOptions;
-import com.kant.llm.eval.embedding.EmbeddingModelClient;
+import com.kant.ai.infra.embedding.EmbeddingService;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
@@ -56,8 +54,8 @@ public class VectorConfiguration {
 
     @Bean(name = "vectorStore")
     public VectorStore vectorStore(@Qualifier("pgJdbcTemplate") JdbcTemplate jdbcTemplate,
-                                   EmbeddingModelClient embeddingModelClient) {
-        return PgVectorStore.builder(jdbcTemplate, embeddingModelClient.getEmbeddingModel())
+                                   EmbeddingService embeddingService) {
+        return PgVectorStore.builder(jdbcTemplate, embeddingService.getEmbeddingClient())
                 .dimensions(dimensions)
                 .distanceType(COSINE_DISTANCE)
                 .indexType(HNSW)

@@ -4,22 +4,20 @@ import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
-import com.kant.llm.eval.client.*;
-import com.kant.llm.eval.common.convention.EvalContext;
+import com.kant.ai.infra.client.*;
+import com.kant.ai.infra.enums.ModelManufacturerEnum;
+import com.kant.framework.errorcode.BaseErrorCode;
+import com.kant.framework.exception.SecurityBlockException;
+import com.kant.framework.convention.EvalContext;
 import com.kant.llm.eval.common.enums.EvalResultStatusEnums;
 import com.kant.llm.eval.common.enums.L2DecisionTypeEnums;
 import com.kant.llm.eval.common.enums.L3DecisionTypeEnums;
-import com.kant.llm.eval.common.enums.ModelManufacturerEnum;
 import com.kant.llm.eval.common.enums.PipelineNodeCodeEnums;
 import com.kant.llm.eval.common.enums.PipelineNodeStatusEnums;
 import com.kant.llm.eval.common.enums.TaskStatusEnums;
-import com.kant.llm.eval.common.errorcode.BaseErrorCode;
-import com.kant.llm.eval.common.exception.SecurityBlockException;
-import com.kant.llm.eval.common.exception.ServiceException;
-import com.kant.llm.eval.dao.entity.EvalResultDetailDO;
-import com.kant.llm.eval.dao.entity.EvalTaskDetailDO;
-import com.kant.llm.eval.dao.entity.ModelInfoDO;
-import com.kant.llm.eval.dao.entity.RiskDetailRuleDO;
+
+import com.kant.framework.exception.ServiceException;
+import com.kant.llm.eval.dao.entity.*;
 import com.kant.llm.eval.dao.mapper.EvalResultDetailMapper;
 import com.kant.llm.eval.dao.mapper.EvalTaskDetailMapper;
 import com.kant.llm.eval.dao.mapper.ModelInfoMapper;
@@ -187,7 +185,7 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
         log.info("评测样本开始调用被测模型，taskDetailId: {}, resultDetailId: {}, modelId: {}",
                 taskDetail.getId(), resultDetail.getId(), message.getModelId());
 
-        ModelInfo modelInfo = loadModelInfo(message.getModelId());
+        ClientModelInfo modelInfo = loadModelInfo(message.getModelId());
         ModelClientStrategy strategy = modelClientStrategyFactory.getStrategy(modelInfo);
         Long modelCallNodeRecordId = evalPipelineNodeRecorder.startNode(taskDetail, resultDetail,
                 PipelineNodeCodeEnums.MODEL_CALL, buildModelCallInputSnapshot(modelInfo, resultDetail));
@@ -197,7 +195,7 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
             modelResponse = strategy.mockCall(MockModelRequest.builder()
                     .modelInfo(modelInfo)
                     .inputText(resultDetail.getInputText())
-                    .mockModelOutputContentService(mockModelOutputContentService)
+                    .modelOutput(getMockOutput(modelInfo.getModelId(), resultDetail.getSampleId()))
                     .sampleId(resultDetail.getSampleId())
                     .build());
             evalPipelineNodeRecorder.finishNode(modelCallNodeRecordId, PipelineNodeStatusEnums.PASSED,
@@ -245,12 +243,26 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
     }
 
     /**
+     * 获取模拟返回数据
+     *
+     * @param modelId
+     * @param sampleId
+     * @return
+     */
+    private String getMockOutput(Long modelId, Long sampleId) {
+        return mockModelOutputContentService.list(new LambdaQueryWrapper<MockModelOutputContentDO>()
+                .eq(MockModelOutputContentDO::getBindModelId, modelId)
+                .eq(MockModelOutputContentDO::getBindSampleId, sampleId)
+                .eq(MockModelOutputContentDO::getDeleted, false)).getFirst().getOutputText();
+    }
+
+    /**
      * 加载并组装模型调用所需的运行时配置。
      *
      * <p>数据库中存储的是持久化模型实体，策略工厂需要的是轻量级 ModelInfo。
      * 这里集中完成厂商枚举转换，避免消费者主流程掺杂配置细节。</p>
      */
-    private ModelInfo loadModelInfo(Long modelId) {
+    private ClientModelInfo loadModelInfo(Long modelId) {
         ModelInfoDO modelInfoDO = modelInfoMapper.selectById(modelId);
         if (modelInfoDO == null) {
             throw new ServiceException("模型配置不存在，无法执行评测样本");
@@ -262,7 +274,7 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
             throw new ServiceException("不支持的大模型厂商标识：" + modelInfoDO.getManufacturerCode(),
                     ex, BaseErrorCode.SERVICE_ERROR);
         }
-        return ModelInfo.builder()
+        return ClientModelInfo.builder()
                 .modelId(modelInfoDO.getId())
                 .model(modelInfoDO.getModel())
                 .apiKey(modelInfoDO.getApiKey())
@@ -582,7 +594,7 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
     /**
      * 构造模型调用节点输入快照。
      */
-    private Object buildModelCallInputSnapshot(ModelInfo modelInfo, EvalResultDetailDO resultDetail) {
+    private Object buildModelCallInputSnapshot(ClientModelInfo modelInfo, EvalResultDetailDO resultDetail) {
         LinkedHashMap<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("modelId", modelInfo.getModelId());
         snapshot.put("manufacturerType", modelInfo.getManufacturerType());
@@ -796,7 +808,7 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
     /**
      * L1 判定轻量结果，用于判断是否继续进入 L2。
      *
-     * @param blocked L1 是否已经拦截
+     * @param blocked     L1 是否已经拦截
      * @param warningTags L1 warning 风险小类标签
      */
     private record L1JudgementResult(boolean blocked, List<Long> warningTags) {

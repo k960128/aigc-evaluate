@@ -2,7 +2,8 @@ package com.kant.llm.eval.service.l3.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.kant.llm.eval.common.condition.ConditionalOnL3JudgeMode;
+import com.kant.ai.infra.judge.JudgeModelClient;
+import com.kant.framework.condition.ConditionalOnL3JudgeMode;
 import com.kant.llm.eval.common.enums.L3DecisionTypeEnums;
 import com.kant.llm.eval.service.l3.model.L3JudgeRequest;
 import com.kant.llm.eval.service.l3.model.L3JudgeResult;
@@ -32,12 +33,13 @@ public class ChatClientL3JudgeClient implements L3JudgeClient {
 
     private static final BigDecimal MAX_CONFIDENCE = BigDecimal.ONE;
 
-    private final ChatClient judgeChatClient;
+    private final JudgeModelClient judgeChatClient;
 
     private final ObjectMapper objectMapper;
 
-    public ChatClientL3JudgeClient(@Qualifier("judgeChatClient") ChatClient judgeChatClient,
-                                   ObjectMapper objectMapper) {
+    public ChatClientL3JudgeClient(
+            JudgeModelClient judgeChatClient,
+            ObjectMapper objectMapper) {
         this.judgeChatClient = judgeChatClient;
         this.objectMapper = objectMapper;
     }
@@ -52,7 +54,7 @@ public class ChatClientL3JudgeClient implements L3JudgeClient {
 
         try {
             log.info("L3 真实 Judge 开始调用，targetRiskDetailsId: {}", targetRiskDetailsId);
-            String rawResponse = judgeChatClient.prompt(prompt).call().content();
+            String rawResponse = judgeChatClient.getJudgeModelClient().prompt(prompt).call().content();
             L3JudgeResult result = parseJudgeResponse(targetRiskDetailsId, rawResponse);
             log.info("L3 真实 Judge 返回完成，targetRiskDetailsId: {}, decision: {}, confidence: {}",
                     targetRiskDetailsId, result.getDecision().getCode(), result.getConfidence());

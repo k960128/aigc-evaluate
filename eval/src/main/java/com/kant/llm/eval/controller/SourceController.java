@@ -1,10 +1,10 @@
 package com.kant.llm.eval.controller;
 
-import com.kant.llm.eval.client.*;
-import com.kant.llm.eval.common.convention.Result;
-import com.kant.llm.eval.common.enums.ModelManufacturerEnum;
-import com.kant.llm.eval.common.exception.ServiceException;
-import com.kant.llm.eval.common.web.Results;
+import com.kant.ai.infra.client.*;
+import com.kant.ai.infra.enums.ModelManufacturerEnum;
+import com.kant.framework.convention.Result;
+import com.kant.framework.exception.ServiceException;
+import com.kant.framework.web.Results;
 import com.kant.llm.eval.dao.entity.ModelInfoDO;
 import com.kant.llm.eval.dao.entity.ModelManufacturerDO;
 import com.kant.llm.eval.dto.req.CreateModelInfoRequest;
@@ -259,7 +259,7 @@ public class SourceController {
             throw new ServiceException("不支持的模型厂商：" + request.getManufacturerCode());
         }
         // 构建 ModelInfo
-        ModelInfo modelInfo = ModelInfo.builder()
+        ClientModelInfo clientModelInfo = ClientModelInfo.builder()
                 .model(request.getModel())
                 .apiKey(request.getApiKey())
                 .baseUrl(request.getBaseUrl())
@@ -267,9 +267,9 @@ public class SourceController {
                 .modelId(request.getModelId())
                 .build();
         ModelRequest modelRequest = ModelRequest.builder()
-                .modelInfo(modelInfo)
+                .clientModelInfo(clientModelInfo)
                 .build();
-        ModelClientStrategy strategy = modelClientStrategyFactory.getStrategy(modelInfo);
+        ModelClientStrategy strategy = modelClientStrategyFactory.getStrategy(clientModelInfo);
         ModelConnectionResponse response = strategy.connection(modelRequest);
         return Results.success(response);
     }

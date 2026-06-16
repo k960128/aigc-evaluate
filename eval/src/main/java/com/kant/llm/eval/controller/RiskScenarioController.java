@@ -2,8 +2,8 @@ package com.kant.llm.eval.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.kant.llm.eval.common.convention.Result;
-import com.kant.llm.eval.common.web.Results;
+import com.kant.framework.convention.Result;
+import com.kant.framework.web.Results;
 import com.kant.llm.eval.dao.entity.RiskScenarioDO;
 import com.kant.llm.eval.dto.req.CreateRiskScenarioRequest;
 import com.kant.llm.eval.dto.req.RiskScenarioPageRequest;

@@ -7,7 +7,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.kant.llm.eval.common.constant.EsDocumentChunk;
 import com.kant.llm.eval.common.enums.KbSyncStatusEnums;
-import com.kant.llm.eval.common.exception.ServiceException;
+import com.kant.framework.exception.ServiceException;
 import com.kant.llm.eval.dao.entity.KbSyncEventDO;
 import com.kant.llm.eval.dao.entity.RiskAttackFeatureDO;
 import com.kant.llm.eval.dto.resp.L2KnowledgeSyncSubmitVO;

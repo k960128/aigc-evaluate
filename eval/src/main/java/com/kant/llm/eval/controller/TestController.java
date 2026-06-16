@@ -1,11 +1,14 @@
 package com.kant.llm.eval.controller;
 
 import com.alibaba.fastjson2.JSONObject;
-import com.kant.llm.eval.client.*;
-import com.kant.llm.eval.common.convention.EvalContext;
-import com.kant.llm.eval.common.convention.Result;
-import com.kant.llm.eval.common.enums.ModelManufacturerEnum;
-import com.kant.llm.eval.common.web.Results;
+import com.kant.ai.infra.client.ClientModelInfo;
+import com.kant.ai.infra.client.ModelClientStrategy;
+import com.kant.ai.infra.client.ModelClientStrategyFactory;
+import com.kant.ai.infra.enums.ModelManufacturerEnum;
+import com.kant.framework.convention.EvalContext;
+
+import com.kant.framework.convention.Result;
+import com.kant.framework.web.Results;
 import com.kant.llm.eval.engine.L1InterceptionEngine;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,7 +26,7 @@ public class TestController {
     private final String QWEN_API_KEY = "sk-3398a71a31f04728a19922dcbb8af1f9";
     private final String GLM_API_KEY = "sk-of-quYqxutarrXLSygXRYAGvGawphLlOpibxDOGDglJROtTDFWVLAYGIHKRFesvRkCd";
 
-    private Map<ModelManufacturerEnum, ModelInfo> modelInfoMap;
+    private Map<ModelManufacturerEnum, ClientModelInfo> modelInfoMap;
 
     private final ModelClientStrategyFactory modelClientStrategyFactory;
 
@@ -34,7 +37,7 @@ public class TestController {
         this.modelClientStrategyFactory = modelClientStrategyFactory;
         this.l1InterceptionEngine = l1InterceptionEngine;
         this.modelInfoMap = new ConcurrentHashMap<>() {{
-            put(ModelManufacturerEnum.DEEPSEEK, ModelInfo.builder()
+            put(ModelManufacturerEnum.DEEPSEEK, ClientModelInfo.builder()
                     .apiKey(DEEP_SEEK)
                     .baseUrl("https://api.deepseek.com")
                     .modelId(1L)
@@ -42,7 +45,7 @@ public class TestController {
                     .manufacturerType(ModelManufacturerEnum.DEEPSEEK)
                     .build());
 
-            put(ModelManufacturerEnum.QWEN, ModelInfo.builder()
+            put(ModelManufacturerEnum.QWEN, ClientModelInfo.builder()
                     .apiKey(QWEN_API_KEY)
                     .baseUrl("https://dashscope.aliyuncs.com/compatible-mode")
                     .modelId(2L)
@@ -50,7 +53,7 @@ public class TestController {
                     .manufacturerType(ModelManufacturerEnum.QWEN)
                     .build());
 
-            put(ModelManufacturerEnum.GLM, ModelInfo.builder()
+            put(ModelManufacturerEnum.GLM, ClientModelInfo.builder()
                     .apiKey(GLM_API_KEY)
                     .baseUrl("https://api.ofox.ai/v1/chat/completions")
                     .modelId(3L)
@@ -66,10 +69,10 @@ public class TestController {
      */
     @GetMapping("/testModelClient")
     public Result<String> testModelClientStrategy() {
-        ModelInfo modelInfo = new ModelInfo();
-        modelInfo.setModelId(1L);
-        modelInfo.setManufacturerType(ModelManufacturerEnum.DEEPSEEK);
-        ModelClientStrategy strategy = modelClientStrategyFactory.getStrategy(modelInfo);
+        ClientModelInfo clientModelInfo = new ClientModelInfo();
+        clientModelInfo.setModelId(1L);
+        clientModelInfo.setManufacturerType(ModelManufacturerEnum.DEEPSEEK);
+        ModelClientStrategy strategy = modelClientStrategyFactory.getStrategy(clientModelInfo);
         return Results.success(strategy.getManufacturer().name());
     }
 

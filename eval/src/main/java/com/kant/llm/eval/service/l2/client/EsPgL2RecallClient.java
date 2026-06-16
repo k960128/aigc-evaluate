@@ -1,6 +1,5 @@
 package com.kant.llm.eval.service.l2.client;
-
-import com.kant.llm.eval.common.condition.ConditionalOnL2RecallMode;
+import com.kant.framework.condition.ConditionalOnL2RecallMode;
 import com.kant.llm.eval.common.constant.EsDocumentChunk;
 import com.kant.llm.eval.dao.entity.RiskCategoryDO;
 import com.kant.llm.eval.dao.entity.RiskDetailRuleDO;

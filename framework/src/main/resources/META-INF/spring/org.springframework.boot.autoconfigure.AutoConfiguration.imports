@@ -1,0 +1,3 @@
+com.kant.framework.config.RedisConfiguration
+com.kant.framework.config.DataBaseConfiguration
+com.kant.framework.config.WebAutoConfiguration
