@@ -1,4 +1,4 @@
-package com.kant.framework.convention;
+package com.kant.llm.eval.common.convention;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;

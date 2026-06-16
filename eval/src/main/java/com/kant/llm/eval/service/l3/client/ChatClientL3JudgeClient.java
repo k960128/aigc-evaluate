@@ -3,14 +3,12 @@ package com.kant.llm.eval.service.l3.client;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kant.ai.infra.judge.JudgeModelClient;
-import com.kant.framework.condition.ConditionalOnL3JudgeMode;
+import com.kant.llm.eval.common.condition.ConditionalOnL3JudgeMode;
 import com.kant.llm.eval.common.enums.L3DecisionTypeEnums;
 import com.kant.llm.eval.service.l3.model.L3JudgeRequest;
 import com.kant.llm.eval.service.l3.model.L3JudgeResult;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;

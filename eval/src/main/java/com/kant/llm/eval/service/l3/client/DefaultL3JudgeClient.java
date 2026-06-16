@@ -1,6 +1,6 @@
 package com.kant.llm.eval.service.l3.client;
 
-import com.kant.framework.condition.ConditionalOnL3JudgeMode;
+import com.kant.llm.eval.common.condition.ConditionalOnL3JudgeMode;
 import com.kant.llm.eval.common.enums.L3DecisionTypeEnums;
 import com.kant.llm.eval.service.l3.model.L3JudgeRequest;
 import com.kant.llm.eval.service.l3.model.L3JudgeResult;

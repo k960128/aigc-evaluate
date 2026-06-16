@@ -17,12 +17,4 @@ public class WebAutoConfiguration implements WebMvcConfigurer {
         // 拦截 /favicon.ico 请求，直接返回空资源，消除404报错
         registry.addResourceHandler("/favicon.ico");
     }
-
-    /**
-     * 构建全局异常拦截器组件 Bean
-     */
-    @Bean
-    public GlobalExceptionHandler globalExceptionHandler() {
-        return new GlobalExceptionHandler();
-    }
 }

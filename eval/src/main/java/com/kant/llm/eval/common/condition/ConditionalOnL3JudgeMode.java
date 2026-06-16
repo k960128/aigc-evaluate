@@ -1,4 +1,4 @@
-package com.kant.framework.condition;
+package com.kant.llm.eval.common.condition;
 
 import org.springframework.context.annotation.Conditional;
 

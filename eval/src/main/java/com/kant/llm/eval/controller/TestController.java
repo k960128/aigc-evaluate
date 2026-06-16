@@ -5,10 +5,10 @@ import com.kant.ai.infra.client.ClientModelInfo;
 import com.kant.ai.infra.client.ModelClientStrategy;
 import com.kant.ai.infra.client.ModelClientStrategyFactory;
 import com.kant.ai.infra.enums.ModelManufacturerEnum;
-import com.kant.framework.convention.EvalContext;
 
 import com.kant.framework.convention.Result;
 import com.kant.framework.web.Results;
+import com.kant.llm.eval.common.convention.EvalContext;
 import com.kant.llm.eval.engine.L1InterceptionEngine;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

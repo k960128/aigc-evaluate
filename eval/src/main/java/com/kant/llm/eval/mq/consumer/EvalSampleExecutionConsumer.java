@@ -8,7 +8,7 @@ import com.kant.ai.infra.client.*;
 import com.kant.ai.infra.enums.ModelManufacturerEnum;
 import com.kant.framework.errorcode.BaseErrorCode;
 import com.kant.framework.exception.SecurityBlockException;
-import com.kant.framework.convention.EvalContext;
+import com.kant.llm.eval.common.convention.EvalContext;
 import com.kant.llm.eval.common.enums.EvalResultStatusEnums;
 import com.kant.llm.eval.common.enums.L2DecisionTypeEnums;
 import com.kant.llm.eval.common.enums.L3DecisionTypeEnums;
