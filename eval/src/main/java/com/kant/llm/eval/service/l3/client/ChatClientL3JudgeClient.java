@@ -3,6 +3,8 @@ package com.kant.llm.eval.service.l3.client;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kant.ai.infra.judge.JudgeModelClient;
+import com.kant.ai.infra.judge.JudgeModelRequest;
+import com.kant.ai.infra.judge.JudgeModelResponse;
 import com.kant.llm.eval.common.condition.ConditionalOnL3JudgeMode;
 import com.kant.llm.eval.common.enums.L3DecisionTypeEnums;
 import com.kant.llm.eval.service.l3.model.L3JudgeRequest;
@@ -18,7 +20,7 @@ import java.util.List;
 /**
  * 基于裁判大模型的 L3 Judge 客户端。
  *
- * <p>该实现只负责调用 JudgeConfiguration 暴露的 judgeChatClient，并把模型返回内容解析为
+ * <p>该实现只负责调用 infra-ai 提供的 JudgeModelClient 策略入口，并把模型返回内容解析为
  * L3JudgeResult。任何调用异常、非 JSON、字段非法或决策非法都会降级为 DEGRADED_MANUAL_REVIEW，
  * 避免 L3 真实模型波动影响批次推进。</p>
  */
@@ -31,14 +33,14 @@ public class ChatClientL3JudgeClient implements L3JudgeClient {
 
     private static final BigDecimal MAX_CONFIDENCE = BigDecimal.ONE;
 
-    private final JudgeModelClient judgeChatClient;
+    private final JudgeModelClient judgeModelClient;
 
     private final ObjectMapper objectMapper;
 
     public ChatClientL3JudgeClient(
-            JudgeModelClient judgeChatClient,
+            JudgeModelClient judgeModelClient,
             ObjectMapper objectMapper) {
-        this.judgeChatClient = judgeChatClient;
+        this.judgeModelClient = judgeModelClient;
         this.objectMapper = objectMapper;
     }
 
@@ -52,10 +54,15 @@ public class ChatClientL3JudgeClient implements L3JudgeClient {
 
         try {
             log.info("L3 真实 Judge 开始调用，targetRiskDetailsId: {}", targetRiskDetailsId);
-            String rawResponse = judgeChatClient.getJudgeModelClient().prompt(prompt).call().content();
+            JudgeModelResponse judgeResponse = judgeModelClient.judge(JudgeModelRequest.builder()
+                    .prompt(prompt)
+                    .targetRiskDetailsId(targetRiskDetailsId)
+                    .build());
+            String rawResponse = judgeResponse == null ? null : judgeResponse.getRawContent();
             L3JudgeResult result = parseJudgeResponse(targetRiskDetailsId, rawResponse);
-            log.info("L3 真实 Judge 返回完成，targetRiskDetailsId: {}, decision: {}, confidence: {}",
-                    targetRiskDetailsId, result.getDecision().getCode(), result.getConfidence());
+            log.info("L3 真实 Judge 返回完成，targetRiskDetailsId: {}, decision: {}, confidence: {}, elapsed: {}ms",
+                    targetRiskDetailsId, result.getDecision().getCode(), result.getConfidence(),
+                    judgeResponse == null ? null : judgeResponse.getElapsed());
             return result;
         } catch (Exception ex) {
             log.warn("L3 真实 Judge 调用或解析异常，进入降级人工核验，targetRiskDetailsId: {}, reason: {}",
