@@ -16,6 +16,7 @@ import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestClientBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Bean;
 
 import javax.net.ssl.SSLContext;
@@ -29,7 +30,7 @@ import javax.net.ssl.SSLContext;
 @AutoConfiguration
 public class InfraElasticsearchConfiguration {
 
-    @Value("${spring.elasticsearch.uris}")
+    @Value("${spring.elasticsearch.uris:}")
     private String uris;
 
     @Value("${spring.elasticsearch.username:}")
@@ -42,17 +43,13 @@ public class InfraElasticsearchConfiguration {
     private boolean insecure;
 
     @Bean
+    @ConditionalOnExpression("'${spring.elasticsearch.uris:}'.trim().length() > 0")
     public ElasticsearchClient elasticsearchClient() {
-        try {
-            RestClientBuilder builder = RestClient.builder(HttpHost.create(uris));
-            configureAuthenticationAndSsl(builder);
-            RestClient restClient = builder.build();
-            ElasticsearchTransport transport = new RestClientTransport(restClient, new JacksonJsonpMapper());
-            return new ElasticsearchClient(transport);
-        } catch (Exception ex) {
-            log.warn("Failed to create Elasticsearch client: {}. ES functionality will be unavailable.", ex.getMessage(), ex);
-            return null;
-        }
+        RestClientBuilder builder = RestClient.builder(HttpHost.create(uris));
+        configureAuthenticationAndSsl(builder);
+        RestClient restClient = builder.build();
+        ElasticsearchTransport transport = new RestClientTransport(restClient, new JacksonJsonpMapper());
+        return new ElasticsearchClient(transport);
     }
 
     private void configureAuthenticationAndSsl(RestClientBuilder builder) {

@@ -49,9 +49,20 @@ public class DashScopeRerankModelStrategy implements RerankModelStrategy {
         long startTime = System.currentTimeMillis();
         try {
             DashScopeRerankModel dashScopeRerankModel = (DashScopeRerankModel) rerankModel;
+            List<Document> springAiDocuments = toSpringAiDocuments(documents);
+            if (springAiDocuments.isEmpty()) {
+                return RerankServiceResult.builder()
+                        .degraded(true)
+                        .reason("Rerank documents 转换后为空")
+                        .elapsed(System.currentTimeMillis() - startTime)
+                        .manufacturer(getManufacturer())
+                        .model(resolveModel(modelInfo))
+                        .modelCode(modelInfo.getModelCode())
+                        .build();
+            }
             log.info("DashScope Rerank 开始调用，modelId: {}, modelCode: {}, model: {}, documentSize: {}",
-                    modelInfo.getModelId(), modelInfo.getModelCode(), resolveModel(modelInfo), documents.size());
-            RerankResponse response = dashScopeRerankModel.call(new RerankRequest(queryText, toSpringAiDocuments(documents)));
+                    modelInfo.getModelId(), modelInfo.getModelCode(), resolveModel(modelInfo), springAiDocuments.size());
+            RerankResponse response = dashScopeRerankModel.call(new RerankRequest(queryText, springAiDocuments));
             long elapsed = System.currentTimeMillis() - startTime;
             log.info("DashScope Rerank 调用完成，modelId: {}, modelCode: {}, elapsed: {}ms",
                     modelInfo.getModelId(), modelInfo.getModelCode(), elapsed);

@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kant.llm.eval.common.constant.EsDocumentChunk;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.io.StringReader;
@@ -41,12 +42,16 @@ public class ElasticSearchService {
 
     private static final int SCORE_SCALE = 6;
 
-    public ElasticSearchService(ElasticsearchClient client) {
-        this.client = client;
+    public ElasticSearchService(ObjectProvider<ElasticsearchClient> clientProvider) {
+        this.client = clientProvider.getIfAvailable();
     }
 
     @PostConstruct
     public void init() {
+        if (client == null) {
+            log.warn("ElasticsearchClient 未配置，跳过 ES 索引初始化；L2 真实召回会保留 PGVector 结果继续降级运行。");
+            return;
+        }
         try {
             if (!indexExists(INDEX_NAME)) {
                 createIndex();
@@ -63,6 +68,7 @@ public class ElasticSearchService {
      * 创建索引（IK 分词 + 停用词 + lowercase）
      */
     public void createIndex() throws Exception {
+        ensureClientAvailable();
         // 1. 设置索引配置（settings）和 mapping
         String settingsAndMappingJson = """
                 {
@@ -187,6 +193,7 @@ public class ElasticSearchService {
      * 单条存储
      */
     public void indexSingle(EsDocumentChunk doc) throws Exception {
+        ensureClientAvailable();
         if (doc == null || doc.getId() == null) {
             throw new IllegalArgumentException("Document or ID cannot be null");
         }
@@ -208,6 +215,7 @@ public class ElasticSearchService {
      * 根据文档 ID 删除单条 ES 索引。
      */
     public void deleteById(String id) throws Exception {
+        ensureClientAvailable();
         if (id == null) {
             throw new IllegalArgumentException("Document ID cannot be null");
         }
@@ -227,6 +235,7 @@ public class ElasticSearchService {
     }
 
     public void bulkIndex(List<EsDocumentChunk> docs, String indexName) throws Exception {
+        ensureClientAvailable();
         if (docs == null || docs.isEmpty()) return;
 
         BulkRequest.Builder bulkBuilder = new BulkRequest.Builder();
@@ -264,6 +273,7 @@ public class ElasticSearchService {
     }
 
     public boolean indexExists(String indexName) throws IOException {
+        ensureClientAvailable();
         ExistsRequest request = ExistsRequest.of(b -> b.index(indexName));
         return client.indices().exists(request).value();
     }
@@ -283,6 +293,7 @@ public class ElasticSearchService {
      * 中文检索：ik_max_word / ik_smart 切换
      */
     public List<EsDocumentChunk> searchByKeyword(String keyword, int size, boolean useSmartAnalyzer, String indexName) throws Exception {
+        ensureClientAvailable();
         SearchRequest request = SearchRequest.of(b -> b
                 .index(indexName)
                 .query(q -> q
@@ -323,6 +334,7 @@ public class ElasticSearchService {
      * ES 只在对应风险小类下召回知识特征，避免跨小类命中导致 L2 过度拦截。</p>
      */
     public List<EsDocumentChunk> searchRiskAttackFeatures(String queryText, int topK, Long targetRiskDetailsId) throws Exception {
+        ensureClientAvailable();
         if (!org.springframework.util.StringUtils.hasText(queryText)) {
             return List.of();
         }
@@ -381,5 +393,11 @@ public class ElasticSearchService {
         log.info("L2 ES 攻击特征召回完成，targetRiskDetailsId: {}, hits: {}, maxScore: {}",
                 targetRiskDetailsId, result.size(), maxScore);
         return result;
+    }
+
+    private void ensureClientAvailable() {
+        if (client == null) {
+            throw new IllegalStateException("ElasticsearchClient 未配置，无法执行 ES 操作");
+        }
     }
 }
