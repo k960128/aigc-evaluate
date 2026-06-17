@@ -52,7 +52,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/risk/l2/kb")
 @RequiredArgsConstructor
-public class L2KnowledgeBaseController {
+public class KnowledgeController {
 
     private static final int DEFAULT_CURRENT = 1;
 

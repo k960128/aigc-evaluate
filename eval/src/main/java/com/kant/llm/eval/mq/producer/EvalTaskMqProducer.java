@@ -1,6 +1,6 @@
 package com.kant.llm.eval.mq.producer;
 
-import com.kant.llm.eval.mq.EvalMqTopics;
+import com.kant.llm.eval.common.constant.EvalMqTopics;
 import com.kant.llm.eval.mq.message.EvalSampleExecutionMessage;
 import com.kant.llm.eval.mq.message.EvalTaskSplitMessage;
 import lombok.extern.slf4j.Slf4j;
@@ -27,15 +27,15 @@ public class EvalTaskMqProducer {
      */
     public void sendTaskSplitMessage(EvalTaskSplitMessage message) {
         log.info("准备发送任务批次拆分 MQ 消息，topic: {}, taskDetailId: {}, taskId: {}, datasetId: {}, modelId: {}",
-                EvalMqTopics.EVAL_TASK_SPLIT, message.getTaskDetailId(), message.getTaskId(),
+                EvalMqTopics.EVAL_TASK_SPLIT_TOPIC, message.getTaskDetailId(), message.getTaskId(),
                 message.getDatasetId(), message.getModelId());
         try {
-            rocketMQTemplate.convertAndSend(EvalMqTopics.EVAL_TASK_SPLIT, message);
+            rocketMQTemplate.convertAndSend(EvalMqTopics.EVAL_TASK_SPLIT_TOPIC, message);
             log.info("任务批次拆分 MQ 消息发送成功，topic: {}, taskDetailId: {}, taskId: {}",
-                    EvalMqTopics.EVAL_TASK_SPLIT, message.getTaskDetailId(), message.getTaskId());
+                    EvalMqTopics.EVAL_TASK_SPLIT_TOPIC, message.getTaskDetailId(), message.getTaskId());
         } catch (Exception ex) {
             log.error("任务批次拆分 MQ 消息发送失败，topic: {}, taskDetailId: {}, taskId: {}",
-                    EvalMqTopics.EVAL_TASK_SPLIT, message.getTaskDetailId(), message.getTaskId(), ex);
+                    EvalMqTopics.EVAL_TASK_SPLIT_TOPIC, message.getTaskDetailId(), message.getTaskId(), ex);
             throw ex;
         }
     }

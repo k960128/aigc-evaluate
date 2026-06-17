@@ -1,6 +1,6 @@
 package com.kant.llm.eval.mq.producer;
 
-import com.kant.llm.eval.mq.EvalMqTopics;
+import com.kant.llm.eval.common.constant.EvalMqTopics;
 import com.kant.llm.eval.mq.message.KbSyncEventMessage;
 import com.kant.llm.eval.mq.message.L2KnowledgeSyncBatchMessage;
 import lombok.RequiredArgsConstructor;

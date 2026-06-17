@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.alibaba.fastjson2.JSON;
+import com.kant.framework.mq.producer.MessageQueueProducer;
+import com.kant.framework.mq.producer.MessageSendRequest;
 import com.kant.llm.eval.common.enums.EvalResultStatusEnums;
 import com.kant.llm.eval.common.enums.PipelineNodeCodeEnums;
 import com.kant.llm.eval.common.enums.PipelineNodeStatusEnums;
@@ -35,7 +37,6 @@ import com.kant.llm.eval.dto.resp.EvalTaskDetailVO;
 import com.kant.llm.eval.dto.resp.EvalTaskStatusVO;
 import com.kant.llm.eval.dto.resp.EvalTaskVO;
 import com.kant.llm.eval.mq.message.EvalTaskSplitMessage;
-import com.kant.llm.eval.mq.producer.EvalTaskMqProducer;
 import com.kant.llm.eval.service.EvalTaskService;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
@@ -52,6 +53,8 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static com.kant.llm.eval.common.constant.EvalMqTopics.EVAL_TASK_SPLIT_TOPIC;
 
 @Slf4j
 @Service
@@ -77,8 +80,8 @@ public class EvalTaskServiceImpl implements EvalTaskService {
     private final EvalPipelineNodeDetailMapper evalPipelineNodeDetailMapper;
     private final EvalResultDetailMapper evalResultDetailMapper;
     private final EvalTaskDetailMapper evalTaskDetailMapper;
-    private final EvalTaskMqProducer evalTaskMqProducer;
     private final RedissonClient redissonClient;
+    private final MessageQueueProducer messageQueueProducer;
 
     public EvalTaskServiceImpl(EvalTaskMapper evalTaskMapper,
                                ModelInfoMapper modelInfoMapper,
@@ -87,8 +90,8 @@ public class EvalTaskServiceImpl implements EvalTaskService {
                                EvalPipelineNodeDetailMapper evalPipelineNodeDetailMapper,
                                EvalResultDetailMapper evalResultDetailMapper,
                                EvalTaskDetailMapper evalTaskDetailMapper,
-                               EvalTaskMqProducer evalTaskMqProducer,
-                               RedissonClient redissonClient) {
+                               RedissonClient redissonClient,
+                               MessageQueueProducer messageQueueProducer) {
         this.evalTaskMapper = evalTaskMapper;
         this.modelInfoMapper = modelInfoMapper;
         this.dataSetMapper = dataSetMapper;
@@ -96,8 +99,8 @@ public class EvalTaskServiceImpl implements EvalTaskService {
         this.evalPipelineNodeDetailMapper = evalPipelineNodeDetailMapper;
         this.evalResultDetailMapper = evalResultDetailMapper;
         this.evalTaskDetailMapper = evalTaskDetailMapper;
-        this.evalTaskMqProducer = evalTaskMqProducer;
         this.redissonClient = redissonClient;
+        this.messageQueueProducer = messageQueueProducer;
     }
 
     @Override
@@ -153,13 +156,19 @@ public class EvalTaskServiceImpl implements EvalTaskService {
             evalTaskDetailMapper.insert(evalTaskDetailDO);
             try {
                 // 5. 只发送批次拆分消息，样本枚举交给 MQ 消费者异步完成。
-                evalTaskMqProducer.sendTaskSplitMessage(EvalTaskSplitMessage.builder()
-                        .taskDetailId(taskDetailId)
-                        .taskId(taskId)
-                        .modelId(task.getModelId())
-                        .datasetId(task.getDatasetId())
-                        .serialNo(serialNo)
+                messageQueueProducer.send(MessageSendRequest.builder()
+                        .topic(EVAL_TASK_SPLIT_TOPIC)
+                        .keys(taskDetailId.toString())
+                        .bizDesc("评测任务拆分消息")
+                        .body(EvalTaskSplitMessage.builder()
+                                .taskDetailId(taskDetailId)
+                                .taskId(taskId)
+                                .modelId(task.getModelId())
+                                .datasetId(task.getDatasetId())
+                                .serialNo(serialNo)
+                                .build())
                         .build());
+
             } catch (Exception ex) {
                 // 保留 ERROR 批次，方便后续排查是哪一次提交没有进入拆分链路。
                 evalTaskDetailDO.setStatus(TaskStatusEnums.ERROR.getCode());

@@ -1,6 +1,6 @@
 package com.kant.llm.eval.mq.consumer;
 
-import com.kant.llm.eval.mq.EvalMqTopics;
+import com.kant.llm.eval.common.constant.EvalMqTopics;
 import com.kant.llm.eval.mq.message.L2KnowledgeSyncBatchMessage;
 import com.kant.llm.eval.service.L2KnowledgeSyncService;
 import lombok.RequiredArgsConstructor;

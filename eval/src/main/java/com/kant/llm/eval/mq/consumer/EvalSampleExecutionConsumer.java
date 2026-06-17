@@ -23,7 +23,7 @@ import com.kant.llm.eval.dao.mapper.EvalTaskDetailMapper;
 import com.kant.llm.eval.dao.mapper.ModelInfoMapper;
 import com.kant.llm.eval.dao.mapper.RiskDetailRuleMapper;
 import com.kant.llm.eval.engine.L1InterceptionEngine;
-import com.kant.llm.eval.mq.EvalMqTopics;
+import com.kant.llm.eval.common.constant.EvalMqTopics;
 import com.kant.llm.eval.mq.message.EvalSampleExecutionMessage;
 import com.kant.llm.eval.service.EvalPipelineNodeRecorder;
 import com.kant.llm.eval.service.MockModelOutputContentService;

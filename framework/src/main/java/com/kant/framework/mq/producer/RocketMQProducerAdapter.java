@@ -12,7 +12,6 @@ import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
 
 import java.util.UUID;
-import java.util.function.Consumer;
 
 /**
  * 基于 RocketMQ 的消息生产者
@@ -25,50 +24,50 @@ public class RocketMQProducerAdapter implements MessageQueueProducer {
     private final DelegatingTransactionListener transactionListener;
 
     @Override
-    public SendResult send(String topic, String keys, String bizDesc, Object body) {
-        keys = StrUtil.isEmpty(keys) ? UUID.randomUUID().toString() : keys;
+    public SendResult send(MessageSendRequest messageSendRequest) {
+        messageSendRequest.setKeys(StrUtil.isEmpty(messageSendRequest.getKeys()) ? UUID.randomUUID().toString() : messageSendRequest.getKeys());
 
         Message<MessageWrapper<Object>> message = MessageBuilder
-                .withPayload(MessageWrapper.builder().keys(keys).body(body).build())
-                .setHeader(MessageConst.PROPERTY_KEYS, keys)
+                .withPayload(MessageWrapper.builder().keys(messageSendRequest.getKeys()).body(messageSendRequest.getBody()).build())
+                .setHeader(MessageConst.PROPERTY_KEYS, messageSendRequest.getKeys())
                 .build();
 
         SendResult sendResult;
         try {
-            sendResult = rocketMQTemplate.syncSend(topic, message);
+            sendResult = rocketMQTemplate.syncSend(messageSendRequest.getTopic(), message);
+
         } catch (Throwable ex) {
-            log.error("[生产者] {} - 消息发送失败，topic: {}, keys: {}", bizDesc, topic, keys, ex);
+            log.error("[生产者] {} - 消息发送失败，topic: {}, keys: {}", messageSendRequest.getBizDesc(), messageSendRequest.getTopic(), messageSendRequest.getKeys(), ex);
             throw ex;
         }
 
-        log.info("[生产者] {} - 发送结果: {}, 消息ID: {}, Keys: {}", bizDesc, sendResult.getSendStatus(), sendResult.getMsgId(), keys);
+        log.info("[生产者] {} - 发送结果: {}, 消息ID: {}, Keys: {}", messageSendRequest.getBizDesc(), sendResult.getSendStatus(), sendResult.getMsgId(), messageSendRequest.getKeys());
         return sendResult;
     }
 
     @Override
-    public void sendInTransaction(String topic, String keys, String bizDesc, Object body,
-                                  Consumer<Object> localTransaction) {
-        keys = StrUtil.isEmpty(keys) ? UUID.randomUUID().toString() : keys;
+    public void sendInTransaction(MessageSendRequest messageSendRequest) {
+        messageSendRequest.setKeys(StrUtil.isEmpty(messageSendRequest.getKeys()) ? UUID.randomUUID().toString() : messageSendRequest.getKeys());
         String txId = UUID.randomUUID().toString();
 
-        transactionListener.registerLocalTransaction(txId, localTransaction);
+        transactionListener.registerLocalTransaction(txId, messageSendRequest.getLocalTransaction());
 
         Message<MessageWrapper<Object>> message = MessageBuilder
-                .withPayload(MessageWrapper.builder().keys(keys).body(body).build())
-                .setHeader(MessageConst.PROPERTY_KEYS, keys)
+                .withPayload(MessageWrapper.builder().keys(messageSendRequest.getKeys()).body(messageSendRequest.getBody()).build())
+                .setHeader(MessageConst.PROPERTY_KEYS, messageSendRequest.getKeys())
                 .setHeader(DelegatingTransactionListener.HEADER_TX_ID, txId)
-                .setHeader(DelegatingTransactionListener.HEADER_TOPIC, topic)
+                .setHeader(DelegatingTransactionListener.HEADER_TOPIC, messageSendRequest.getTopic())
                 .build();
 
         TransactionSendResult sendResult;
         try {
-            sendResult = rocketMQTemplate.sendMessageInTransaction(topic, message, null);
+            sendResult = rocketMQTemplate.sendMessageInTransaction(messageSendRequest.getTopic(), message, null);
         } catch (Throwable ex) {
-            log.error("[生产者] {} - 事务消息发送失败，topic: {}, keys: {}", bizDesc, topic, keys, ex);
+            log.error("[生产者] {} - 事务消息发送失败，topic: {}, keys: {}", messageSendRequest.getBizDesc(), messageSendRequest.getTopic(), messageSendRequest.getKeys(), ex);
             throw ex;
         }
 
         log.info("[生产者] {} - 事务消息发送结果: {}, 本地事务状态: {}, 消息ID: {}, Keys: {}",
-                bizDesc, sendResult.getSendStatus(), sendResult.getLocalTransactionState(), sendResult.getMsgId(), keys);
+                messageSendRequest.getBizDesc(), sendResult.getSendStatus(), sendResult.getLocalTransactionState(), sendResult.getMsgId(), messageSendRequest.getKeys());
     }
 }

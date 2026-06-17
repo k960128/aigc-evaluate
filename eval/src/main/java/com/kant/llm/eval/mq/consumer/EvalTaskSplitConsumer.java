@@ -3,6 +3,7 @@ package com.kant.llm.eval.mq.consumer;
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.IdUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.kant.framework.mq.MessageWrapper;
 import com.kant.llm.eval.common.enums.EvalResultStatusEnums;
 import com.kant.llm.eval.common.enums.TaskStatusEnums;
 import com.kant.llm.eval.dao.entity.DataSetSampleDO;
@@ -11,7 +12,7 @@ import com.kant.llm.eval.dao.entity.EvalTaskDetailDO;
 import com.kant.llm.eval.dao.mapper.DataSetSampleMapper;
 import com.kant.llm.eval.dao.mapper.EvalResultDetailMapper;
 import com.kant.llm.eval.dao.mapper.EvalTaskDetailMapper;
-import com.kant.llm.eval.mq.EvalMqTopics;
+import com.kant.llm.eval.common.constant.EvalMqTopics;
 import com.kant.llm.eval.mq.message.EvalSampleExecutionMessage;
 import com.kant.llm.eval.mq.message.EvalTaskSplitMessage;
 import com.kant.llm.eval.mq.producer.EvalTaskMqProducer;
@@ -31,10 +32,10 @@ import java.util.Objects;
 @Slf4j
 @Component
 @RocketMQMessageListener(
-        topic = EvalMqTopics.EVAL_TASK_SPLIT,
+        topic = EvalMqTopics.EVAL_TASK_SPLIT_TOPIC,
         consumerGroup = "aigc-eval-task-split-consumer-group"
 )
-public class EvalTaskSplitConsumer implements RocketMQListener<EvalTaskSplitMessage> {
+public class EvalTaskSplitConsumer implements RocketMQListener<MessageWrapper<EvalTaskSplitMessage>> {
 
     private final EvalTaskDetailMapper evalTaskDetailMapper;
     private final EvalResultDetailMapper evalResultDetailMapper;
@@ -52,11 +53,13 @@ public class EvalTaskSplitConsumer implements RocketMQListener<EvalTaskSplitMess
     }
 
     @Override
-    public void onMessage(EvalTaskSplitMessage message) {
-        log.info("开始消费任务批次拆分 MQ 消息，topic: {}, taskDetailId: {}, taskId: {}, datasetId: {}, modelId: {}",
-                EvalMqTopics.EVAL_TASK_SPLIT, message.getTaskDetailId(), message.getTaskId(),
-                message.getDatasetId(), message.getModelId());
-        EvalTaskDetailDO taskDetail = evalTaskDetailMapper.selectById(message.getTaskDetailId());
+    public void onMessage(MessageWrapper<EvalTaskSplitMessage> message) {
+
+        EvalTaskSplitMessage body = message.getBody();
+        log.info("[消费者] 开始消费任务批次拆分 MQ 消息，topic: {}, taskDetailId: {}, taskId: {}, datasetId: {}, modelId: {}",
+                EvalMqTopics.EVAL_TASK_SPLIT_TOPIC, body.getTaskDetailId(), body.getTaskId(),
+                body.getDatasetId(), body.getModelId());
+        EvalTaskDetailDO taskDetail = evalTaskDetailMapper.selectById(body.getTaskDetailId());
         if (taskDetail == null) {
             log.warn("评测任务批次不存在，跳过拆分，消息: {}", message);
             return;
