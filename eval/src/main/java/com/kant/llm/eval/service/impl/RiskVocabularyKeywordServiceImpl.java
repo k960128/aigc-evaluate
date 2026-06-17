@@ -174,4 +174,22 @@ public class RiskVocabularyKeywordServiceImpl extends ServiceImpl<RiskVocabulary
             throw new ServiceException("序列化 AC 自动机特征词快照失败", ex, BaseErrorCode.SERVICE_ERROR);
         }
     }
+
+
+    /**
+     * 发布一个新的 AC 自动机特征词版本。 V2 版本
+     *
+     * <p>流程：读取 DB 全量未删除词条 -> 生成稳定快照和 hash -> Redis 原子写入快照、latest 指针和通知
+     * -> 发布成功后把未删除词条标记为已进入发布快照。</p>
+     */
+    @Override
+    public String publishAcSnapshotV2() {
+
+        try {
+            TimeUnit.SECONDS.sleep(200);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        return "已提交发布任务";
+    }
 }

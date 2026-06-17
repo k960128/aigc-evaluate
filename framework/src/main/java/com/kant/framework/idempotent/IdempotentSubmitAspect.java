@@ -32,17 +32,11 @@ public final class IdempotentSubmitAspect {
     private final RedissonClient redissonClient;
     private final Gson gson = new Gson();
 
-    @Value("${app.eval.enabled:false}")
-    private boolean evalEnabled;
-
     /**
      * 增强方法标记 {@link IdempotentSubmit} 注解逻辑
      */
     @Around("@annotation(com.kant.framework.idempotent.IdempotentSubmit)")
     public Object idempotentSubmit(ProceedingJoinPoint joinPoint) throws Throwable {
-        if (evalEnabled) {
-            return joinPoint.proceed();
-        }
         IdempotentSubmit idempotentSubmit = getIdempotentSubmitAnnotation(joinPoint);
         // 获取分布式锁标识
         String lockKey = buildLockKey(joinPoint, idempotentSubmit);

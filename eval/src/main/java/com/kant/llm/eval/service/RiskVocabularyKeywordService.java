@@ -9,4 +9,10 @@ public interface RiskVocabularyKeywordService extends IService<RiskVocabularyKey
      * 发布当前全量有效特征词快照，并通知集群节点异步构建 AC 自动机。
      */
     String publishAcSnapshot();
+
+    /**
+     * 发布当前全量有效特征词快照，并通知集群节点异步构建 AC 自动机 V2
+     */
+
+    String publishAcSnapshotV2();
 }

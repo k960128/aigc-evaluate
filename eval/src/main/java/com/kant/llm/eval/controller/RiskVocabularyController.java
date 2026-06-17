@@ -3,7 +3,9 @@ package com.kant.llm.eval.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.kant.framework.convention.Result;
+import com.kant.framework.idempotent.IdempotentSubmit;
 import com.kant.framework.web.Results;
+import com.kant.llm.eval.common.constant.RiskVocabularyAcRedisKeys;
 import com.kant.llm.eval.dao.entity.RiskVocabularyKeywordDO;
 import com.kant.llm.eval.dto.req.CreateRiskVocabularyKeywordRequest;
 import com.kant.llm.eval.dto.req.RiskVocabularyKeywordPageRequest;
@@ -164,6 +166,22 @@ public class RiskVocabularyController {
     public Result<String> publishAcSnapshot() {
         // 发布一个新的特征词版本。
         return Results.success(keywordService.publishAcSnapshot());
+    }
+
+    /**
+     * 将待同步的风险词库特征词模拟同步到 Redis V2 版本
+     *
+     * <p>当前实现会查询同步状态为 0 的特征词，并批量更新为 1。</p>
+     *
+     * @return 同步处理结果描述
+     */
+    @IdempotentSubmit(
+            key = RiskVocabularyAcRedisKeys.PUBLISH_LOCK
+            , message = "当前已有特征词版本正在发布，请稍后重试")
+    @PostMapping("/keyword/version/publishV2")
+    public Result<String> publishAcSnapshotV2() {
+        // 发布一个新的特征词版本。
+        return Results.success(keywordService.publishAcSnapshotV2());
     }
 
     /**

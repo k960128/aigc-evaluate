@@ -2,3 +2,4 @@ com.kant.framework.config.RedisConfiguration
 com.kant.framework.config.DataBaseConfiguration
 com.kant.framework.config.WebAutoConfiguration
 com.kant.framework.config.RocketMQAutoConfiguration
+com.kant.framework.config.IdempotentConfiguration
