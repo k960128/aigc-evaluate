@@ -1,18 +1,21 @@
 package com.kant.ai.infra.embedding;
 
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.EmbeddingModel;
-import org.springframework.ai.openai.OpenAiEmbeddingModel;
-import org.springframework.ai.openai.OpenAiEmbeddingOptions;
-import org.springframework.ai.openai.api.OpenAiApi;
-import org.springframework.stereotype.Service;
 
 import java.util.List;
 
-@Slf4j
-@Service
+/**
+ * 路由型 Embedding 服务。
+ *
+ * <p>默认调用启动初始化后的默认模型；传入模型 ID 或 modelCode 时，按注册表路由到指定模型。</p>
+ */
 public class RoutingEmbeddingService implements EmbeddingService {
+
+    private final EmbeddingModelRegistry embeddingModelRegistry;
+
+    public RoutingEmbeddingService(EmbeddingModelRegistry embeddingModelRegistry) {
+        this.embeddingModelRegistry = embeddingModelRegistry;
+    }
 
     @Override
     public float[] embed(String text) {
@@ -21,7 +24,7 @@ public class RoutingEmbeddingService implements EmbeddingService {
 
     @Override
     public float[] embed(String text, String modelId) {
-        return getEmbeddingClient().embed(text);
+        return embeddingModelRegistry.getEmbeddingModel(modelId).embed(text);
     }
 
     @Override
@@ -31,21 +34,16 @@ public class RoutingEmbeddingService implements EmbeddingService {
 
     @Override
     public List<float[]> embedBatch(List<String> texts, String modelId) {
-        return getEmbeddingClient().embed(texts);
+        return embeddingModelRegistry.getEmbeddingModel(modelId).embed(texts);
+    }
+
+    @Override
+    public int dimension() {
+        return embeddingModelRegistry.getDefaultDimension();
     }
 
     @Override
     public EmbeddingModel getEmbeddingClient() {
-        OpenAiApi openAiApi = OpenAiApi.builder()
-                .apiKey("sk-3398a71a31f04728a19922dcbb8af1f9")
-                .baseUrl("https://dashscope.aliyuncs.com/compatible-mode")
-                .build();
-
-        OpenAiEmbeddingOptions embeddingOptions = OpenAiEmbeddingOptions.builder()
-                .model("text-embedding-v4")
-                .dimensions(1024)
-                .build();
-
-        return new OpenAiEmbeddingModel(openAiApi, MetadataMode.EMBED, embeddingOptions);
+        return embeddingModelRegistry.getDefaultEmbeddingModel();
     }
 }

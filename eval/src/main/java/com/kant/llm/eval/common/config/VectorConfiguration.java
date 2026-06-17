@@ -4,6 +4,7 @@ import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
 import com.alibaba.cloud.ai.dashscope.rerank.DashScopeRerankModel;
 import com.alibaba.cloud.ai.dashscope.rerank.DashScopeRerankOptions;
 import com.kant.ai.infra.embedding.EmbeddingService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -20,6 +21,7 @@ import static org.springframework.ai.vectorstore.pgvector.PgVectorStore.PgIndexT
  * 自动装配pg数据源和jdbcTemplate模板
  * 手动注册vector
  */
+@Slf4j
 @Configuration
 public class VectorConfiguration {
 
@@ -55,6 +57,11 @@ public class VectorConfiguration {
     @Bean(name = "vectorStore")
     public VectorStore vectorStore(@Qualifier("pgJdbcTemplate") JdbcTemplate jdbcTemplate,
                                    EmbeddingService embeddingService) {
+        int embeddingDimension = embeddingService.dimension();
+        if (embeddingDimension > 0 && embeddingDimension != dimensions) {
+            log.warn("PGVector 表维度与默认 Embedding 模型维度不一致，pgDimensions: {}, embeddingDimension: {}",
+                    dimensions, embeddingDimension);
+        }
         return PgVectorStore.builder(jdbcTemplate, embeddingService.getEmbeddingClient())
                 .dimensions(dimensions)
                 .distanceType(COSINE_DISTANCE)
