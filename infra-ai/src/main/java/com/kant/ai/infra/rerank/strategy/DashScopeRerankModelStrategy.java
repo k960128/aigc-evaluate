@@ -11,8 +11,10 @@ import com.kant.ai.infra.rerank.RerankModelStrategy;
 import com.kant.ai.infra.rerank.RerankServiceResult;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.ai.document.Document;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * DashScope/Qwen Rerank 模型策略。
@@ -40,13 +42,16 @@ public class DashScopeRerankModelStrategy implements RerankModelStrategy {
     }
 
     @Override
-    public RerankServiceResult rerank(RerankModelInfo modelInfo, Object rerankModel, String queryText, List<String> documents) {
+    public RerankServiceResult rerank(RerankModelInfo modelInfo,
+                                      Object rerankModel,
+                                      String queryText,
+                                      List<String> documents) {
         long startTime = System.currentTimeMillis();
         try {
             DashScopeRerankModel dashScopeRerankModel = (DashScopeRerankModel) rerankModel;
             log.info("DashScope Rerank 开始调用，modelId: {}, modelCode: {}, model: {}, documentSize: {}",
                     modelInfo.getModelId(), modelInfo.getModelCode(), resolveModel(modelInfo), documents.size());
-            RerankResponse response = dashScopeRerankModel.call(new RerankRequest(queryText, documents));
+            RerankResponse response = dashScopeRerankModel.call(new RerankRequest(queryText, toSpringAiDocuments(documents)));
             long elapsed = System.currentTimeMillis() - startTime;
             log.info("DashScope Rerank 调用完成，modelId: {}, modelCode: {}, elapsed: {}ms",
                     modelInfo.getModelId(), modelInfo.getModelCode(), elapsed);
@@ -90,5 +95,19 @@ public class DashScopeRerankModelStrategy implements RerankModelStrategy {
             return DEFAULT_TOP_N;
         }
         return modelInfo.getTopN();
+    }
+
+    /**
+     * 将 infra-ai 对外暴露的纯文本候选转换成 Spring AI Rerank SDK 所需的 Document。
+     *
+     * <p>这样可以让 RerankService 的公共接口保持轻量，不把 Spring AI 的 Document 类型泄漏给业务调用方。</p>
+     */
+    private List<Document> toSpringAiDocuments(List<String> documents) {
+        return documents.stream()
+                .filter(StringUtils::isNotBlank)
+                .map(String::trim)
+                .filter(Objects::nonNull)
+                .map(Document::new)
+                .toList();
     }
 }
