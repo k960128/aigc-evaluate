@@ -22,6 +22,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * 资源管理接口
+ *
+ */
 @RestController
 @RequestMapping("/source")
 public class SourceController {

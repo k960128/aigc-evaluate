@@ -6,32 +6,38 @@ import com.hankcs.algorithm.AhoCorasickDoubleArrayTrie;
 import com.kant.framework.exception.SecurityBlockException;
 import com.kant.llm.eval.common.constant.RiskVocabularyAcRedisKeys;
 import com.kant.llm.eval.common.convention.EvalContext;
+import com.kant.llm.eval.common.enums.AcSnapshotAckStageEnums;
 import com.kant.llm.eval.dao.entity.RiskVocabularyKeywordDO;
 import com.kant.llm.eval.engine.model.AcAutomatonContext;
 import com.kant.llm.eval.engine.model.RiskTag;
-import com.kant.llm.eval.engine.model.RiskVocabularyPublishMessage;
-import com.kant.llm.eval.engine.model.RiskVocabularySnapshot;
 import com.kant.llm.eval.engine.model.RiskVocabularySnapshotItem;
+import com.kant.llm.eval.engine.model.RiskVocabularySnapshotManifest;
+import com.kant.llm.eval.engine.model.RiskVocabularySnapshotShard;
+import com.kant.llm.eval.engine.model.RiskVocabularySnapshotShardMeta;
 import com.kant.llm.eval.engine.support.RiskVocabularyAcSupport;
+import com.kant.llm.eval.service.AcSnapshotNodeAckService;
+import com.kant.llm.eval.service.AcSnapshotNodeRegistryService;
 import com.kant.llm.eval.service.RiskVocabularyKeywordService;
 import jakarta.annotation.PostConstruct;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
+import java.net.InetAddress;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * L1 字面量风险拦截引擎。
- *
- * <p>引擎只维护当前生效的 AC 自动机上下文。新版本在后台完整构建并校验成功后，
- * 再通过 AtomicReference 原子替换，保证评测热路径无锁且不会读到半成品 Trie。</p>
  */
 @Slf4j
 @Component
@@ -50,27 +56,36 @@ public class L1InterceptionEngine {
 
     private final ObjectMapper objectMapper;
 
-    /**
-     * 当前 JVM 正在使用的 AC 自动机版本。
-     */
+    private final AcSnapshotNodeAckService nodeAckService;
+
+    private final AcSnapshotNodeRegistryService nodeRegistryService;
+
     private final AtomicReference<AcAutomatonContext> activeContext = new AtomicReference<>(emptyContext());
 
-    /**
-     * 应用启动时优先加载 Redis latest 快照；Redis 不可用或快照缺失时，回退到 DB 已同步词条构建。
-     */
+    private final AtomicReference<AcAutomatonContext> preparedContext = new AtomicReference<>();
+
+    @Value("${spring.application.name:aigc-eval}")
+    private String applicationName;
+
+    @Value("${server.port:8800}")
+    private Integer serverPort;
+
+    @Getter
+    private String nodeId;
+
+    @Getter
+    private String nodeHost;
+
     @PostConstruct
     public void init() {
-        if (reloadLatestSnapshotFromRedis()) {
-            return;
+        this.nodeHost = resolveHost();
+        this.nodeId = applicationName + "-" + nodeHost + "-" + serverPort;
+        if (!reloadLatestSnapshotFromRedis()) {
+            reloadTrieFromSyncedDbKeywords();
         }
-        reloadTrieFromSyncedDbKeywords();
+        heartbeat();
     }
 
-    /**
-     * 使用当前生效的 AC 自动机扫描 prompt。
-     *
-     * <p>方法内只读取一次 activeContext，后续扫描都基于该不可变快照，避免热更新过程中前后不一致。</p>
-     */
     public EvalContext analyze(String prompt) {
         EvalContext context = new EvalContext(prompt);
         if (!StringUtils.hasText(prompt)) {
@@ -102,88 +117,119 @@ public class L1InterceptionEngine {
         return context;
     }
 
-    /**
-     * 根据 Redis Pub/Sub 发布消息加载并切换到新版本 AC。
-     *
-     * <p>该方法由监听器的单线程构建执行器调用。构建失败会抛出异常给监听器重试，
-     * 当前 activeContext 不会被修改。</p>
-     */
-    public boolean rebuildFromPublishMessage(RiskVocabularyPublishMessage message) {
-        if (message == null || message.getVersionId() == null || !StringUtils.hasText(message.getSnapshotKey())) {
-            log.warn("跳过无效的 AC 自动机发布消息：{}", message);
+    public boolean prepareFromManifest(Long versionId, String manifestKey, String expectedHash) {
+        try {
+            AcAutomatonContext current = activeContext.get();
+            if (current != null && current.getVersionId() != null && current.getVersionId() >= versionId) {
+                nodeAckService.ackSuccess(versionId, nodeId, AcSnapshotAckStageEnums.BUILD.getCode(), current.getHash());
+                return true;
+            }
+            AcAutomatonContext prepared = preparedContext.get();
+            if (prepared != null && Objects.equals(prepared.getVersionId(), versionId)) {
+                nodeAckService.ackSuccess(versionId, nodeId, AcSnapshotAckStageEnums.BUILD.getCode(), prepared.getHash());
+                return true;
+            }
+
+            RiskVocabularySnapshotManifest manifest = loadManifest(manifestKey);
+            if (manifest == null) {
+                throw new IllegalStateException("AC manifest \u4e0d\u5b58\u5728\uff1a" + manifestKey);
+            }
+            if (!Objects.equals(versionId, manifest.getVersionId())) {
+                throw new IllegalStateException("AC manifest \u7248\u672c\u4e0d\u4e00\u81f4\uff1a" + manifestKey);
+            }
+            if (!Objects.equals(expectedHash, manifest.getGlobalHash())) {
+                throw new IllegalStateException("AC manifest hash \u4e0d\u4e00\u81f4\uff1a" + manifestKey);
+            }
+
+            AcAutomatonContext newContext = buildContext(manifest);
+            preparedContext.set(newContext);
+            nodeAckService.ackSuccess(versionId, nodeId, AcSnapshotAckStageEnums.BUILD.getCode(), newContext.getHash());
+            heartbeat();
+            log.info("AC \u5feb\u7167\u5df2\u6784\u5efa\u5230 preparedContext\uff0cversionId={}\uff0cwordCount={}\uff0chash={}",
+                    versionId, newContext.getWordCount(), newContext.getHash());
+            return true;
+        } catch (Exception ex) {
+            nodeAckService.ackFailed(versionId, nodeId, AcSnapshotAckStageEnums.BUILD.getCode(), expectedHash, ex.getMessage());
+            log.warn("AC \u5feb\u7167\u6784\u5efa\u5931\u8d25\uff0cversionId={}", versionId, ex);
             return false;
         }
-
-        AcAutomatonContext current = activeContext.get();
-        if (current != null && current.getVersionId() != null
-                && current.getVersionId() >= message.getVersionId()) {
-            // Snowflake 版本号递增，旧消息或重复消息不能覆盖当前较新的 AC。
-            log.info("跳过过期的 AC 自动机版本，当前版本={}，消息版本={}",
-                    current.getVersionId(), message.getVersionId());
-            return true;
-        }
-
-        RiskVocabularySnapshot snapshot = loadSnapshot(message.getSnapshotKey());
-        if (snapshot == null) {
-            throw new IllegalStateException("未找到 AC 自动机快照：" + message.getSnapshotKey());
-        }
-        if (!Objects.equals(message.getVersionId(), snapshot.getVersionId())) {
-            throw new IllegalStateException("AC 自动机快照版本不一致，消息版本="
-                    + message.getVersionId() + "，快照版本=" + snapshot.getVersionId());
-        }
-        if (!Objects.equals(message.getHash(), snapshot.getHash())) {
-            throw new IllegalStateException("AC 自动机快照哈希不一致，版本号=" + message.getVersionId());
-        }
-        if (!Objects.equals(message.getWordCount(), snapshot.getWordCount())) {
-            throw new IllegalStateException("AC 自动机快照词条数量不一致，版本号=" + message.getVersionId());
-        }
-
-        AcAutomatonContext newContext = buildContext(snapshot);
-        // 只有完整构建和校验成功后才替换引用；失败时继续使用旧 AC。
-        activeContext.set(newContext);
-        log.info("AC 自动机版本切换完成，版本号={}，特征词数量={}，快照哈希={}",
-                newContext.getVersionId(), newContext.getWordCount(), newContext.getHash());
-        return true;
     }
 
-    /**
-     * 暴露当前版本上下文，便于后续排查节点加载状态或扩展管理接口。
-     */
+    public boolean activatePreparedVersion(Long versionId, String expectedHash) {
+        try {
+            AcAutomatonContext current = activeContext.get();
+            if (current != null && Objects.equals(current.getVersionId(), versionId)) {
+                nodeAckService.ackSuccess(versionId, nodeId, AcSnapshotAckStageEnums.ACTIVE.getCode(), current.getHash());
+                return true;
+            }
+            String latestVersion = stringRedisTemplate.opsForValue().get(RiskVocabularyAcRedisKeys.LATEST_VERSION);
+            if (!Objects.equals(String.valueOf(versionId), latestVersion)) {
+                throw new IllegalStateException("Redis \u6700\u65b0 AC \u7248\u672c\u5c1a\u672a\u5207\u6362\u5230 " + versionId);
+            }
+            AcAutomatonContext prepared = preparedContext.get();
+            if (prepared == null || !Objects.equals(prepared.getVersionId(), versionId)) {
+                throw new IllegalStateException("\u8282\u70b9\u672a\u51c6\u5907\u597d AC \u5feb\u7167\uff0cversionId=" + versionId);
+            }
+            if (!Objects.equals(prepared.getHash(), expectedHash)) {
+                throw new IllegalStateException("\u8282\u70b9\u5df2\u51c6\u5907 AC \u5feb\u7167 hash \u4e0d\u4e00\u81f4\uff0cversionId=" + versionId);
+            }
+            activeContext.set(prepared);
+            preparedContext.compareAndSet(prepared, null);
+            nodeAckService.ackSuccess(versionId, nodeId, AcSnapshotAckStageEnums.ACTIVE.getCode(), prepared.getHash());
+            heartbeat();
+            log.info("AC \u5feb\u7167\u5df2\u6fc0\u6d3b\uff0cversionId={}\uff0cwordCount={}\uff0chash={}",
+                    versionId, prepared.getWordCount(), prepared.getHash());
+            return true;
+        } catch (Exception ex) {
+            nodeAckService.ackFailed(versionId, nodeId, AcSnapshotAckStageEnums.ACTIVE.getCode(), expectedHash, ex.getMessage());
+            log.warn("AC \u5feb\u7167\u6fc0\u6d3b\u5931\u8d25\uff0cversionId={}", versionId, ex);
+            return false;
+        }
+    }
+
     public AcAutomatonContext getActiveContext() {
         return activeContext.get();
     }
 
-    /**
-     * 从 Redis latest 指针加载最新快照。
-     */
+    public AcAutomatonContext getPreparedContext() {
+        return preparedContext.get();
+    }
+
+    public void heartbeat() {
+        AcAutomatonContext current = activeContext.get();
+        AcAutomatonContext prepared = preparedContext.get();
+        nodeRegistryService.heartbeat(nodeId, applicationName, nodeHost,
+                current == null ? null : current.getVersionId(),
+                prepared == null ? null : prepared.getVersionId());
+    }
+
     private boolean reloadLatestSnapshotFromRedis() {
         try {
-            String latestVersion = stringRedisTemplate.opsForValue().get(RiskVocabularyAcRedisKeys.LATEST_VERSION);
-            if (!StringUtils.hasText(latestVersion)) {
+            String manifestKey = stringRedisTemplate.opsForValue().get(RiskVocabularyAcRedisKeys.LATEST_MANIFEST);
+            if (!StringUtils.hasText(manifestKey)) {
+                String latestVersion = stringRedisTemplate.opsForValue().get(RiskVocabularyAcRedisKeys.LATEST_VERSION);
+                if (!StringUtils.hasText(latestVersion)) {
+                    return false;
+                }
+                manifestKey = RiskVocabularyAcRedisKeys.manifestKey(Long.valueOf(latestVersion));
+            }
+            RiskVocabularySnapshotManifest manifest = loadManifest(manifestKey);
+            if (manifest == null) {
                 return false;
             }
-            Long versionId = Long.valueOf(latestVersion);
-            String snapshotKey = RiskVocabularyAcRedisKeys.snapshotKey(versionId);
-            RiskVocabularySnapshot snapshot = loadSnapshot(snapshotKey);
-            if (snapshot == null) {
-                log.warn("Redis 中缺少最新 AC 自动机快照，版本号={}", versionId);
-                return false;
-            }
-            activeContext.set(buildContext(snapshot));
-            log.info("从 Redis 初始化 AC 自动机完成，版本号={}，特征词数量={}，快照哈希={}",
-                    snapshot.getVersionId(), snapshot.getWordCount(), snapshot.getHash());
+            AcAutomatonContext context = buildContext(manifest);
+            activeContext.set(context);
+            nodeAckService.ackSuccess(manifest.getVersionId(), nodeId,
+                    AcSnapshotAckStageEnums.ACTIVE.getCode(), context.getHash());
+            log.info("\u5df2\u4ece Redis manifest \u52a0\u8f7d AC \u5feb\u7167\uff0cversionId={}\uff0cwordCount={}\uff0chash={}",
+                    manifest.getVersionId(), manifest.getTotalWordCount(), manifest.getGlobalHash());
             return true;
         } catch (Exception ex) {
-            log.warn("从 Redis 初始化 AC 自动机失败，回退到 DB 已同步词条构建", ex);
+            log.warn("\u4ece Redis manifest \u52a0\u8f7d AC \u5feb\u7167\u5931\u8d25\uff0c\u964d\u7ea7\u4f7f\u7528 DB \u5df2\u540c\u6b65\u8bcd\u6761", ex);
             return false;
         }
     }
 
-    /**
-     * Redis 快照不可用时的启动兜底策略。
-     *
-     * <p>这里只读取 syncStatus=true 的 DB 词条，保持和历史实现兼容。</p>
-     */
     private void reloadTrieFromSyncedDbKeywords() {
         List<RiskVocabularyKeywordDO> keywords = riskVocabularyKeywordService.lambdaQuery()
                 .eq(RiskVocabularyKeywordDO::getSyncStatus, SYNC_STATUS_SYNCED)
@@ -192,57 +238,102 @@ public class L1InterceptionEngine {
 
         List<RiskVocabularySnapshotItem> items = RiskVocabularyAcSupport.toSnapshotItems(keywords);
         String hash = RiskVocabularyAcSupport.calculateHash(items);
-        RiskVocabularySnapshot snapshot = RiskVocabularySnapshot.builder()
-                .versionId(null)
-                .hash(hash)
-                .wordCount(items.size())
-                .publishTime(LocalDateTime.now())
-                .items(items)
-                .build();
-        activeContext.set(buildContext(snapshot));
-        log.info("从 DB 兜底初始化 AC 自动机完成，特征词数量={}，快照哈希={}", items.size(), hash);
+        activeContext.set(buildContext(null, hash, items));
+        log.info("\u5df2\u4ece DB \u5df2\u540c\u6b65\u8bcd\u6761\u52a0\u8f7d AC \u5feb\u7167\uff0cwordCount={}\uff0chash={}", items.size(), hash);
     }
 
-    /**
-     * 根据 Redis snapshotKey 读取并反序列化快照。
-     */
-    private RiskVocabularySnapshot loadSnapshot(String snapshotKey) {
-        String snapshotJson = stringRedisTemplate.opsForValue().get(snapshotKey);
-        if (!StringUtils.hasText(snapshotJson)) {
+    private RiskVocabularySnapshotManifest loadManifest(String manifestKey) {
+        String manifestJson = stringRedisTemplate.opsForValue().get(manifestKey);
+        if (!StringUtils.hasText(manifestJson)) {
             return null;
         }
         try {
-            return objectMapper.readValue(snapshotJson, RiskVocabularySnapshot.class);
+            return objectMapper.readValue(manifestJson, RiskVocabularySnapshotManifest.class);
         } catch (JsonProcessingException ex) {
-            throw new IllegalStateException("反序列化 AC 自动机快照失败：" + snapshotKey, ex);
+            throw new IllegalStateException("\u53cd\u5e8f\u5217\u5316 AC manifest \u5931\u8d25\uff1a" + manifestKey, ex);
         }
     }
 
-    /**
-     * 校验快照内容并构建新的 AC 上下文。
-     */
-    private AcAutomatonContext buildContext(RiskVocabularySnapshot snapshot) {
-        List<RiskVocabularySnapshotItem> items = snapshot.getItems();
+    private RiskVocabularySnapshotShard loadShard(String shardKey) {
+        String shardJson = stringRedisTemplate.opsForValue().get(shardKey);
+        if (!StringUtils.hasText(shardJson)) {
+            throw new IllegalStateException("AC shard \u4e0d\u5b58\u5728\uff1a" + shardKey);
+        }
+        try {
+            return objectMapper.readValue(shardJson, RiskVocabularySnapshotShard.class);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("\u53cd\u5e8f\u5217\u5316 AC shard \u5931\u8d25\uff1a" + shardKey, ex);
+        }
+    }
+
+    private AcAutomatonContext buildContext(RiskVocabularySnapshotManifest manifest) {
+        List<RiskVocabularySnapshotItem> items = new ArrayList<>();
+        MessageDigest globalDigest = RiskVocabularyAcSupport.newSha256Digest();
+        int wordCount = 0;
+        if (!CollectionUtils.isEmpty(manifest.getShards())) {
+            for (RiskVocabularySnapshotShardMeta shardMeta : manifest.getShards()) {
+                RiskVocabularySnapshotShard shard = loadShard(shardMeta.getShardKey());
+                if (!Objects.equals(shardMeta.getRiskDetailsId(), shard.getRiskDetailsId())
+                        || !Objects.equals(shardMeta.getBucketNo(), shard.getBucketNo())) {
+                    throw new IllegalStateException("AC shard \u8eab\u4efd\u4fe1\u606f\u4e0d\u4e00\u81f4\uff1a" + shardMeta.getShardKey());
+                }
+                List<RiskVocabularySnapshotItem> shardItems = shard.getItems() == null ? List.of() : shard.getItems();
+                if (!Objects.equals(shardMeta.getWordCount(), shardItems.size())) {
+                    throw new IllegalStateException("AC shard \u8bcd\u6761\u6570\u91cf\u4e0d\u4e00\u81f4\uff1a" + shardMeta.getShardKey());
+                }
+                String actualShardHash = RiskVocabularyAcSupport.calculateHash(shardItems);
+                if (!Objects.equals(shardMeta.getShardHash(), actualShardHash)) {
+                    throw new IllegalStateException("AC shard hash \u4e0d\u4e00\u81f4\uff1a" + shardMeta.getShardKey());
+                }
+                wordCount += shardItems.size();
+                items.addAll(shardItems);
+                appendShardToGlobalDigest(globalDigest, shardMeta);
+            }
+        }
+        String actualGlobalHash = RiskVocabularyAcSupport.toHex(globalDigest.digest());
+        if (!Objects.equals(manifest.getGlobalHash(), actualGlobalHash)) {
+            throw new IllegalStateException("AC manifest \u5168\u5c40 hash \u4e0d\u4e00\u81f4\uff0cversionId=" + manifest.getVersionId());
+        }
+        if (!Objects.equals(manifest.getTotalWordCount(), wordCount)) {
+            throw new IllegalStateException("AC manifest \u8bcd\u6761\u6570\u91cf\u4e0d\u4e00\u81f4\uff0cversionId=" + manifest.getVersionId());
+        }
+        return AcAutomatonContext.builder()
+                .versionId(manifest.getVersionId())
+                .hash(manifest.getGlobalHash())
+                .wordCount(wordCount)
+                .buildTime(LocalDateTime.now())
+                .trie(RiskVocabularyAcSupport.buildTrie(items))
+                .build();
+    }
+
+    private AcAutomatonContext buildContext(Long versionId, String hash, List<RiskVocabularySnapshotItem> items) {
         if (CollectionUtils.isEmpty(items)) {
             items = List.of();
         }
         String actualHash = RiskVocabularyAcSupport.calculateHash(items);
-        if (!Objects.equals(snapshot.getHash(), actualHash)) {
-            throw new IllegalStateException("AC 自动机快照内容哈希校验失败，版本号=" + snapshot.getVersionId());
+        if (!Objects.equals(hash, actualHash)) {
+            throw new IllegalStateException("AC \u5feb\u7167 hash \u6821\u9a8c\u5931\u8d25\uff0cversionId=" + versionId);
         }
-
         return AcAutomatonContext.builder()
-                .versionId(snapshot.getVersionId())
-                .hash(snapshot.getHash())
+                .versionId(versionId)
+                .hash(hash)
                 .wordCount(items.size())
                 .buildTime(LocalDateTime.now())
                 .trie(RiskVocabularyAcSupport.buildTrie(items))
                 .build();
     }
 
-    /**
-     * 空 AC 上下文，保证服务启动早期即使还没有词库也可以安全调用 analyze。
-     */
+    private void appendShardToGlobalDigest(MessageDigest digest, RiskVocabularySnapshotShardMeta shardMeta) {
+        RiskVocabularyAcSupport.updateDigest(digest, String.valueOf(shardMeta.getRiskDetailsId()));
+        RiskVocabularyAcSupport.updateDigest(digest, "|");
+        RiskVocabularyAcSupport.updateDigest(digest, String.valueOf(shardMeta.getBucketNo()));
+        RiskVocabularyAcSupport.updateDigest(digest, "|");
+        RiskVocabularyAcSupport.updateDigest(digest, shardMeta.getShardHash());
+        RiskVocabularyAcSupport.updateDigest(digest, "|");
+        RiskVocabularyAcSupport.updateDigest(digest, String.valueOf(shardMeta.getWordCount()));
+        RiskVocabularyAcSupport.updateDigest(digest, "\n");
+    }
+
     private static AcAutomatonContext emptyContext() {
         return AcAutomatonContext.builder()
                 .wordCount(0)
@@ -251,9 +342,6 @@ public class L1InterceptionEngine {
                 .build();
     }
 
-    /**
-     * AC 回调返回的是 begin/end 下标，这里做边界保护后再截取命中的原始文本。
-     */
     private static String substringSafely(String source, int begin, int end) {
         if (source == null || begin >= end) {
             return "";
@@ -264,5 +352,13 @@ public class L1InterceptionEngine {
             return "";
         }
         return source.substring(safeBegin, safeEnd);
+    }
+
+    private static String resolveHost() {
+        try {
+            return InetAddress.getLocalHost().getHostAddress();
+        } catch (Exception ex) {
+            return "unknown-host";
+        }
     }
 }

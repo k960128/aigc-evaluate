@@ -2,6 +2,7 @@ package com.kant.llm.eval.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.kant.llm.eval.common.constant.CommonRedisKeys;
 import com.kant.llm.eval.dao.entity.RiskDetailsDO;
 import com.kant.llm.eval.dao.mapper.RiskDetailsMapper;
 import com.kant.llm.eval.dto.resp.RiskDetailsVO;
@@ -29,7 +30,7 @@ public class RiskDetailsServiceImpl extends ServiceImpl<RiskDetailsMapper, RiskD
     }
 
     List<RiskDetailsVO> detailsListCache() {
-        List<RiskDetailsVO> detailsList = (List<RiskDetailsVO>) redisTemplate.opsForValue().get("riskDetailsList");
+        List<RiskDetailsVO> detailsList = (List<RiskDetailsVO>) redisTemplate.opsForValue().get(CommonRedisKeys.RISK_DETAILS_KEY);
         if (null == detailsList) {
             List<RiskDetailsDO> list = list();
             detailsList = new ArrayList<>();
@@ -37,7 +38,7 @@ public class RiskDetailsServiceImpl extends ServiceImpl<RiskDetailsMapper, RiskD
                 return detailsList;
             }
             detailsList = BeanUtil.copyToList(list, RiskDetailsVO.class);
-            redisTemplate.opsForValue().set("riskDetailsList", detailsList);
+            redisTemplate.opsForValue().set(CommonRedisKeys.RISK_DETAILS_KEY, detailsList);
         }
         return detailsList;
     }

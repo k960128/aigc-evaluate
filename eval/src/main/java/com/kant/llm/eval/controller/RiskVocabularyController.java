@@ -3,14 +3,13 @@ package com.kant.llm.eval.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.kant.framework.convention.Result;
-import com.kant.framework.idempotent.IdempotentSubmit;
 import com.kant.framework.web.Results;
-import com.kant.llm.eval.common.constant.RiskVocabularyAcRedisKeys;
 import com.kant.llm.eval.dao.entity.RiskVocabularyKeywordDO;
 import com.kant.llm.eval.dto.req.CreateRiskVocabularyKeywordRequest;
 import com.kant.llm.eval.dto.req.RiskVocabularyKeywordPageRequest;
 import com.kant.llm.eval.dto.req.UpdateRiskVocabularyKeywordRequest;
 import com.kant.llm.eval.dto.resp.RiskVocabularyKeywordVO;
+import com.kant.llm.eval.service.AcSnapshotDirtyShardService;
 import com.kant.llm.eval.service.RiskVocabularyKeywordService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
@@ -28,71 +27,54 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * 安全评测 - 风险词库管理接口。
- *
- * <p>提供风险词库分组、特征词、分页查询以及特征词同步状态管理能力。</p>
+ * 风险词库管理接口。
  */
 @RestController
 @RequestMapping("/risk/vocabularies")
 @RequiredArgsConstructor
 public class RiskVocabularyController {
+
+    private static final String SYNC_STATUS = "syncStatus";
+
     private final RiskVocabularyKeywordService keywordService;
 
-    /**
-     * 创建风险词库特征词。
-     *
-     * <p>当请求未传入同步状态时，默认设置为 0，表示待同步。</p>
-     *
-     * @param request 特征词创建请求，包含所属分组、风险明细、特征词内容、风险等级和匹配模式等信息
-     * @return 创建成功后的特征词信息
-     */
+    private final AcSnapshotDirtyShardService dirtyShardService;
+
     @PostMapping("/keyword/create")
     public Result<RiskVocabularyKeywordVO> createKeyword(@RequestBody CreateRiskVocabularyKeywordRequest request) {
         RiskVocabularyKeywordDO entity = new RiskVocabularyKeywordDO();
         BeanUtils.copyProperties(request, entity);
-        // 新增词条默认只进入 DB，等待后台业务发布后再进入 AC 快照。
         entity.setSyncStatus(false);
         keywordService.save(entity);
+        dirtyShardService.markDirty(entity.getRiskDetailsId(), "CREATE");
         return Results.success(convertToKeywordVO(entity));
     }
 
-    /**
-     * 更新风险词库特征词。
-     *
-     * @param request 特征词更新请求，包含特征词 ID 以及需要更新的字段
-     * @return 更新后的特征词信息；特征词不存在时返回空数据
-     */
     @PutMapping("/keyword/update")
     public Result<RiskVocabularyKeywordVO> updateKeyword(@RequestBody UpdateRiskVocabularyKeywordRequest request) {
         RiskVocabularyKeywordDO entity = keywordService.getById(request.getId());
         if (entity == null) {
             return Results.success(null);
         }
-        BeanUtils.copyProperties(request, entity);
-        // 特征词内容发生变更后，需要重新发布 AC 快照才能进入线上 Trie。
+        Long oldRiskDetailsId = entity.getRiskDetailsId();
+        BeanUtils.copyProperties(request, entity, SYNC_STATUS);
         entity.setSyncStatus(false);
         keywordService.updateById(entity);
+        dirtyShardService.markDirty(oldRiskDetailsId, "UPDATE_OLD");
+        dirtyShardService.markDirty(entity.getRiskDetailsId(), "UPDATE_NEW");
         return Results.success(convertToKeywordVO(entity));
     }
 
-    /**
-     * 删除风险词库特征词。
-     *
-     * @param id 特征词 ID
-     * @return 无返回数据
-     */
     @DeleteMapping("/keyword/delete")
     public Result<Void> deleteKeyword(@RequestParam("id") Long id) {
+        RiskVocabularyKeywordDO entity = keywordService.getById(id);
         keywordService.removeById(id);
+        if (entity != null) {
+            dirtyShardService.markDirty(entity.getRiskDetailsId(), "DELETE");
+        }
         return Results.success();
     }
 
-    /**
-     * 根据 ID 查询风险词库特征词详情。
-     *
-     * @param id 特征词 ID
-     * @return 特征词详情；特征词不存在时返回空数据
-     */
     @GetMapping("/keyword/get")
     public Result<RiskVocabularyKeywordVO> getKeywordById(@RequestParam("id") Long id) {
         RiskVocabularyKeywordDO entity = keywordService.getById(id);
@@ -102,11 +84,6 @@ public class RiskVocabularyController {
         return Results.success(convertToKeywordVO(entity));
     }
 
-    /**
-     * 查询全部风险词库特征词。
-     *
-     * @return 特征词列表
-     */
     @GetMapping("/keyword/list")
     public Result<List<RiskVocabularyKeywordVO>> listKeyword() {
         List<RiskVocabularyKeywordVO> voList = keywordService.list().stream()
@@ -115,12 +92,6 @@ public class RiskVocabularyController {
         return Results.success(voList);
     }
 
-    /**
-     * 分页查询风险词库特征词。
-     *
-     * @param request 分页查询请求，支持按风险明细、分组、关键词、风险等级、匹配模式和同步状态筛选
-     * @return 特征词分页结果
-     */
     @PostMapping("/keyword/page")
     public Result<Page<RiskVocabularyKeywordVO>> pageKeyword(@RequestBody RiskVocabularyKeywordPageRequest request) {
         int current = request.getCurrent() == null ? 1 : request.getCurrent();
@@ -155,41 +126,11 @@ public class RiskVocabularyController {
         return Results.success(voPage);
     }
 
-    /**
-     * 将待同步的风险词库特征词模拟同步到 Redis。
-     *
-     * <p>当前实现会查询同步状态为 0 的特征词，并批量更新为 1。</p>
-     *
-     * @return 同步处理结果描述
-     */
     @PostMapping("/keyword/version/publish")
     public Result<String> publishAcSnapshot() {
-        // 发布一个新的特征词版本。
         return Results.success(keywordService.publishAcSnapshot());
     }
 
-    /**
-     * 将待同步的风险词库特征词模拟同步到 Redis V2 版本
-     *
-     * <p>当前实现会查询同步状态为 0 的特征词，并批量更新为 1。</p>
-     *
-     * @return 同步处理结果描述
-     */
-    @IdempotentSubmit(
-            key = RiskVocabularyAcRedisKeys.PUBLISH_LOCK
-            , message = "当前已有特征词版本正在发布，请稍后重试")
-    @PostMapping("/keyword/version/publishV2")
-    public Result<String> publishAcSnapshotV2() {
-        // 发布一个新的特征词版本。
-        return Results.success(keywordService.publishAcSnapshotV2());
-    }
-
-    /**
-     * 将风险词库特征词实体转换为接口响应 VO。
-     *
-     * @param entity 风险词库特征词实体
-     * @return 风险词库特征词响应对象
-     */
     private RiskVocabularyKeywordVO convertToKeywordVO(RiskVocabularyKeywordDO entity) {
         return RiskVocabularyKeywordVO.builder()
                 .id(entity.getId())

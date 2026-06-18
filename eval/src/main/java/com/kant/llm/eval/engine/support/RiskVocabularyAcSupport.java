@@ -16,21 +16,13 @@ import java.util.List;
 import java.util.TreeMap;
 
 /**
- * 风险词库 AC 自动机构建的公共辅助类。
- *
- * <p>发布服务生成 Redis 快照、节点加载快照构建 Trie 都复用这里的规则，确保“发布时算出的
- * hash”和“节点实际构建的内容”口径一致。</p>
+ * AC 快照词条转换、哈希计算和字典树构建的公共规则。
  */
 public final class RiskVocabularyAcSupport {
 
     private RiskVocabularyAcSupport() {
     }
 
-    /**
-     * 将数据库词条转换成快照词条。
-     *
-     * <p>这里会过滤无效词条、去除关键词首尾空格，并对重复关键词只保留最高优先级的风险标签。</p>
-     */
     public static List<RiskVocabularySnapshotItem> toSnapshotItems(List<RiskVocabularyKeywordDO> keywords) {
         TreeMap<String, RiskVocabularySnapshotItem> dictionary = new TreeMap<>();
         if (!CollectionUtils.isEmpty(keywords)) {
@@ -41,32 +33,52 @@ public final class RiskVocabularyAcSupport {
         return new ArrayList<>(dictionary.values());
     }
 
-    /**
-     * 对快照内容计算稳定 SHA-256 hash。
-     *
-     * <p>hash 内容只包含会影响 AC 匹配和命中结果的字段；排序后再计算，避免 DB 返回顺序导致
-     * 同一批词条产生不同版本。</p>
-     */
     public static String calculateHash(List<RiskVocabularySnapshotItem> items) {
-        StringBuilder content = new StringBuilder();
+        MessageDigest digest = newSha256Digest();
         if (!CollectionUtils.isEmpty(items)) {
             items.stream()
                     .sorted(Comparator.comparing(RiskVocabularySnapshotItem::getKeyword,
                             Comparator.nullsFirst(String::compareTo)))
-                    .forEach(item -> content.append(nullToEmpty(item.getKeyword())).append('|')
-                            .append(nullToEmpty(item.getKeywordId())).append('|')
-                            .append(nullToEmpty(item.getRiskDetailsId())).append('|')
-                            .append(nullToEmpty(item.getRiskLevel()))
-                            .append('\n'));
+                    .forEach(item -> updateDigest(digest, item));
         }
-        return sha256(content.toString());
+        return toHex(digest.digest());
     }
 
-    /**
-     * 基于快照词条构建 Aho-Corasick Double Array Trie。
-     *
-     * <p>构建完成后的 Trie 不再原地修改，只通过 L1 引擎的 AtomicReference 整体切换。</p>
-     */
+    public static void updateDigest(MessageDigest digest, RiskVocabularySnapshotItem item) {
+        updateDigest(digest, nullToEmpty(item.getKeyword()));
+        updateDigest(digest, "|");
+        updateDigest(digest, nullToEmpty(item.getKeywordId()));
+        updateDigest(digest, "|");
+        updateDigest(digest, nullToEmpty(item.getRiskDetailsId()));
+        updateDigest(digest, "|");
+        updateDigest(digest, nullToEmpty(item.getRiskLevel()));
+        updateDigest(digest, "\n");
+    }
+
+    public static void updateDigest(MessageDigest digest, String value) {
+        digest.update(value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    public static MessageDigest newSha256Digest() {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("\u5f53\u524d\u8fd0\u884c\u73af\u5883\u4e0d\u652f\u6301 SHA-256 \u6458\u8981\u7b97\u6cd5", ex);
+        }
+    }
+
+    public static String toHex(byte[] bytes) {
+        StringBuilder hex = new StringBuilder(bytes.length * 2);
+        for (byte value : bytes) {
+            String item = Integer.toHexString(value & 0xff);
+            if (item.length() == 1) {
+                hex.append('0');
+            }
+            hex.append(item);
+        }
+        return hex.toString();
+    }
+
     public static AhoCorasickDoubleArrayTrie<RiskTag> buildTrie(List<RiskVocabularySnapshotItem> items) {
         TreeMap<String, RiskTag> dictionary = new TreeMap<>();
         if (!CollectionUtils.isEmpty(items)) {
@@ -79,9 +91,6 @@ public final class RiskVocabularyAcSupport {
         return trie;
     }
 
-    /**
-     * DB 词条进入快照前的过滤和归一化逻辑。
-     */
     private static void appendKeyword(TreeMap<String, RiskVocabularySnapshotItem> dictionary,
                                       RiskVocabularyKeywordDO keyword) {
         if (keyword == null
@@ -105,9 +114,6 @@ public final class RiskVocabularyAcSupport {
         dictionary.merge(literal, item, RiskVocabularyAcSupport::selectHigherPriorityItem);
     }
 
-    /**
-     * 快照词条进入 Trie 前的过滤和载荷转换逻辑。
-     */
     private static void appendSnapshotItem(TreeMap<String, RiskTag> dictionary, RiskVocabularySnapshotItem item) {
         if (item == null
                 || !StringUtils.hasText(item.getKeyword())
@@ -125,11 +131,6 @@ public final class RiskVocabularyAcSupport {
         dictionary.merge(literal, riskTag, RiskVocabularyAcSupport::selectHigherPriorityTag);
     }
 
-    /**
-     * 同一个字面量特征词出现多条配置时，选择风险等级更高的一条。
-     *
-     * <p>风险等级数字越小优先级越高；等级相同时按 ID 做稳定兜底，避免 DB 顺序影响快照 hash。</p>
-     */
     private static RiskVocabularySnapshotItem selectHigherPriorityItem(RiskVocabularySnapshotItem existing,
                                                                        RiskVocabularySnapshotItem incoming) {
         if (existing == null) {
@@ -152,9 +153,6 @@ public final class RiskVocabularyAcSupport {
         return compareNullableLong(incoming.getRiskDetailsId(), existing.getRiskDetailsId()) < 0 ? incoming : existing;
     }
 
-    /**
-     * Trie 载荷层面的重复关键词选择逻辑，和快照层保持一致。
-     */
     private static RiskTag selectHigherPriorityTag(RiskTag existing, RiskTag incoming) {
         if (existing == null) {
             return incoming;
@@ -180,9 +178,6 @@ public final class RiskVocabularyAcSupport {
         return value == null ? "" : String.valueOf(value);
     }
 
-    /**
-     * 空 ID 排在非空 ID 后面，用于重复词的稳定 tie-break。
-     */
     private static int compareNullableLong(Long left, Long right) {
         if (left == null && right == null) {
             return 0;
@@ -194,23 +189,5 @@ public final class RiskVocabularyAcSupport {
             return -1;
         }
         return left.compareTo(right);
-    }
-
-    private static String sha256(String content) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] bytes = digest.digest(content.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hex = new StringBuilder(bytes.length * 2);
-            for (byte value : bytes) {
-                String item = Integer.toHexString(value & 0xff);
-                if (item.length() == 1) {
-                    hex.append('0');
-                }
-                hex.append(item);
-            }
-            return hex.toString();
-        } catch (NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("当前运行环境不支持 SHA-256 摘要算法", ex);
-        }
     }
 }
