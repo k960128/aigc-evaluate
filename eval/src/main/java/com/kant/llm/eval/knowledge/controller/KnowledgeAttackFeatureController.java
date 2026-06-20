@@ -50,7 +50,7 @@ import java.util.stream.Collectors;
  * MySQL 仍是知识库事实源；ES/PGVector 同步事件写入和真实索引同步后续应下沉到 Service 层统一处理。</p>
  */
 @RestController
-@RequestMapping("/Knowledge/attack-feature")
+@RequestMapping("/knowledge/attack-feature")
 @RequiredArgsConstructor
 public class KnowledgeAttackFeatureController {
 
