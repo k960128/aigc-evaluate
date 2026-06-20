@@ -8,6 +8,7 @@ import com.kant.ai.infra.client.*;
 import com.kant.ai.infra.enums.ModelManufacturerEnum;
 import com.kant.framework.errorcode.BaseErrorCode;
 import com.kant.framework.exception.SecurityBlockException;
+import com.kant.framework.mq.MessageWrapper;
 import com.kant.llm.eval.basesource.dao.entity.MockModelOutputContentDO;
 import com.kant.llm.eval.basesource.dao.entity.ModelInfoDO;
 import com.kant.llm.common.convention.EvalContext;
@@ -62,10 +63,10 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @Component
 @RocketMQMessageListener(
-        topic = EvalMqTopics.EXECUTION,
+        topic = EvalMqTopics.EXECUTION_TOPIC,
         consumerGroup = "aigc-eval-sample-execution-consumer-group"
 )
-public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleExecutionMessage> {
+public class EvalSampleExecutionConsumer implements RocketMQListener<MessageWrapper<EvalSampleExecutionMessage>> {
 
     private static final String EXECUTION_LOCK_KEY_PREFIX = "aigc-eval:eval-result:execute:";
 
@@ -119,9 +120,10 @@ public class EvalSampleExecutionConsumer implements RocketMQListener<EvalSampleE
     }
 
     @Override
-    public void onMessage(EvalSampleExecutionMessage message) {
-        log.info("开始消费单样本执行 MQ 消息，topic: {}, taskDetailId: {}, resultDetailId: {}, sampleId: {}, modelId: {}",
-                EvalMqTopics.EXECUTION, message.getTaskDetailId(), message.getResultDetailId(),
+    public void onMessage(MessageWrapper<EvalSampleExecutionMessage> messageWrapper) {
+        EvalSampleExecutionMessage message = messageWrapper.getBody();
+        log.info("[消费者] 开始消费单样本执行 MQ 消息，topic: {}, taskDetailId: {}, resultDetailId: {}, sampleId: {}, modelId: {}",
+                EvalMqTopics.EXECUTION_TOPIC, message.getTaskDetailId(), message.getResultDetailId(),
                 message.getSampleId(), message.getModelId());
         RLock lock = redissonClient.getLock(EXECUTION_LOCK_KEY_PREFIX + message.getResultDetailId());
         boolean locked;

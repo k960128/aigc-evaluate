@@ -36,7 +36,7 @@ import com.kant.llm.eval.dataset.dto.resp.EvalResultDetailVO;
 import com.kant.llm.eval.task.dto.resp.EvalTaskDetailVO;
 import com.kant.llm.eval.task.dto.resp.EvalTaskStatusVO;
 import com.kant.llm.eval.task.dto.resp.EvalTaskVO;
-import com.kant.llm.eval.pipeline.mq.message.EvalTaskSplitMessage;
+import com.kant.llm.eval.task.mq.EvalTaskSplitMessage;
 import com.kant.llm.eval.task.service.EvalTaskService;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;

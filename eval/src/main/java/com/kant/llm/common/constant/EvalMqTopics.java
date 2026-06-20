@@ -21,7 +21,7 @@ public final class EvalMqTopics {
     /**
      * 单样本执行 Topic：后续接入被测模型调用与 L1/L2/L3 漏斗判定。
      * */
-    public static final String EXECUTION = "Execution_MQ";
+    public static final String EXECUTION_TOPIC = "Execution_MQ";
 
     /**
      * L2 知识库一键同步批次 Topic：消费端负责扫描待同步知识并拆成单条同步事件。

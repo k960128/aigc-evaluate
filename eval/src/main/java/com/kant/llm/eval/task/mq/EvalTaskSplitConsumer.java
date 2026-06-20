@@ -1,9 +1,11 @@
-package com.kant.llm.eval.pipeline.mq.consumer;
+package com.kant.llm.eval.task.mq;
 
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.IdUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.kant.framework.mq.MessageWrapper;
+import com.kant.framework.mq.producer.MessageQueueProducer;
+import com.kant.framework.mq.producer.MessageSendRequest;
 import com.kant.llm.common.enums.EvalResultStatusEnums;
 import com.kant.llm.common.enums.TaskStatusEnums;
 import com.kant.llm.eval.dataset.dao.entity.DataSetSampleDO;
@@ -14,8 +16,6 @@ import com.kant.llm.eval.task.dao.mapper.EvalResultDetailMapper;
 import com.kant.llm.eval.task.dao.mapper.EvalTaskDetailMapper;
 import com.kant.llm.common.constant.EvalMqTopics;
 import com.kant.llm.eval.pipeline.mq.message.EvalSampleExecutionMessage;
-import com.kant.llm.eval.pipeline.mq.message.EvalTaskSplitMessage;
-import com.kant.llm.eval.pipeline.mq.producer.EvalTaskMqProducer;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
@@ -25,6 +25,8 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
+
+import static com.kant.llm.common.constant.EvalMqTopics.EXECUTION_TOPIC;
 
 /**
  * 评测任务批次拆分消费者。
@@ -40,16 +42,16 @@ public class EvalTaskSplitConsumer implements RocketMQListener<MessageWrapper<Ev
     private final EvalTaskDetailMapper evalTaskDetailMapper;
     private final EvalResultDetailMapper evalResultDetailMapper;
     private final DataSetSampleMapper dataSetSampleMapper;
-    private final EvalTaskMqProducer evalTaskMqProducer;
+    private final MessageQueueProducer messageQueueProducer;
 
     public EvalTaskSplitConsumer(EvalTaskDetailMapper evalTaskDetailMapper,
                                  EvalResultDetailMapper evalResultDetailMapper,
                                  DataSetSampleMapper dataSetSampleMapper,
-                                 EvalTaskMqProducer evalTaskMqProducer) {
+                                 MessageQueueProducer messageQueueProducer) {
         this.evalTaskDetailMapper = evalTaskDetailMapper;
         this.evalResultDetailMapper = evalResultDetailMapper;
         this.dataSetSampleMapper = dataSetSampleMapper;
-        this.evalTaskMqProducer = evalTaskMqProducer;
+        this.messageQueueProducer = messageQueueProducer;
     }
 
     @Override
@@ -160,12 +162,17 @@ public class EvalTaskSplitConsumer implements RocketMQListener<MessageWrapper<Ev
     private void sendSampleExecutionMessage(EvalTaskDetailDO taskDetail, EvalResultDetailDO resultDetail) {
         log.info("准备投递拆分后的单样本执行消息，taskDetailId: {}, resultDetailId: {}, sampleId: {}",
                 taskDetail.getId(), resultDetail.getId(), resultDetail.getSampleId());
-        evalTaskMqProducer.sendSampleExecutionMessage(EvalSampleExecutionMessage.builder()
-                .taskDetailId(taskDetail.getId())
-                .resultDetailId(resultDetail.getId())
-                .taskId(taskDetail.getTaskId())
-                .sampleId(resultDetail.getSampleId())
-                .modelId(taskDetail.getModelId())
+        messageQueueProducer.send(MessageSendRequest.builder()
+                .topic(EXECUTION_TOPIC)
+                .keys(resultDetail.getId().toString())
+                .bizDesc("单样本执行消息")
+                .body(EvalSampleExecutionMessage.builder()
+                        .taskDetailId(taskDetail.getId())
+                        .resultDetailId(resultDetail.getId())
+                        .taskId(taskDetail.getTaskId())
+                        .sampleId(resultDetail.getSampleId())
+                        .modelId(taskDetail.getModelId())
+                        .build())
                 .build());
     }
 
