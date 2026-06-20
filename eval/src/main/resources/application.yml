@@ -53,7 +53,7 @@ rag:
       driver-class-name: org.postgresql.Driver
       initialize-schema: false
       schema-name: public
-      table-name: vector_store
+      table-name: t_knowledge_vector
       dimensions: 1024
       max-document-batch-size: 10
 

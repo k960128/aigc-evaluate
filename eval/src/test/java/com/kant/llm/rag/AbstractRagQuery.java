@@ -1,7 +1,7 @@
 package com.kant.llm.rag;
 
-import com.kant.llm.eval.dao.entity.ModelInfoDO;
-import com.kant.llm.eval.service.ModelInfoService;
+import com.kant.llm.eval.basesource.dao.entity.ModelInfoDO;
+import com.kant.llm.eval.basesource.service.ModelInfoService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;

@@ -2,8 +2,8 @@ package com.kant.llm.eval;
 
 import com.kant.ai.infra.client.*;
 import com.kant.ai.infra.enums.ModelManufacturerEnum;
-import com.kant.llm.eval.dao.entity.ModelInfoDO;
-import com.kant.llm.eval.service.ModelInfoService;
+import com.kant.llm.eval.basesource.dao.entity.ModelInfoDO;
+import com.kant.llm.eval.basesource.service.ModelInfoService;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

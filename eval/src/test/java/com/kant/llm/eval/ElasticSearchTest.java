@@ -1,7 +1,7 @@
 package com.kant.llm.eval;
 
-import com.kant.llm.eval.common.constant.EsDocumentChunk;
-import com.kant.llm.eval.service.es.ElasticSearchService;
+import com.kant.llm.common.constant.EsDocumentChunk;
+import com.kant.llm.eval.pipeline.service.es.ElasticSearchService;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

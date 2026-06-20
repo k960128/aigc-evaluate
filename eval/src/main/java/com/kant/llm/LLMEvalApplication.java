@@ -8,7 +8,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 @SpringBootApplication
 @MapperScan(basePackages = {
-        "com.kant.llm.*.dao.mapper"
+        "com.kant.llm.*.dao.mapper",
+        "com.kant.llm.*.*.dao.mapper"
 })
 public class LLMEvalApplication {
     public static void main(String[] args) {
