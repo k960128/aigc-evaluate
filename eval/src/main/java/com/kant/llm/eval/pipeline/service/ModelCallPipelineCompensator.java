@@ -8,6 +8,7 @@ import com.kant.framework.mq.producer.MessageSendRequest;
 import com.kant.llm.common.constant.EvalMqTopics;
 import com.kant.llm.common.enums.EvalResultStatusEnums;
 import com.kant.llm.common.enums.TaskStatusEnums;
+import com.kant.llm.eval.es.service.EvalEsSyncOutboxService;
 import com.kant.llm.eval.pipeline.mq.message.SafetyEvaluateMessage;
 import com.kant.llm.eval.task.dao.entity.EvalResultDetailDO;
 import com.kant.llm.eval.task.dao.entity.EvalTaskDetailDO;
@@ -52,17 +53,20 @@ public class ModelCallPipelineCompensator {
     private final MessageQueueProducer messageQueueProducer;
     private final TransactionTemplate transactionTemplate;
     private final RedissonClient redissonClient;
+    private final EvalEsSyncOutboxService evalEsSyncOutboxService;
 
     public ModelCallPipelineCompensator(EvalResultDetailMapper evalResultDetailMapper,
                                         EvalTaskDetailMapper evalTaskDetailMapper,
                                         MessageQueueProducer messageQueueProducer,
                                         TransactionTemplate transactionTemplate,
-                                        RedissonClient redissonClient) {
+                                        RedissonClient redissonClient,
+                                        EvalEsSyncOutboxService evalEsSyncOutboxService) {
         this.evalResultDetailMapper = evalResultDetailMapper;
         this.evalTaskDetailMapper = evalTaskDetailMapper;
         this.messageQueueProducer = messageQueueProducer;
         this.transactionTemplate = transactionTemplate;
         this.redissonClient = redissonClient;
+        this.evalEsSyncOutboxService = evalEsSyncOutboxService;
     }
 
     @Scheduled(fixedDelay = 60_000L, initialDelay = 120_000L)
@@ -158,11 +162,16 @@ public class ModelCallPipelineCompensator {
     }
 
     private void markResultStopped(Long resultDetailId, String errorMsg) {
-        evalResultDetailMapper.update(null, new LambdaUpdateWrapper<EvalResultDetailDO>()
-                .eq(EvalResultDetailDO::getId, resultDetailId)
-                .notIn(EvalResultDetailDO::getStatus, FINISHED_RESULT_STATUS)
-                .set(EvalResultDetailDO::getStatus, EvalResultStatusEnums.STOPPED.getCode())
-                .set(EvalResultDetailDO::getErrorMsg, trimErrorMessage(errorMsg)));
+        transactionTemplate.executeWithoutResult(status -> {
+            int updatedRows = evalResultDetailMapper.update(null, new LambdaUpdateWrapper<EvalResultDetailDO>()
+                    .eq(EvalResultDetailDO::getId, resultDetailId)
+                    .notIn(EvalResultDetailDO::getStatus, FINISHED_RESULT_STATUS)
+                    .set(EvalResultDetailDO::getStatus, EvalResultStatusEnums.STOPPED.getCode())
+                    .set(EvalResultDetailDO::getErrorMsg, trimErrorMessage(errorMsg)));
+            if (updatedRows > 0) {
+                evalEsSyncOutboxService.recordResultDetailUpsert(resultDetailId);
+            }
+        });
     }
 
     private void markResultFailedAndIncreaseProgress(Long resultDetailId, Long taskDetailId, String errorMsg) {
@@ -174,6 +183,7 @@ public class ModelCallPipelineCompensator {
                     .set(EvalResultDetailDO::getErrorMsg, trimErrorMessage(errorMsg))
                     .set(EvalResultDetailDO::getStatus, EvalResultStatusEnums.FAILED.getCode()));
             if (updatedRows > 0) {
+                evalEsSyncOutboxService.recordResultDetailUpsert(resultDetailId);
                 increaseTaskProgress(taskDetailId, true);
             }
         });

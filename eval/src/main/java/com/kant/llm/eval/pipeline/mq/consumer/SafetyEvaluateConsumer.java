@@ -16,6 +16,7 @@ import com.kant.llm.common.enums.PipelineNodeCodeEnums;
 import com.kant.llm.common.enums.PipelineNodeStatusEnums;
 import com.kant.llm.common.enums.TaskStatusEnums;
 import com.kant.llm.eval.knowledge.engine.L1InterceptionEngine;
+import com.kant.llm.eval.es.service.EvalEsSyncOutboxService;
 import com.kant.llm.eval.pipeline.mq.message.SafetyEvaluateMessage;
 import com.kant.llm.eval.pipeline.service.EvalPipelineNodeRecorder;
 import com.kant.llm.eval.pipeline.service.SafetyEvaluateExecutionService;
@@ -77,6 +78,7 @@ public class SafetyEvaluateConsumer implements RocketMQListener<MessageWrapper<S
     private final EvalPipelineNodeRecorder evalPipelineNodeRecorder;
     private final L2EvaluationService l2EvaluationService;
     private final L3EvaluationService l3EvaluationService;
+    private final EvalEsSyncOutboxService evalEsSyncOutboxService;
 
     public SafetyEvaluateConsumer(EvalResultDetailMapper evalResultDetailMapper,
                                   EvalTaskDetailMapper evalTaskDetailMapper,
@@ -86,7 +88,8 @@ public class SafetyEvaluateConsumer implements RocketMQListener<MessageWrapper<S
                                   TransactionTemplate transactionTemplate,
                                   EvalPipelineNodeRecorder evalPipelineNodeRecorder,
                                   L2EvaluationService l2EvaluationService,
-                                  L3EvaluationService l3EvaluationService) {
+                                  L3EvaluationService l3EvaluationService,
+                                  EvalEsSyncOutboxService evalEsSyncOutboxService) {
         this.evalResultDetailMapper = evalResultDetailMapper;
         this.evalTaskDetailMapper = evalTaskDetailMapper;
         this.riskDetailRuleMapper = riskDetailRuleMapper;
@@ -96,6 +99,7 @@ public class SafetyEvaluateConsumer implements RocketMQListener<MessageWrapper<S
         this.evalPipelineNodeRecorder = evalPipelineNodeRecorder;
         this.l2EvaluationService = l2EvaluationService;
         this.l3EvaluationService = l3EvaluationService;
+        this.evalEsSyncOutboxService = evalEsSyncOutboxService;
     }
 
     @Override
@@ -195,11 +199,16 @@ public class SafetyEvaluateConsumer implements RocketMQListener<MessageWrapper<S
     }
 
     private void markResultSafetyEvaluating(Long resultDetailId) {
-        evalResultDetailMapper.update(null, new LambdaUpdateWrapper<EvalResultDetailDO>()
-                .eq(EvalResultDetailDO::getId, resultDetailId)
-                .eq(EvalResultDetailDO::getStatus, EvalResultStatusEnums.MODEL_CALLED.getCode())
-                .set(EvalResultDetailDO::getStatus, EvalResultStatusEnums.SAFETY_EVALUATING.getCode())
-                .set(EvalResultDetailDO::getErrorMsg, null));
+        transactionTemplate.executeWithoutResult(status -> {
+            int updatedRows = evalResultDetailMapper.update(null, new LambdaUpdateWrapper<EvalResultDetailDO>()
+                    .eq(EvalResultDetailDO::getId, resultDetailId)
+                    .eq(EvalResultDetailDO::getStatus, EvalResultStatusEnums.MODEL_CALLED.getCode())
+                    .set(EvalResultDetailDO::getStatus, EvalResultStatusEnums.SAFETY_EVALUATING.getCode())
+                    .set(EvalResultDetailDO::getErrorMsg, null));
+            if (updatedRows > 0) {
+                evalEsSyncOutboxService.recordResultDetailUpsert(resultDetailId);
+            }
+        });
     }
 
     private L1JudgementResult applyL1Judgement(EvalTaskDetailDO taskDetail,
@@ -330,6 +339,7 @@ public class SafetyEvaluateConsumer implements RocketMQListener<MessageWrapper<S
             }
             int updatedRows = updateResultSuccess(updateEntity);
             if (updatedRows > 0) {
+                evalEsSyncOutboxService.recordResultDetailUpsert(updateEntity.getId());
                 increaseTaskProgress(taskDetailId, false);
             }
         });
@@ -348,6 +358,7 @@ public class SafetyEvaluateConsumer implements RocketMQListener<MessageWrapper<S
             }
             int updatedRows = updateResultFailed(updateEntity);
             if (updatedRows > 0) {
+                evalEsSyncOutboxService.recordResultDetailUpsert(resultDetailId);
                 increaseTaskProgress(taskDetailId, true);
             }
         });

@@ -43,4 +43,11 @@ public final class EvalMqTopics {
      * */
     public static final String L2_KB_SYNC_EVENT = "L2KbSyncEvent_MQ";
 
+    /**
+     * 评测结果与流水线节点 ES 投影同步事件 Topic。
+     *
+     * <p>消费者回查 MySQL 最新数据后写入 Easy-ES 管理的结果/节点索引。</p>
+     */
+    public static final String EVAL_ES_SYNC_EVENT_TOPIC = "EvalEsSyncEvent_MQ";
+
 }

@@ -1,0 +1,81 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0
+  },
+  "mappings": {
+    "dynamic": false,
+    "properties": {
+      "id": {
+        "type": "long"
+      },
+      "taskId": {
+        "type": "long"
+      },
+      "taskDetailId": {
+        "type": "long"
+      },
+      "resultDetailId": {
+        "type": "long"
+      },
+      "sampleId": {
+        "type": "long"
+      },
+      "nodeCode": {
+        "type": "keyword",
+        "ignore_above": 64
+      },
+      "status": {
+        "type": "keyword",
+        "ignore_above": 64
+      },
+      "startTime": {
+        "type": "date",
+        "format": "yyyy-MM-dd HH:mm:ss||strict_date_optional_time||epoch_millis"
+      },
+      "endTime": {
+        "type": "date",
+        "format": "yyyy-MM-dd HH:mm:ss||strict_date_optional_time||epoch_millis"
+      },
+      "latency": {
+        "type": "integer"
+      },
+      "errorMsg": {
+        "type": "text",
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 512
+          }
+        }
+      },
+      "inputSnapshot": {
+        "type": "text",
+        "index": false
+      },
+      "outputSnapshot": {
+        "type": "text",
+        "index": false
+      },
+      "nodeResult": {
+        "type": "text",
+        "index": false
+      },
+      "createTime": {
+        "type": "date",
+        "format": "yyyy-MM-dd HH:mm:ss||strict_date_optional_time||epoch_millis"
+      },
+      "updateTime": {
+        "type": "date",
+        "format": "yyyy-MM-dd HH:mm:ss||strict_date_optional_time||epoch_millis"
+      }
+    }
+  },
+  "aliases": {
+    "eval_pipeline_node_detail": {
+      "is_write_index": true
+    }
+  }
+}

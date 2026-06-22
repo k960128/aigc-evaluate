@@ -15,12 +15,14 @@ import com.kant.llm.eval.dataset.dao.mapper.DataSetSampleMapper;
 import com.kant.llm.eval.task.dao.mapper.EvalResultDetailMapper;
 import com.kant.llm.eval.task.dao.mapper.EvalTaskDetailMapper;
 import com.kant.llm.common.constant.EvalMqTopics;
+import com.kant.llm.eval.es.service.EvalEsSyncOutboxService;
 import com.kant.llm.eval.pipeline.mq.message.ModelCallMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -43,15 +45,21 @@ public class EvalTaskSplitConsumer implements RocketMQListener<MessageWrapper<Ev
     private final EvalResultDetailMapper evalResultDetailMapper;
     private final DataSetSampleMapper dataSetSampleMapper;
     private final MessageQueueProducer messageQueueProducer;
+    private final EvalEsSyncOutboxService evalEsSyncOutboxService;
+    private final TransactionTemplate transactionTemplate;
 
     public EvalTaskSplitConsumer(EvalTaskDetailMapper evalTaskDetailMapper,
                                  EvalResultDetailMapper evalResultDetailMapper,
                                  DataSetSampleMapper dataSetSampleMapper,
-                                 MessageQueueProducer messageQueueProducer) {
+                                 MessageQueueProducer messageQueueProducer,
+                                 EvalEsSyncOutboxService evalEsSyncOutboxService,
+                                 TransactionTemplate transactionTemplate) {
         this.evalTaskDetailMapper = evalTaskDetailMapper;
         this.evalResultDetailMapper = evalResultDetailMapper;
         this.dataSetSampleMapper = dataSetSampleMapper;
         this.messageQueueProducer = messageQueueProducer;
+        this.evalEsSyncOutboxService = evalEsSyncOutboxService;
+        this.transactionTemplate = transactionTemplate;
     }
 
     @Override
@@ -126,34 +134,37 @@ public class EvalTaskSplitConsumer implements RocketMQListener<MessageWrapper<Ev
      * <p>该方法只负责拆分落库，不投递执行消息；执行消息在批次 READY 后统一发送。</p>
      */
     private EvalResultDetailDO splitSample(EvalTaskDetailDO taskDetail, DataSetSampleDO sample) {
-        // 先查后插配合唯一索引，保证重复消费同一批次拆分消息时不会重复生成结果明细。
-        EvalResultDetailDO resultDetail = findResultDetail(taskDetail.getId(), sample.getId());
-        if (resultDetail == null) {
-            resultDetail = EvalResultDetailDO.builder()
-                    .id(IdUtil.getSnowflake().nextId())
-                    .taskId(taskDetail.getTaskId())
-                    .taskDetailId(taskDetail.getId())
-                    .sampleId(sample.getId())
-                    .inputText(sample.getQuestion())
-                    .riskDetailsId(sample.getRiskDetailsId())
-                    .status(EvalResultStatusEnums.PENDING.getCode())
-                    .build();
-            try {
-                evalResultDetailMapper.insert(resultDetail);
-                log.info("评测结果明细创建成功，taskDetailId: {}, resultDetailId: {}, sampleId: {}",
-                        taskDetail.getId(), resultDetail.getId(), sample.getId());
-            } catch (DuplicateKeyException ex) {
-                // 并发消费或重试下可能已经被另一条执行流插入，回查即可继续投递执行消息。
-                resultDetail = findResultDetail(taskDetail.getId(), sample.getId());
-                log.info("评测结果明细已存在，复用已有明细，taskDetailId: {}, resultDetailId: {}, sampleId: {}",
-                        taskDetail.getId(), resultDetail == null ? null : resultDetail.getId(), sample.getId());
+        return transactionTemplate.execute(status -> {
+            // 先查后插配合唯一索引，保证重复消费同一批次拆分消息时不会重复生成结果明细。
+            EvalResultDetailDO resultDetail = findResultDetail(taskDetail.getId(), sample.getId());
+            if (resultDetail == null) {
+                resultDetail = EvalResultDetailDO.builder()
+                        .id(IdUtil.getSnowflake().nextId())
+                        .taskId(taskDetail.getTaskId())
+                        .taskDetailId(taskDetail.getId())
+                        .sampleId(sample.getId())
+                        .inputText(sample.getQuestion())
+                        .riskDetailsId(sample.getRiskDetailsId())
+                        .status(EvalResultStatusEnums.PENDING.getCode())
+                        .build();
+                try {
+                    evalResultDetailMapper.insert(resultDetail);
+                    log.info("评测结果明细创建成功，taskDetailId: {}, resultDetailId: {}, sampleId: {}",
+                            taskDetail.getId(), resultDetail.getId(), sample.getId());
+                } catch (DuplicateKeyException ex) {
+                    // 并发消费或重试下可能已经被另一条执行流插入，回查即可继续投递执行消息。
+                    resultDetail = findResultDetail(taskDetail.getId(), sample.getId());
+                    log.info("评测结果明细已存在，复用已有明细，taskDetailId: {}, resultDetailId: {}, sampleId: {}",
+                            taskDetail.getId(), resultDetail == null ? null : resultDetail.getId(), sample.getId());
+                }
             }
-        }
-        if (resultDetail == null) {
-            throw new IllegalStateException("评测结果明细创建失败，taskDetailId=" + taskDetail.getId()
-                    + ", sampleId=" + sample.getId());
-        }
-        return resultDetail;
+            if (resultDetail == null) {
+                throw new IllegalStateException("评测结果明细创建失败，taskDetailId=" + taskDetail.getId()
+                        + ", sampleId=" + sample.getId());
+            }
+            evalEsSyncOutboxService.recordResultDetailUpsert(resultDetail.getId());
+            return resultDetail;
+        });
     }
 
     /**

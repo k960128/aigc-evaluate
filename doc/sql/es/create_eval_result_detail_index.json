@@ -1,0 +1,85 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0
+  },
+  "mappings": {
+    "dynamic": false,
+    "properties": {
+      "id": {
+        "type": "long"
+      },
+      "taskId": {
+        "type": "long"
+      },
+      "taskDetailId": {
+        "type": "long"
+      },
+      "sampleId": {
+        "type": "long"
+      },
+      "riskDetailsId": {
+        "type": "long"
+      },
+      "inputText": {
+        "type": "text",
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 512
+          }
+        }
+      },
+      "modelOutput": {
+        "type": "text",
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 512
+          }
+        }
+      },
+      "rawResponse": {
+        "type": "text",
+        "index": false
+      },
+      "latency": {
+        "type": "integer"
+      },
+      "isSafe": {
+        "type": "boolean"
+      },
+      "status": {
+        "type": "integer"
+      },
+      "errorMsg": {
+        "type": "text",
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 512
+          }
+        }
+      },
+      "createTime": {
+        "type": "date",
+        "format": "yyyy-MM-dd HH:mm:ss||strict_date_optional_time||epoch_millis"
+      },
+      "updateTime": {
+        "type": "date",
+        "format": "yyyy-MM-dd HH:mm:ss||strict_date_optional_time||epoch_millis"
+      }
+    }
+  },
+  "aliases": {
+    "eval_result_detail": {
+      "is_write_index": true
+    }
+  }
+}

@@ -15,6 +15,7 @@ import com.kant.framework.errorcode.BaseErrorCode;
 import com.kant.framework.exception.ServiceException;
 import com.kant.llm.eval.dataset.dao.entity.DataSetDO;
 import com.kant.llm.eval.dataset.dao.entity.DataSetSampleDO;
+import com.kant.llm.eval.es.service.EvalEsSyncOutboxService;
 import com.kant.llm.eval.pipeline.dao.entity.EvalPipelineNodeDetailDO;
 import com.kant.llm.eval.task.dao.entity.EvalResultDetailDO;
 import com.kant.llm.eval.task.dao.entity.EvalTaskDO;
@@ -42,6 +43,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -82,6 +84,8 @@ public class EvalTaskServiceImpl implements EvalTaskService {
     private final EvalTaskDetailMapper evalTaskDetailMapper;
     private final RedissonClient redissonClient;
     private final MessageQueueProducer messageQueueProducer;
+    private final EvalEsSyncOutboxService evalEsSyncOutboxService;
+    private final TransactionTemplate transactionTemplate;
 
     public EvalTaskServiceImpl(EvalTaskMapper evalTaskMapper,
                                ModelInfoMapper modelInfoMapper,
@@ -91,7 +95,9 @@ public class EvalTaskServiceImpl implements EvalTaskService {
                                EvalResultDetailMapper evalResultDetailMapper,
                                EvalTaskDetailMapper evalTaskDetailMapper,
                                RedissonClient redissonClient,
-                               MessageQueueProducer messageQueueProducer) {
+                               MessageQueueProducer messageQueueProducer,
+                               EvalEsSyncOutboxService evalEsSyncOutboxService,
+                               TransactionTemplate transactionTemplate) {
         this.evalTaskMapper = evalTaskMapper;
         this.modelInfoMapper = modelInfoMapper;
         this.dataSetMapper = dataSetMapper;
@@ -101,6 +107,8 @@ public class EvalTaskServiceImpl implements EvalTaskService {
         this.evalTaskDetailMapper = evalTaskDetailMapper;
         this.redissonClient = redissonClient;
         this.messageQueueProducer = messageQueueProducer;
+        this.evalEsSyncOutboxService = evalEsSyncOutboxService;
+        this.transactionTemplate = transactionTemplate;
     }
 
     @Override
@@ -431,13 +439,27 @@ public class EvalTaskServiceImpl implements EvalTaskService {
      * <p>只更新 PENDING 状态，已自动评分、失败、人工核验的结果保持不变，确保用户可以查看停止前的真实结果。</p>
      */
     private void markPendingResultStopped(Long taskDetailId) {
-        evalResultDetailMapper.update(null, new LambdaUpdateWrapper<EvalResultDetailDO>()
-                .eq(EvalResultDetailDO::getTaskDetailId, taskDetailId)
-                .in(EvalResultDetailDO::getStatus,
-                        EvalResultStatusEnums.PENDING.getCode(),
-                        EvalResultStatusEnums.MODEL_CALLED.getCode())
-                .set(EvalResultDetailDO::getStatus, EvalResultStatusEnums.STOPPED.getCode())
-                .set(EvalResultDetailDO::getErrorMsg, "用户主动终止评测，样本未执行"));
+        transactionTemplate.executeWithoutResult(status -> {
+            List<Long> stoppedResultDetailIds = evalResultDetailMapper.selectList(new LambdaQueryWrapper<EvalResultDetailDO>()
+                            .select(EvalResultDetailDO::getId)
+                            .eq(EvalResultDetailDO::getTaskDetailId, taskDetailId)
+                            .in(EvalResultDetailDO::getStatus,
+                                    EvalResultStatusEnums.PENDING.getCode(),
+                                    EvalResultStatusEnums.MODEL_CALLED.getCode()))
+                    .stream()
+                    .map(EvalResultDetailDO::getId)
+                    .collect(Collectors.toList());
+            int updatedRows = evalResultDetailMapper.update(null, new LambdaUpdateWrapper<EvalResultDetailDO>()
+                    .eq(EvalResultDetailDO::getTaskDetailId, taskDetailId)
+                    .in(EvalResultDetailDO::getStatus,
+                            EvalResultStatusEnums.PENDING.getCode(),
+                            EvalResultStatusEnums.MODEL_CALLED.getCode())
+                    .set(EvalResultDetailDO::getStatus, EvalResultStatusEnums.STOPPED.getCode())
+                    .set(EvalResultDetailDO::getErrorMsg, "用户主动终止评测，样本未执行"));
+            if (updatedRows > 0) {
+                evalEsSyncOutboxService.recordResultDetailUpsertBatch(stoppedResultDetailIds);
+            }
+        });
     }
 
     /**

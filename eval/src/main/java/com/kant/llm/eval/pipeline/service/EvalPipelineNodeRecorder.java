@@ -4,12 +4,14 @@ import cn.hutool.core.util.IdUtil;
 import com.alibaba.fastjson2.JSON;
 import com.kant.llm.common.enums.PipelineNodeCodeEnums;
 import com.kant.llm.common.enums.PipelineNodeStatusEnums;
+import com.kant.llm.eval.es.service.EvalEsSyncOutboxService;
 import com.kant.llm.eval.pipeline.dao.entity.EvalPipelineNodeDetailDO;
 import com.kant.llm.eval.task.dao.entity.EvalResultDetailDO;
 import com.kant.llm.eval.task.dao.entity.EvalTaskDetailDO;
 import com.kant.llm.eval.pipeline.dao.mapper.EvalPipelineNodeDetailMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -25,9 +27,15 @@ import java.time.LocalDateTime;
 public class EvalPipelineNodeRecorder {
 
     private final EvalPipelineNodeDetailMapper evalPipelineNodeDetailMapper;
+    private final EvalEsSyncOutboxService evalEsSyncOutboxService;
+    private final TransactionTemplate transactionTemplate;
 
-    public EvalPipelineNodeRecorder(EvalPipelineNodeDetailMapper evalPipelineNodeDetailMapper) {
+    public EvalPipelineNodeRecorder(EvalPipelineNodeDetailMapper evalPipelineNodeDetailMapper,
+                                    EvalEsSyncOutboxService evalEsSyncOutboxService,
+                                    TransactionTemplate transactionTemplate) {
         this.evalPipelineNodeDetailMapper = evalPipelineNodeDetailMapper;
+        this.evalEsSyncOutboxService = evalEsSyncOutboxService;
+        this.transactionTemplate = transactionTemplate;
     }
 
     /**
@@ -55,7 +63,10 @@ public class EvalPipelineNodeRecorder {
                 .startTime(LocalDateTime.now())
                 .inputSnapshot(toJson(inputSnapshot))
                 .build();
-        evalPipelineNodeDetailMapper.insert(nodeDetail);
+        transactionTemplate.executeWithoutResult(status -> {
+            evalPipelineNodeDetailMapper.insert(nodeDetail);
+            evalEsSyncOutboxService.recordPipelineNodeUpsert(nodeRecordId);
+        });
         log.info("流水线节点开始记录已写入，nodeRecordId: {}, nodeCode: {}, taskDetailId: {}, resultDetailId: {}",
                 nodeRecordId, nodeCode.getCode(), taskDetail.getId(), resultDetail.getId());
         return nodeRecordId;
@@ -119,7 +130,12 @@ public class EvalPipelineNodeRecorder {
                 .nodeResult(toJson(nodeResult))
                 .errorMsg(trimErrorMessage(errorMsg))
                 .build();
-        evalPipelineNodeDetailMapper.updateById(updateEntity);
+        transactionTemplate.executeWithoutResult(transactionStatus -> {
+            int updatedRows = evalPipelineNodeDetailMapper.updateById(updateEntity);
+            if (updatedRows > 0) {
+                evalEsSyncOutboxService.recordPipelineNodeUpsert(nodeRecordId);
+            }
+        });
         log.info("流水线节点记录已更新，nodeRecordId: {}, nodeCode: {}, status: {}, latency: {}",
                 nodeRecordId, current.getNodeCode(), status.getCode(), updateEntity.getLatency());
     }

@@ -4,6 +4,9 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.json.jackson.JacksonJsonpMapper;
 import co.elastic.clients.transport.ElasticsearchTransport;
 import co.elastic.clients.transport.rest_client.RestClientTransport;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.HttpHost;
 import org.apache.http.auth.AuthScope;
@@ -48,8 +51,21 @@ public class InfraElasticsearchConfiguration {
         RestClientBuilder builder = RestClient.builder(HttpHost.create(uris));
         configureAuthenticationAndSsl(builder);
         RestClient restClient = builder.build();
-        ElasticsearchTransport transport = new RestClientTransport(restClient, new JacksonJsonpMapper());
+        ElasticsearchTransport transport = new RestClientTransport(restClient, new JacksonJsonpMapper(buildObjectMapper()));
         return new ElasticsearchClient(transport);
+    }
+
+    /**
+     * 构建 ES Java API Client 使用的 Jackson Mapper。
+     *
+     * <p>默认 JacksonJsonpMapper 内部 ObjectMapper 不一定注册 JavaTimeModule。
+     * 评测结果和流水线节点投影里有 LocalDateTime 字段，如果不注册 JavaTimeModule，
+     * 写入 ES 时会抛出 “Java 8 date/time type not supported by default”。</p>
+     */
+    private ObjectMapper buildObjectMapper() {
+        return new ObjectMapper()
+                .registerModule(new JavaTimeModule())
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     }
 
     private void configureAuthenticationAndSsl(RestClientBuilder builder) {

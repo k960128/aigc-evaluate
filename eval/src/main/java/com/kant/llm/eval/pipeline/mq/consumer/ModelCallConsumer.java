@@ -24,6 +24,7 @@ import com.kant.llm.eval.basesource.dao.entity.MockModelOutputContentDO;
 import com.kant.llm.eval.basesource.dao.entity.ModelInfoDO;
 import com.kant.llm.eval.basesource.dao.mapper.ModelInfoMapper;
 import com.kant.llm.eval.basesource.service.MockModelOutputContentService;
+import com.kant.llm.eval.es.service.EvalEsSyncOutboxService;
 import com.kant.llm.eval.pipeline.mq.message.ModelCallMessage;
 import com.kant.llm.eval.pipeline.mq.message.SafetyEvaluateMessage;
 import com.kant.llm.eval.pipeline.service.EvalPipelineNodeRecorder;
@@ -83,6 +84,7 @@ public class ModelCallConsumer implements RocketMQListener<MessageWrapper<ModelC
     private final MockModelOutputContentService mockModelOutputContentService;
     private final MessageQueueProducer messageQueueProducer;
     private final ModelCallRateLimiter modelCallRateLimiter;
+    private final EvalEsSyncOutboxService evalEsSyncOutboxService;
 
     public ModelCallConsumer(EvalResultDetailMapper evalResultDetailMapper,
                              EvalTaskDetailMapper evalTaskDetailMapper,
@@ -93,7 +95,8 @@ public class ModelCallConsumer implements RocketMQListener<MessageWrapper<ModelC
                              EvalPipelineNodeRecorder evalPipelineNodeRecorder,
                              MockModelOutputContentService mockModelOutputContentService,
                              MessageQueueProducer messageQueueProducer,
-                             ModelCallRateLimiter modelCallRateLimiter) {
+                             ModelCallRateLimiter modelCallRateLimiter,
+                             EvalEsSyncOutboxService evalEsSyncOutboxService) {
         this.evalResultDetailMapper = evalResultDetailMapper;
         this.evalTaskDetailMapper = evalTaskDetailMapper;
         this.modelInfoMapper = modelInfoMapper;
@@ -104,6 +107,7 @@ public class ModelCallConsumer implements RocketMQListener<MessageWrapper<ModelC
         this.mockModelOutputContentService = mockModelOutputContentService;
         this.messageQueueProducer = messageQueueProducer;
         this.modelCallRateLimiter = modelCallRateLimiter;
+        this.evalEsSyncOutboxService = evalEsSyncOutboxService;
     }
 
     @Override
@@ -272,11 +276,17 @@ public class ModelCallConsumer implements RocketMQListener<MessageWrapper<ModelC
     }
 
     private int markResultModelRunning(Long resultDetailId) {
-        return evalResultDetailMapper.update(null, new LambdaUpdateWrapper<EvalResultDetailDO>()
-                .eq(EvalResultDetailDO::getId, resultDetailId)
-                .eq(EvalResultDetailDO::getStatus, EvalResultStatusEnums.PENDING.getCode())
-                .set(EvalResultDetailDO::getStatus, EvalResultStatusEnums.MODEL_RUNNING.getCode())
-                .set(EvalResultDetailDO::getErrorMsg, null));
+        return transactionTemplate.execute(status -> {
+            int updatedRows = evalResultDetailMapper.update(null, new LambdaUpdateWrapper<EvalResultDetailDO>()
+                    .eq(EvalResultDetailDO::getId, resultDetailId)
+                    .eq(EvalResultDetailDO::getStatus, EvalResultStatusEnums.PENDING.getCode())
+                    .set(EvalResultDetailDO::getStatus, EvalResultStatusEnums.MODEL_RUNNING.getCode())
+                    .set(EvalResultDetailDO::getErrorMsg, null));
+            if (updatedRows > 0) {
+                evalEsSyncOutboxService.recordResultDetailUpsert(resultDetailId);
+            }
+            return updatedRows;
+        });
     }
 
     private int markResultModelCalled(Long resultDetailId, ModelResponse modelResponse) {
@@ -288,7 +298,13 @@ public class ModelCallConsumer implements RocketMQListener<MessageWrapper<ModelC
                 .set("latency", toIntegerLatency(modelResponse.getElapsed()))
                 .set("error_msg", null)
                 .set("status", EvalResultStatusEnums.MODEL_CALLED.getCode());
-        return evalResultDetailMapper.update(null, updateWrapper);
+        return transactionTemplate.execute(status -> {
+            int updatedRows = evalResultDetailMapper.update(null, updateWrapper);
+            if (updatedRows > 0) {
+                evalEsSyncOutboxService.recordResultDetailUpsert(resultDetailId);
+            }
+            return updatedRows;
+        });
     }
 
     private void markTaskRunning(EvalTaskDetailDO taskDetail) {
@@ -322,11 +338,16 @@ public class ModelCallConsumer implements RocketMQListener<MessageWrapper<ModelC
     }
 
     private void markResultStopped(Long resultDetailId, String errorMsg) {
-        evalResultDetailMapper.update(null, new LambdaUpdateWrapper<EvalResultDetailDO>()
-                .eq(EvalResultDetailDO::getId, resultDetailId)
-                .notIn(EvalResultDetailDO::getStatus, FINISHED_RESULT_STATUS)
-                .set(EvalResultDetailDO::getStatus, EvalResultStatusEnums.STOPPED.getCode())
-                .set(EvalResultDetailDO::getErrorMsg, trimErrorMessage(errorMsg)));
+        transactionTemplate.executeWithoutResult(status -> {
+            int updatedRows = evalResultDetailMapper.update(null, new LambdaUpdateWrapper<EvalResultDetailDO>()
+                    .eq(EvalResultDetailDO::getId, resultDetailId)
+                    .notIn(EvalResultDetailDO::getStatus, FINISHED_RESULT_STATUS)
+                    .set(EvalResultDetailDO::getStatus, EvalResultStatusEnums.STOPPED.getCode())
+                    .set(EvalResultDetailDO::getErrorMsg, trimErrorMessage(errorMsg)));
+            if (updatedRows > 0) {
+                evalEsSyncOutboxService.recordResultDetailUpsert(resultDetailId);
+            }
+        });
     }
 
     private void markResultFailedAndIncreaseProgress(Long resultDetailId, Long taskDetailId, Exception ex) {
@@ -347,6 +368,7 @@ public class ModelCallConsumer implements RocketMQListener<MessageWrapper<ModelC
                     .set(EvalResultDetailDO::getErrorMsg, updateEntity.getErrorMsg())
                     .set(EvalResultDetailDO::getStatus, updateEntity.getStatus()));
             if (updatedRows > 0) {
+                evalEsSyncOutboxService.recordResultDetailUpsert(resultDetailId);
                 increaseTaskProgress(taskDetailId, true);
             }
         });
