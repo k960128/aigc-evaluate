@@ -19,7 +19,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @RestController
-@RequestMapping("/test")
+@RequestMapping("/eval/test")
 public class TestController {
 
     private final String DEEP_SEEK = "sk-b9a7cb64a3e24c109bfe46214d1ee823";
