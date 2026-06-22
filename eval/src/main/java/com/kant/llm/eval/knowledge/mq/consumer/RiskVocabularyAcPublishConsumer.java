@@ -1,10 +1,10 @@
-package com.kant.llm.eval.pipeline.mq.consumer;
+package com.kant.llm.eval.knowledge.mq.consumer;
 
 import com.kant.framework.idempotent.IdempotentConsume;
 import com.kant.framework.mq.MessageWrapper;
 import com.kant.llm.common.constant.EvalMqTopics;
 import com.kant.llm.eval.knowledge.engine.L1InterceptionEngine;
-import com.kant.llm.eval.pipeline.mq.message.RiskVocabularyAcPublishMessage;
+import com.kant.llm.eval.knowledge.mq.message.RiskVocabularyAcPublishMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.MessageModel;

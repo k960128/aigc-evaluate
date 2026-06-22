@@ -1,7 +1,7 @@
-package com.kant.llm.eval.pipeline.mq.consumer;
+package com.kant.llm.eval.knowledge.mq.consumer;
 
 import com.kant.llm.common.constant.EvalMqTopics;
-import com.kant.llm.eval.pipeline.mq.message.KbSyncEventMessage;
+import com.kant.llm.eval.knowledge.mq.message.KbSyncEventMessage;
 import com.kant.llm.eval.knowledge.service.L2KnowledgeSyncService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
