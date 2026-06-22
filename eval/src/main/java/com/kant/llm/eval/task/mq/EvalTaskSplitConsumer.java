@@ -15,7 +15,7 @@ import com.kant.llm.eval.dataset.dao.mapper.DataSetSampleMapper;
 import com.kant.llm.eval.task.dao.mapper.EvalResultDetailMapper;
 import com.kant.llm.eval.task.dao.mapper.EvalTaskDetailMapper;
 import com.kant.llm.common.constant.EvalMqTopics;
-import com.kant.llm.eval.pipeline.mq.message.EvalSampleExecutionMessage;
+import com.kant.llm.eval.pipeline.mq.message.ModelCallMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
@@ -26,7 +26,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 
-import static com.kant.llm.common.constant.EvalMqTopics.EXECUTION_TOPIC;
+import static com.kant.llm.common.constant.EvalMqTopics.MODEL_CALL_TOPIC;
 
 /**
  * 评测任务批次拆分消费者。
@@ -160,13 +160,13 @@ public class EvalTaskSplitConsumer implements RocketMQListener<MessageWrapper<Ev
      * 将拆分后的结果明细投递到单样本执行 Topic。
      */
     private void sendSampleExecutionMessage(EvalTaskDetailDO taskDetail, EvalResultDetailDO resultDetail) {
-        log.info("准备投递拆分后的单样本执行消息，taskDetailId: {}, resultDetailId: {}, sampleId: {}",
+        log.info("准备投递拆分后的单样本模型调用消息，taskDetailId: {}, resultDetailId: {}, sampleId: {}",
                 taskDetail.getId(), resultDetail.getId(), resultDetail.getSampleId());
         messageQueueProducer.send(MessageSendRequest.builder()
-                .topic(EXECUTION_TOPIC)
+                .topic(MODEL_CALL_TOPIC)
                 .keys(resultDetail.getId().toString())
-                .bizDesc("单样本执行消息")
-                .body(EvalSampleExecutionMessage.builder()
+                .bizDesc("单样本模型调用消息")
+                .body(ModelCallMessage.builder()
                         .taskDetailId(taskDetail.getId())
                         .resultDetailId(resultDetail.getId())
                         .taskId(taskDetail.getTaskId())

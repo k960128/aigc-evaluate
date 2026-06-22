@@ -433,7 +433,9 @@ public class EvalTaskServiceImpl implements EvalTaskService {
     private void markPendingResultStopped(Long taskDetailId) {
         evalResultDetailMapper.update(null, new LambdaUpdateWrapper<EvalResultDetailDO>()
                 .eq(EvalResultDetailDO::getTaskDetailId, taskDetailId)
-                .eq(EvalResultDetailDO::getStatus, EvalResultStatusEnums.PENDING.getCode())
+                .in(EvalResultDetailDO::getStatus,
+                        EvalResultStatusEnums.PENDING.getCode(),
+                        EvalResultStatusEnums.MODEL_CALLED.getCode())
                 .set(EvalResultDetailDO::getStatus, EvalResultStatusEnums.STOPPED.getCode())
                 .set(EvalResultDetailDO::getErrorMsg, "用户主动终止评测，样本未执行"));
     }

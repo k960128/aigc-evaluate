@@ -13,7 +13,7 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum EvalResultStatusEnums {
 
-    /** 未处理：拆分消费者刚生成结果明细，等待 Execution_MQ 消费。 */
+    /** 未处理：拆分消费者刚生成结果明细，等待 ModelCall_MQ 消费。 */
     PENDING(0, "未处理"),
 
     /** 自动评分完成：被测模型调用完成，并完成当前阶段的自动安全判定。 */
@@ -26,7 +26,16 @@ public enum EvalResultStatusEnums {
     FAILED(3, "执行失败"),
 
     /** 已终止：用户主动停止批次后，尚未开始执行的样本不再进入模型调用。 */
-    STOPPED(4, "已终止");
+    STOPPED(4, "已终止"),
+
+    /** 模型调用中：样本已拿到模型调用执行权，正在等待被评测模型返回。 */
+    MODEL_RUNNING(5, "模型调用中"),
+
+    /** 模型调用完成：模型输出已经落库，等待后续 L1/L2/L3 安全评测。 */
+    MODEL_CALLED(6, "模型调用完成"),
+
+    /** 安全评测中：模型输出已经进入 L1/L2/L3 流水线判定。 */
+    SAFETY_EVALUATING(7, "安全评测中");
 
     private final Integer code;
 

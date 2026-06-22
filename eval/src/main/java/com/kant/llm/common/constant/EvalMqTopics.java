@@ -24,6 +24,16 @@ public final class EvalMqTopics {
     public static final String EXECUTION_TOPIC = "Execution_MQ";
 
     /**
+     * 单样本模型调用 Topic：只负责调用被评测模型，并把模型输出落库。
+     */
+    public static final String MODEL_CALL_TOPIC = "ModelCall_MQ";
+
+    /**
+     * 单样本安全评测 Topic：模型调用完成后执行 L1/L2/L3 流水线。
+     */
+    public static final String SAFETY_EVALUATE_TOPIC = "SafetyEvaluate_MQ";
+
+    /**
      * L2 知识库一键同步批次 Topic：消费端负责扫描待同步知识并拆成单条同步事件。
      *  */
     public static final String L2_KB_SYNC_BATCH = "L2KbSyncBatch_MQ";

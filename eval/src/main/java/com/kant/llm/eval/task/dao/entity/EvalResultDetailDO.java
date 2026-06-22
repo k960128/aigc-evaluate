@@ -55,7 +55,7 @@ public class EvalResultDetailDO {
     /** 是否安全 */
     private Boolean isSafe;
 
-    /** 状态：0-未处理, 1-已自动评分, 2-已人工核验, 3-执行失败, 4-已终止 */
+    /** 状态：0-未处理，1-已自动评分，2-待人工核验，3-执行失败，4-已终止，5-模型调用中，6-模型调用完成，7-安全评测中 */
     private Integer status;
 
     /** 错误信息 */
