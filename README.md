@@ -2,7 +2,7 @@
 
 `aigc-evaluate` 是一个大模型安全评测平台后端项目。项目用于管理被测模型、评测数据集、风险分类、L1 风险词库和 L2 攻击特征知识库，并通过 RocketMQ 异步执行评测任务。
 
-当前评测主链路已经形成 `MODEL_CALL -> L1 -> L2 -> L3` 的分级安全判定流水线：系统先批量调用被测大模型，再记录样本级输出，随后依次经过 L1 AC 自动机字面量拦截、L2 ES + PGVector 双路召回判定、L3 Judge 模型裁决，最后写回样本结果、流水线节点日志和批次进度。
+当前评测主链路已经形成 `ModelCall_MQ -> SafetyEvaluate_MQ` 的两段式异步流水线：第一段只负责按模型并发限流调用被测大模型并落库输出，第二段读取已落库输出后依次经过 L1 AC 自动机字面量拦截、L2 ES + PGVector 双路召回判定、L3 Judge 模型裁决，最后写回样本结果、流水线节点日志和批次进度。
 
 ## 核心能力
 
@@ -14,7 +14,7 @@
 | L1 风险词库 | 管理风险关键词，并通过 Redis manifest/shard 快照、节点心跳和 ACK 协调发布 AC 自动机版本 |
 | L2 攻击特征知识库 | 管理攻击特征和风险小类判定规则，支持异步同步到 Elasticsearch 和 PGVector |
 | 评测任务管理 | 支持任务分页、提交、停止、状态查询、批次查询、样本结果查询和流水线日志查询 |
-| 异步任务执行 | 使用 RocketMQ 解耦任务拆分、单样本执行、知识库同步和 AC 快照发布 |
+| 异步任务执行 | 使用 RocketMQ 解耦任务拆分、模型调用、安全评测、知识库同步和 AC 快照发布 |
 | 模型调用策略 | 通过 `ModelClientStrategy` 接入 OpenAI、DeepSeek、Qwen、Spark、GLM、GPT、Mock 等厂商策略 |
 | L1 字面量拦截 | 使用 Aho-Corasick Double Array Trie 对模型输出进行高性能风险词判定 |
 | L2 双路召回判定 | 使用 ES 字面召回、PGVector 语义召回、RRF 融合、Rerank 和阈值路由输出安全决策 |
@@ -110,30 +110,36 @@ flowchart TD
 
     Service --> Producer["RocketMQ Producer"]
     Producer --> SplitMQ["EvalTaskSplit_MQ"]
-    Producer --> ExecMQ["Execution_MQ"]
+    Producer --> ModelCallMQ["ModelCall_MQ"]
     Producer --> KbBatchMQ["L2KbSyncBatch_MQ"]
     Producer --> AcPublishMQ["RiskVocabularyAcPublish_MQ"]
 
     SplitMQ --> SplitConsumer["EvalTaskSplitConsumer"]
     SplitConsumer --> MySQL
-    SplitConsumer --> ExecMQ
+    SplitConsumer --> ModelCallMQ
 
-    ExecMQ --> ExecConsumer["EvalSampleExecutionConsumer"]
-    ExecConsumer --> ModelFactory["ModelClientStrategyFactory"]
+    ModelCallMQ --> ModelCallConsumer["ModelCallConsumer"]
+    ModelCallConsumer --> Redis
+    ModelCallConsumer --> ModelFactory["ModelClientStrategyFactory"]
     ModelFactory --> TargetModel["Target LLM API"]
+    ModelCallConsumer --> Recorder["EvalPipelineNodeRecorder"]
+    ModelCallConsumer --> MySQL
+    ModelCallConsumer --> SafetyMQ
 
-    ExecConsumer --> L1["L1InterceptionEngine"]
+    SafetyMQ --> SafetyConsumer["SafetyEvaluateConsumer"]
+    SafetyConsumer --> Redis
+    SafetyConsumer --> L1["L1InterceptionEngine"]
     L1 --> Redis[("Redis AC Snapshot")]
 
-    ExecConsumer --> L2["L2EvaluationService"]
+    SafetyConsumer --> L2["L2EvaluationService"]
     L2 --> ES["Elasticsearch"]
     L2 --> PGVector["PGVector"]
     L2 --> Reranker["RerankService"]
 
-    ExecConsumer --> L3["L3EvaluationService"]
+    SafetyConsumer --> L3["L3EvaluationService"]
     L3 --> Judge["JudgeModelClient"]
 
-    ExecConsumer --> Recorder["EvalPipelineNodeRecorder"]
+    SafetyConsumer --> Recorder
     Recorder --> MySQL
 
     KbBatchMQ --> KbSync["L2KnowledgeSyncService"]
@@ -154,8 +160,10 @@ sequenceDiagram
     participant S as EvalTaskServiceImpl
     participant MQ1 as EvalTaskSplit_MQ
     participant Split as EvalTaskSplitConsumer
-    participant MQ2 as Execution_MQ
-    participant Exec as EvalSampleExecutionConsumer
+    participant MQ2 as ModelCall_MQ
+    participant ModelCall as ModelCallConsumer
+    participant MQ3 as SafetyEvaluate_MQ
+    participant Safety as SafetyEvaluateConsumer
     participant Model as Target LLM
     participant L1 as L1InterceptionEngine
     participant L2 as L2EvaluationService
@@ -168,32 +176,36 @@ sequenceDiagram
     MQ1->>Split: consume task detail
     Split->>DB: create eval_result_detail(PENDING)
     Split->>DB: mark task detail READY
-    Split->>MQ2: publish sample execution messages
-    MQ2->>Exec: consume sample execution
-    Exec->>DB: mark task detail RUNNING
-    Exec->>Model: call target model
-    Model-->>Exec: model response
-    Exec->>DB: record MODEL_CALL node
-    Exec->>L1: analyze(modelOutput)
-    L1-->>Exec: blocked or warning tags
-    Exec->>L2: evaluate if L1 passed
-    L2-->>Exec: UNSAFE / SAFE / DEGRADED_SAFE / PASS_TO_L3
-    Exec->>L3: judge if L2 PASS_TO_L3
-    L3-->>Exec: UNSAFE / SAFE / MANUAL_REVIEW
-    Exec->>DB: update result detail and pipeline logs
-    Exec->>DB: increase finished/failed count
+    Split->>MQ2: publish model call messages
+    MQ2->>ModelCall: consume model call
+    ModelCall->>DB: mark MODEL_RUNNING
+    ModelCall->>Model: call target model with Redisson semaphore
+    Model-->>ModelCall: model response
+    ModelCall->>DB: record MODEL_CALL node and mark MODEL_CALLED
+    ModelCall->>MQ3: publish safety evaluate message
+    MQ3->>Safety: consume safety evaluate
+    Safety->>DB: mark SAFETY_EVALUATING
+    Safety->>L1: analyze(modelOutput)
+    L1-->>Safety: blocked or warning tags
+    Safety->>L2: evaluate if L1 passed
+    L2-->>Safety: UNSAFE / SAFE / DEGRADED_SAFE / PASS_TO_L3
+    Safety->>L3: judge if L2 PASS_TO_L3
+    L3-->>Safety: UNSAFE / SAFE / MANUAL_REVIEW
+    Safety->>DB: update result detail and pipeline logs
+    Safety->>DB: increase finished/failed count
 ```
 
 流程说明：
 
 1. 提交任务后，系统为已有 `eval_task` 创建一次执行批次 `eval_task_detail`，状态为 `CREATING`。
 2. 任务拆分消费者读取 `dataset_sample`，为每条样本生成 `eval_result_detail`，状态为 `PENDING`。
-3. 批次进入 `READY` 后，系统逐条发送 `Execution_MQ` 单样本执行消息。
-4. 单样本执行消费者先调用被测模型，并记录 `MODEL_CALL` 节点。
-5. 模型输出进入 L1。高确定性风险词命中时直接阻断，未阻断时 warning 标签会传给 L2。
-6. L2 构造查询文本，执行 ES + PGVector 双路召回、RRF 融合、Rerank 和风险小类聚合，输出 `UNSAFE`、`SAFE`、`DEGRADED_SAFE` 或 `PASS_TO_L3`。
-7. L3 只处理 L2 模糊区，加载 `risk_detail_rule` 构造 Judge Prompt，并通过真实或降级 Judge Client 输出最终判定。
-8. 系统写回样本结果、节点日志，并用 SQL 原子递增推进批次进度；所有样本完成后将批次置为 `COMPLETED` 或 `ERROR`。
+3. 批次进入 `READY` 后，系统逐条发送 `ModelCall_MQ` 模型调用消息。
+4. `ModelCallConsumer` 使用结果明细锁和模型维度 Redisson 分布式信号量调用被测模型，记录 `MODEL_CALL` 节点，并把样本状态推进到 `MODEL_CALLED`。
+5. 模型调用完成后投递 `SafetyEvaluate_MQ`，`SafetyEvaluateConsumer` 读取已落库模型输出并把样本置为 `SAFETY_EVALUATING`。
+6. 模型输出进入 L1。高确定性风险词命中时直接阻断，未阻断时 warning 标签会传给 L2。
+7. L2 构造查询文本，执行 ES + PGVector 双路召回、RRF 融合、Rerank 和风险小类聚合，输出 `UNSAFE`、`SAFE`、`DEGRADED_SAFE` 或 `PASS_TO_L3`。
+8. L3 只处理 L2 模糊区，加载 `risk_detail_rule` 构造 Judge Prompt，并通过真实或降级 Judge Client 输出最终判定。
+9. 系统写回样本结果、节点日志，并用 SQL 原子递增推进批次进度；所有样本完成后将批次置为 `COMPLETED` 或 `ERROR`。
 
 ## 知识库同步流程
 
@@ -287,7 +299,7 @@ mvn test -pl eval -Dtest=ModelClientStrategyTest#test
 
 - MySQL：保存模型、数据集、任务、批次、结果、风险分类、知识库和同步事件等业务数据。
 - Redis：用于 Redisson 分布式锁、AC 自动机快照、节点版本指针和 Sa-Token 支持。
-- RocketMQ：用于任务拆分、单样本执行、L2 知识库同步、AC 快照发布。
+- RocketMQ：用于任务拆分、模型调用、安全评测、L2 知识库同步、AC 快照发布。
 - Elasticsearch：用于 L2 攻击特征字面召回。
 - PostgreSQL + PGVector：用于 L2 攻击特征语义召回。
 - 外部被测模型 API：用于模型连通性测试和评测执行。
