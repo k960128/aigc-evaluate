@@ -3,10 +3,13 @@ package com.kant.llm.agent.service.impl;
 import com.kant.llm.agent.constant.ChatSource;
 import com.kant.llm.agent.service.ChatApplicationService;
 import com.kant.llm.agent.service.ChatConversationService;
+import com.kant.llm.agent.service.ChatMessageService;
 import com.kant.llm.agent.tools.TitleSummaryService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.Map;
 
@@ -14,12 +17,15 @@ import java.util.Map;
 @Service
 public class ChatApplicationServiceImpl implements ChatApplicationService {
 
-    private final ChatConversationService chatConversationService;
+    private final ChatMessageService chatMessageService;
     private final TitleSummaryService titleSummaryService;
+    private final ChatConversationService chatConversationService;
 
     public ChatApplicationServiceImpl(ChatConversationService chatConversationService,
+                                      ChatMessageService chatMessageService,
                                       TitleSummaryService titleSummaryService) {
         this.chatConversationService = chatConversationService;
+        this.chatMessageService = chatMessageService;
         this.titleSummaryService = titleSummaryService;
     }
 
@@ -63,6 +69,16 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
             finalConversationId = conversationId;
         }
 
-        return null;
+        // 2. 保存用户消息
+        String messageId = chatMessageService.saveUserMessage(finalConversationId, content);
+        log.info("保存用户消息: messageId={}, conversationId={}, content={}", messageId, finalConversationId, content);
+
+        // 3. 流式返回：先发送意图识别进度，再执行意图识别
+        return Flux.just("[PROGRESS]:正在识别您的意图...")
+                .concatWith(Flux.just(messageId))
+                .subscribeOn(Schedulers.boundedElastic())
+                .doOnError(e ->  log.error("流式对话异常: conversationId={}", finalConversationId, e))
+                // 6. 在流末尾追加一条 [DONE] 事件，携带 conversationId
+                .concatWith(Mono.just("[DONE]:" + finalConversationId));
     }
 }
