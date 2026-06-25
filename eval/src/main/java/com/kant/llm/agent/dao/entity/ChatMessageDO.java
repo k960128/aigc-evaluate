@@ -16,7 +16,7 @@ import java.util.Map;
  */
 @Getter
 @Setter
-@TableName("chat_conversation")
+@TableName("chat_message")
 public class ChatMessageDO {
     /**
      * 主键ID
