@@ -75,7 +75,10 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
 
         // 3. 流式返回：先发送意图识别进度，再执行意图识别
         return Flux.just("[PROGRESS]:正在识别您的意图...")
-                .concatWith(Flux.just(messageId))
+                .concatWith(Flux.concat(
+                        Flux.just("[PROGRESS]:正在生成回答..."),
+                        Flux.just("balibajiasdofjoewfgenwgojoiejriojgog")
+                ))
                 .subscribeOn(Schedulers.boundedElastic())
                 .doOnError(e ->  log.error("流式对话异常: conversationId={}", finalConversationId, e))
                 // 6. 在流末尾追加一条 [DONE] 事件，携带 conversationId
