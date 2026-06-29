@@ -4,6 +4,7 @@ import com.kant.llm.agent.ai.model.IntentRecognitionResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.zhipuai.ZhiPuAiChatModel;
 import org.springframework.ai.zhipuai.ZhiPuAiChatOptions;
 import org.springframework.ai.zhipuai.api.ZhiPuAiApi;
@@ -241,30 +242,17 @@ public class IntentRecognitionService {
 
     private final ChatClient chatClient;
 
-    public IntentRecognitionService() {
-        this.chatClient = buildChatClient();
+    public IntentRecognitionService(ChatClient chatClient) {
+        this.chatClient = chatClient;
     }
 
+
     public IntentRecognitionResult chat(String query) {
-        return chatClient.prompt()
+        return chatClient
+                .prompt()
+                .system(INTENT_RECOGNITION_NEW_PROMPT)
                 .user(u -> u.text(query))
                 .call().entity(IntentRecognitionResult.class);
     }
 
-    private ChatClient buildChatClient() {
-
-        ZhiPuAiChatModel chatModel = new ZhiPuAiChatModel(ZhiPuAiApi.builder()
-                .apiKey("bae3e679181f4b659fe87ad698ff89d2.HlZWH3hYAesVxxwk")
-                .build(),
-                ZhiPuAiChatOptions.builder()
-                        .model("GLM-4.7-Flash")
-                        .temperature(0.7)
-                        .thinking(ZhiPuAiApi.ChatCompletionRequest.Thinking.enabled()) // 开启思考
-                        .build());
-        return ChatClient
-                .builder(chatModel)
-                .defaultSystem(INTENT_RECOGNITION_NEW_PROMPT)
-                .defaultAdvisors(new SimpleLoggerAdvisor())
-                .build();
-    }
 }

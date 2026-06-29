@@ -1,4 +1,4 @@
-package com.kant.llm.agent.ai.tools;
+package com.kant.llm.agent.ai.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -12,12 +12,12 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-public class TitleSummaryTool {
+public class TitleSummaryService {
 
     private final ChatClient chatClient;
 
-    public TitleSummaryTool() {
-        this.chatClient = buildChatClient();
+    public TitleSummaryService(ChatClient chatClient) {
+        this.chatClient = chatClient;
     }
 
     public String generateTitle(String userQuestion) {
@@ -26,17 +26,5 @@ public class TitleSummaryTool {
                 .user(u -> u.text("请根据以下用户问题生成会话标题：{question}").param("question", userQuestion))
                 .call()
                 .content();
-    }
-
-    private ChatClient buildChatClient() {
-        ZhiPuAiChatModel chatModel = new ZhiPuAiChatModel(ZhiPuAiApi.builder()
-                .apiKey("bae3e679181f4b659fe87ad698ff89d2.HlZWH3hYAesVxxwk")
-                .build(),
-                ZhiPuAiChatOptions.builder()
-                        .model("GLM-4.7-Flash")
-                        .temperature(0.7)
-                        .thinking(ZhiPuAiApi.ChatCompletionRequest.Thinking.disabled()) // 关闭思考
-                        .build());
-        return ChatClient.builder(chatModel).build();
     }
 }

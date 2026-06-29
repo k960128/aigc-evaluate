@@ -4,7 +4,7 @@ import com.kant.llm.agent.chat.constant.ChatSource;
 import com.kant.llm.agent.chat.service.ChatApplicationService;
 import com.kant.llm.agent.chat.service.ChatConversationService;
 import com.kant.llm.agent.chat.service.ChatMessageService;
-import com.kant.llm.agent.ai.tools.TitleSummaryTool;
+import com.kant.llm.agent.ai.service.TitleSummaryService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -16,15 +16,15 @@ import reactor.core.scheduler.Schedulers;
 public class ChatApplicationServiceImpl implements ChatApplicationService {
 
     private final ChatMessageService chatMessageService;
-    private final TitleSummaryTool titleSummaryTool;
+    private final TitleSummaryService titleSummaryService;
     private final ChatConversationService chatConversationService;
 
     public ChatApplicationServiceImpl(ChatConversationService chatConversationService,
                                       ChatMessageService chatMessageService,
-                                      TitleSummaryTool titleSummaryTool) {
+                                      TitleSummaryService titleSummaryService) {
         this.chatConversationService = chatConversationService;
         this.chatMessageService = chatMessageService;
-        this.titleSummaryTool = titleSummaryTool;
+        this.titleSummaryService = titleSummaryService;
     }
 
     /**
@@ -55,7 +55,7 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
             // 异步：用虚拟线程调用 LLM 生成摘要标题，完成后回写到数据库
             Thread.ofVirtual().name("title-summary-" + finalConversationId).start(() -> {
                 try {
-                    String aiTitle = titleSummaryTool.generateTitle(content);
+                    String aiTitle = titleSummaryService.generateTitle(content);
                     Boolean respFlag = chatConversationService.updateTitle(finalConversationId, aiTitle);
                     log.info("异步标题更新完成: respFlag={}, conversationId={}, title={}", respFlag, finalConversationId, aiTitle);
                 } catch (Exception e) {
