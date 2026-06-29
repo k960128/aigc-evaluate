@@ -1,5 +1,9 @@
 package com.kant.llm.agent.chat.service.impl;
 
+import com.kant.llm.agent.ai.model.IntentRecognitionResult;
+import com.kant.llm.agent.ai.service.CommonChatService;
+import com.kant.llm.agent.ai.service.IntentRecognitionService;
+import com.kant.llm.agent.ai.service.QueryTransformerService;
 import com.kant.llm.agent.chat.constant.ChatSource;
 import com.kant.llm.agent.chat.service.ChatApplicationService;
 import com.kant.llm.agent.chat.service.ChatConversationService;
@@ -11,20 +15,32 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.util.List;
+import java.util.function.Consumer;
+
 @Slf4j
 @Service
 public class ChatApplicationServiceImpl implements ChatApplicationService {
 
+    private final CommonChatService commonChatService;
     private final ChatMessageService chatMessageService;
     private final TitleSummaryService titleSummaryService;
     private final ChatConversationService chatConversationService;
+    private final IntentRecognitionService intentRecognitionService;
+    private final QueryTransformerService queryTransformerService;
 
     public ChatApplicationServiceImpl(ChatConversationService chatConversationService,
                                       ChatMessageService chatMessageService,
-                                      TitleSummaryService titleSummaryService) {
+                                      TitleSummaryService titleSummaryService,
+                                      CommonChatService commonChatService,
+                                      IntentRecognitionService intentRecognitionService,
+                                      QueryTransformerService queryTransformerService) {
         this.chatConversationService = chatConversationService;
         this.chatMessageService = chatMessageService;
         this.titleSummaryService = titleSummaryService;
+        this.commonChatService = commonChatService;
+        this.intentRecognitionService = intentRecognitionService;
+        this.queryTransformerService = queryTransformerService;
     }
 
     /**
@@ -70,16 +86,25 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
         // 2. 保存用户消息
         String messageId = chatMessageService.saveUserMessage(finalConversationId, content);
         log.info("保存用户消息: messageId={}, conversationId={}, content={}", messageId, finalConversationId, content);
+        String assistantMessageId = chatMessageService.saveAssistantMessage(finalConversationId);
+        // 3. 意图识别
+        IntentRecognitionResult recognitionResult = intentRecognitionService.chat(content);
+        // 4. 如果用户问题不相关，调用一个通用LLM做对话
+        if (!recognitionResult.related()) {
+            return commonChatService.chatStream(content)
+                    .concatWith(Flux.just("[DONE]:" + finalConversationId));
+        }
+        return Flux.just("[DONE]:" + finalConversationId);
 
-        // 3. 流式返回：先发送意图识别进度，再执行意图识别
-        return Flux.just("[PROGRESS]:正在识别您的意图...")
-                .concatWith(Flux.concat(
-                        Flux.just("[PROGRESS]:正在生成回答..."),
-                        Flux.just("balibajiasdofjoewfgenwgojoiejriojgog")
-                ))
-                .subscribeOn(Schedulers.boundedElastic())
-                .doOnError(e ->  log.error("流式对话异常: conversationId={}", finalConversationId, e))
-                // 6. 在流末尾追加一条 [DONE] 事件，携带 conversationId
-                .concatWith(Mono.just("[DONE]:" + finalConversationId));
+//        // 3. 流式返回：先发送意图识别进度，再执行意图识别
+//        return Flux.just("[PROGRESS]:正在识别您的意图...")
+//                .concatWith(Flux.concat(
+//                        Flux.just("[PROGRESS]:正在生成回答..."),
+//                        Flux.just("balibajiasdofjoewfgenwgojoiejriojgog")
+//                ))
+//                .subscribeOn(Schedulers.boundedElastic())
+//                .doOnError(e ->  log.error("流式对话异常: conversationId={}", finalConversationId, e))
+//                // 6. 在流末尾追加一条 [DONE] 事件，携带 conversationId
+//                .concatWith(Mono.just("[DONE]:" + finalConversationId));
     }
 }

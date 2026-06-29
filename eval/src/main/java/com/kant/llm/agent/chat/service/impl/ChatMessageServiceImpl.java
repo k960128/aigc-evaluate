@@ -1,5 +1,6 @@
 package com.kant.llm.agent.chat.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.kant.llm.agent.chat.constant.ChatMessageType;
 import com.kant.llm.agent.chat.dao.entity.ChatMessageDO;
@@ -26,6 +27,28 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
         message.setConversationId(conversationId);
         message.setType(ChatMessageType.USER);
         message.setContent(content);
+        message.setCreateTime(LocalDateTime.now());
+
+        this.save(message);
+        return messageId;
+    }
+
+    @Override
+    public void updateTransformContent(String messageId, String transformContent) {
+        ChatMessageDO update = new ChatMessageDO();
+        update.setTransformContent(transformContent);
+        this.update(update, new LambdaQueryWrapper<ChatMessageDO>()
+                .eq(ChatMessageDO::getMessageId, messageId));
+    }
+
+    @Override
+    public String saveAssistantMessage(String conversationId) {
+        String messageId = UUID.randomUUID().toString().replace("-", "");
+
+        ChatMessageDO message = new ChatMessageDO();
+        message.setMessageId(messageId);
+        message.setConversationId(conversationId);
+        message.setType(ChatMessageType.ASSISTANT);
         message.setCreateTime(LocalDateTime.now());
 
         this.save(message);
