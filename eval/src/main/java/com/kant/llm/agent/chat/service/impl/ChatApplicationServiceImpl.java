@@ -3,7 +3,6 @@ package com.kant.llm.agent.chat.service.impl;
 import com.kant.llm.agent.ai.model.IntentRecognitionResult;
 import com.kant.llm.agent.ai.service.CommonChatService;
 import com.kant.llm.agent.ai.service.IntentRecognitionService;
-import com.kant.llm.agent.ai.service.QueryTransformerService;
 import com.kant.llm.agent.chat.constant.ChatSource;
 import com.kant.llm.agent.chat.service.ChatApplicationService;
 import com.kant.llm.agent.chat.service.ChatConversationService;
@@ -12,11 +11,6 @@ import com.kant.llm.agent.ai.service.TitleSummaryService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
-
-import java.util.List;
-import java.util.function.Consumer;
 
 @Slf4j
 @Service
@@ -27,20 +21,17 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
     private final TitleSummaryService titleSummaryService;
     private final ChatConversationService chatConversationService;
     private final IntentRecognitionService intentRecognitionService;
-    private final QueryTransformerService queryTransformerService;
 
     public ChatApplicationServiceImpl(ChatConversationService chatConversationService,
                                       ChatMessageService chatMessageService,
                                       TitleSummaryService titleSummaryService,
                                       CommonChatService commonChatService,
-                                      IntentRecognitionService intentRecognitionService,
-                                      QueryTransformerService queryTransformerService) {
+                                      IntentRecognitionService intentRecognitionService) {
         this.chatConversationService = chatConversationService;
         this.chatMessageService = chatMessageService;
         this.titleSummaryService = titleSummaryService;
         this.commonChatService = commonChatService;
         this.intentRecognitionService = intentRecognitionService;
-        this.queryTransformerService = queryTransformerService;
     }
 
     /**
