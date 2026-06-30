@@ -1,6 +1,9 @@
 package com.kant.llm.examples.controller;
 
 import com.alibaba.fastjson2.JSON;
+import com.kant.llm.agent.ai.model.IntentRecognitionResult;
+import com.kant.llm.agent.ai.service.IntentRecognitionService;
+import com.kant.llm.agent.ai.service.PromptService;
 import com.kant.llm.agent.chat.service.ChatMessageService;
 import com.kant.llm.rag.moduler.EvaSqlDatabaseContentRetriever;
 import com.kant.llm.rag.moduler.EvalQueryRouter;
@@ -29,6 +32,8 @@ public class ExamplesQueryTransformerController {
     private final ChatMessageService chatMessageService;
     private final ChatClient chatClient;
     private final VectorStore vectorStore;
+    private final IntentRecognitionService intentRecognitionService;
+    private final PromptService promptService;
 
     @GetMapping("/testTransformQuery")
     public String transformQuery(@RequestParam("query") String query) {
@@ -50,5 +55,11 @@ public class ExamplesQueryTransformerController {
         EvalQueryRouter evalQueryRouter = new EvalQueryRouter(documentRetrievers, chatClient);
         List<DocumentRetriever> route = evalQueryRouter.route(new Query(query));
         return JSON.toJSONString(route);
+    }
+
+    @GetMapping("testPromptRouter")
+    public String testPromptRouter(String query) {
+        IntentRecognitionResult intentRecognitionResult = intentRecognitionService.chat(query);
+        return promptService.getPrompt(intentRecognitionResult);
     }
 }
