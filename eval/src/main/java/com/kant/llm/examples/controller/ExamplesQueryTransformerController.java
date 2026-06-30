@@ -18,8 +18,6 @@ import java.util.UUID;
 @RequestMapping("/examples/queryTransformer")
 @RequiredArgsConstructor
 public class ExamplesQueryTransformerController {
-
-    private final QueryTransformerService queryTransformerService;
     private final ChatMessageService chatMessageService;
     private final ChatClient chatClient;
 
