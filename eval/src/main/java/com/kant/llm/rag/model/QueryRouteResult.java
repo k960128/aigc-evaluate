@@ -7,8 +7,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
  * @param strategy
  * @param confidence
  * @param reasoning
- * @author Hollis
- */
+ * */
 public record QueryRouteResult(
         @JsonPropertyDescription("用户问题的核心意图，仅使用以下三个字符串值：relational_db、graph_db、knowledge_base") String intent,
         @JsonPropertyDescription("推荐的查询策略") String strategy,
