@@ -1,37 +1,76 @@
 package com.kant.llm.agent.chat.service.impl;
 
+import com.alibaba.cloud.ai.advisor.RetrievalRerankAdvisor;
+import com.kant.llm.agent.ai.model.ChatParam;
 import com.kant.llm.agent.ai.model.IntentRecognitionResult;
 import com.kant.llm.agent.ai.service.CommonChatService;
 import com.kant.llm.agent.ai.service.IntentRecognitionService;
+import com.kant.llm.agent.ai.service.PromptService;
 import com.kant.llm.agent.chat.constant.ChatSource;
 import com.kant.llm.agent.chat.service.ChatApplicationService;
 import com.kant.llm.agent.chat.service.ChatConversationService;
 import com.kant.llm.agent.chat.service.ChatMessageService;
 import com.kant.llm.agent.ai.service.TitleSummaryService;
+import com.kant.llm.rag.moduler.EvaSqlDatabaseContentRetriever;
+import com.kant.llm.rag.moduler.EvalQueryRouter;
+import com.kant.llm.rag.moduler.EvalQueryTransformer;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.prompt.PromptTemplate;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.rag.Query;
+import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
+import org.springframework.ai.rag.generation.augmentation.ContextualQueryAugmenter;
+import org.springframework.ai.rag.generation.augmentation.QueryAugmenter;
+import org.springframework.ai.rag.retrieval.join.ConcatenationDocumentJoiner;
+import org.springframework.ai.rag.retrieval.join.DocumentJoiner;
+import org.springframework.ai.rag.retrieval.search.DocumentRetriever;
+import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
 public class ChatApplicationServiceImpl implements ChatApplicationService {
 
+
+    private final ChatClient chatClient;
+    private final VectorStore vectorStore;
+    private final PromptService promptService;
     private final CommonChatService commonChatService;
     private final ChatMessageService chatMessageService;
     private final TitleSummaryService titleSummaryService;
     private final ChatConversationService chatConversationService;
     private final IntentRecognitionService intentRecognitionService;
 
-    public ChatApplicationServiceImpl(ChatConversationService chatConversationService,
+    private final ChatMemory examplesChatMemory;
+
+    public ChatApplicationServiceImpl(ChatClient chatClient,
+                                      VectorStore vectorStore,
+                                      PromptService promptService,
+                                      ChatConversationService chatConversationService,
                                       ChatMessageService chatMessageService,
                                       TitleSummaryService titleSummaryService,
                                       CommonChatService commonChatService,
-                                      IntentRecognitionService intentRecognitionService) {
+                                      IntentRecognitionService intentRecognitionService,
+                                      ChatMemory examplesChatMemory) {
+        this.chatClient = chatClient;
+        this.vectorStore = vectorStore;
+        this.promptService = promptService;
         this.chatConversationService = chatConversationService;
         this.chatMessageService = chatMessageService;
         this.titleSummaryService = titleSummaryService;
         this.commonChatService = commonChatService;
         this.intentRecognitionService = intentRecognitionService;
+        this.examplesChatMemory = examplesChatMemory;
     }
 
     /**
@@ -79,13 +118,14 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
         log.info("保存用户消息: messageId={}, conversationId={}, content={}", messageId, finalConversationId, content);
         String assistantMessageId = chatMessageService.saveAssistantMessage(finalConversationId);
         // 3. 意图识别
-        IntentRecognitionResult recognitionResult = intentRecognitionService.chat(content);
+        IntentRecognitionResult intentRecognitionResult = intentRecognitionService.chat(content);
         // 4. 如果用户问题不相关，调用一个通用LLM做对话
-        if (!recognitionResult.related()) {
+        if (!intentRecognitionResult.related()) {
             return commonChatService.chatStream(content)
                     .concatWith(Flux.just("[DONE]:" + finalConversationId));
+        } else {
+            return ragChat(new ChatParam(userId, finalConversationId, messageId, content, assistantMessageId, intentRecognitionResult, chatSource));
         }
-        return Flux.just("[DONE]:" + finalConversationId);
 
 //        // 3. 流式返回：先发送意图识别进度，再执行意图识别
 //        return Flux.just("[PROGRESS]:正在识别您的意图...")
@@ -97,5 +137,77 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
 //                .doOnError(e ->  log.error("流式对话异常: conversationId={}", finalConversationId, e))
 //                // 6. 在流末尾追加一条 [DONE] 事件，携带 conversationId
 //                .concatWith(Mono.just("[DONE]:" + finalConversationId));
+    }
+
+
+    /**
+     * RAG 流式对话。
+     * <p>
+     * 1. 根据意图识别结果，判断是否需要车辆信息
+     * 2. 如果车辆信息不完善，则返回车辆信息不完善提示
+     * 3. 根据意图识别结果，判断是否需要车辆信息
+     * </p>
+     */
+    public Flux<String> ragChat(ChatParam chatParam) {
+        // 1. 构建查询转换器
+        EvalQueryTransformer evalQueryTransformer = new EvalQueryTransformer(chatClient, chatParam.messageId());
+
+        // 2. 多检索器路由
+        EvalQueryRouter evalQueryRouter = new EvalQueryRouter(buildRoutingRetrievers(), chatClient);
+
+        // 4. 获取业务系统提示词
+        String prompt = promptService.getPrompt(chatParam.intentRecognitionResult());
+
+        // 5. 聚合-重排序+RRF
+        DocumentJoiner documentJoiner = new ConcatenationDocumentJoiner();
+        Map<Query, List<List<Document>>> documentsForQuery = new HashMap<>();
+        documentsForQuery.put(new Query("asdasdasd"), new ArrayList<>());
+        documentJoiner.join(documentsForQuery);
+
+        // 5. 上下文的注入
+        QueryAugmenter queryAugmenter = ContextualQueryAugmenter.builder()
+                .allowEmptyContext(true)
+                .emptyContextPromptTemplate(new PromptTemplate("请回答以下用户问题"))
+                .build();
+
+        // 6. 构建检索增强器
+        RetrievalAugmentationAdvisor augmentationAdvisor = RetrievalAugmentationAdvisor
+                .builder()
+                .documentRetriever(evalQueryRouter)
+                .queryTransformers(evalQueryTransformer) // 自定义改写起
+                .documentJoiner(documentJoiner) // 自定义聚合器（多层去重+RRF）
+                .queryAugmenter(queryAugmenter) // 自定义注入模板
+                .build();
+
+        // 7. 构建流式对话
+        return chatClient.prompt()
+                .system(prompt)
+                .user(chatParam.content())
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chatParam.conversationId()))
+                .advisors(augmentationAdvisor)
+                .stream()
+                .content();
+    }
+
+
+    /**
+     * 构建检索路由
+     * @return 检索器列表
+     */
+    private List<DocumentRetriever> buildRoutingRetrievers() {
+        // 构建数据库检索器
+        EvaSqlDatabaseContentRetriever sqlRetriever = new EvaSqlDatabaseContentRetriever();
+        // 构建向量检索器
+        VectorStoreDocumentRetriever embeddingRetriever = VectorStoreDocumentRetriever
+                .builder()
+                .vectorStore(vectorStore) // 必需：绑定向量存储
+                .topK(5) // 返回最相似的 5 个文档
+                .similarityThreshold(0.6) // 相似度低于 0.6 的过滤掉
+//                .filterExpression() 元数据过滤表达式
+                .build();
+        // TODO 其他检索器 图数据库或者ES检索器
+
+        // 返回检索器列表
+        return List.of(sqlRetriever, embeddingRetriever);
     }
 }

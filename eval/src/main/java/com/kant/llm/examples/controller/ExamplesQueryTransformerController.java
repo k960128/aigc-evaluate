@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.rag.Query;
+import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
 import org.springframework.ai.rag.retrieval.search.DocumentRetriever;
 import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -61,5 +62,11 @@ public class ExamplesQueryTransformerController {
     public String testPromptRouter(String query) {
         IntentRecognitionResult intentRecognitionResult = intentRecognitionService.chat(query);
         return promptService.getPrompt(intentRecognitionResult);
+    }
+
+    @GetMapping("/testRetrievalAugmentationAdvisor")
+    public String testRetrievalAugmentationAdvisor(){
+        RetrievalAugmentationAdvisor retrievalAugmentationAdvisor = RetrievalAugmentationAdvisor.builder().build();
+        return "testRetrievalAugmentationAdvisor";
     }
 }
