@@ -1,18 +1,19 @@
 package com.kant.llm.examples.controller;
 
 import com.alibaba.fastjson2.JSON;
+import com.kant.ai.infra.rerank.RerankService;
 import com.kant.llm.agent.ai.model.IntentRecognitionResult;
 import com.kant.llm.agent.ai.service.IntentRecognitionService;
 import com.kant.llm.agent.ai.service.PromptService;
 import com.kant.llm.agent.chat.service.ChatMessageService;
-import com.kant.llm.rag.moduler.EvaSqlDatabaseContentRetriever;
-import com.kant.llm.rag.moduler.EvalQueryRouter;
-import com.kant.llm.rag.moduler.EvalQueryTransformer;
+import com.kant.llm.eval.pipeline.service.es.ElasticSearchService;
+import com.kant.llm.rag.moduler.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.prompt.PromptTemplate;
+import org.springframework.ai.document.Document;
 import org.springframework.ai.rag.Query;
 import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
 import org.springframework.ai.rag.generation.augmentation.ContextualQueryAugmenter;
@@ -44,6 +45,8 @@ public class ExamplesQueryTransformerController {
     private final VectorStore vectorStore;
     private final IntentRecognitionService intentRecognitionService;
     private final PromptService promptService;
+    private final ElasticSearchService elasticSearchService;
+    private final RerankService rerankService;
 
     @GetMapping("/testTransformQuery")
     public String transformQuery(@RequestParam("query") String query) {
@@ -69,6 +72,42 @@ public class ExamplesQueryTransformerController {
     public String testPromptRouter(@RequestParam("query") String query) {
         IntentRecognitionResult intentRecognitionResult = intentRecognitionService.chat(query);
         return promptService.getPrompt(intentRecognitionResult);
+    }
+
+    @GetMapping(path = "/testHybridRetriever", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<String> testHybridRetriever(@RequestParam("query") String query) {
+        String finalConversationId = UUID.randomUUID().toString();
+        // 测试混合检索相关业务
+
+        // 1. 混合检索器
+        HybridDocumentRetriever hybridDocumentRetriever = new HybridDocumentRetriever(elasticSearchService, vectorStore);
+
+        // 2. RrfDocumentJoiner
+        RrfDocumentJoiner rrfDocumentJoiner = new RrfDocumentJoiner();
+
+        // 3. RerankDocumentPostProcessor
+        RerankDocumentPostProcessor rerankDocumentPostProcessor = new RerankDocumentPostProcessor(rerankService);
+
+        QueryAugmenter queryAugmenter = ContextualQueryAugmenter.builder()
+                .allowEmptyContext(false)
+                .build();
+
+        RetrievalAugmentationAdvisor retrievalAugmentationAdvisor = RetrievalAugmentationAdvisor
+                .builder()
+                .documentRetriever(hybridDocumentRetriever)
+                .documentJoiner(rrfDocumentJoiner)
+                .documentPostProcessors(rerankDocumentPostProcessor)
+                .queryAugmenter(queryAugmenter)
+                .build();
+
+        return Flux.just("开始处理...")
+                .concatWith(chatClient.prompt()
+                        .user(query)
+                        .advisors(retrievalAugmentationAdvisor)
+                        .stream()
+                        .content())
+                .doOnError(e -> log.error("流式对话异常: conversationId={}", finalConversationId, e))
+                .concatWith(Mono.just("[DONE]:" + finalConversationId));
     }
 
     @GetMapping(path = "/testRetrievalAugmentationAdvisor", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -128,17 +167,11 @@ public class ExamplesQueryTransformerController {
     private List<DocumentRetriever> buildRoutingRetrievers() {
         // 构建数据库检索器
         EvaSqlDatabaseContentRetriever sqlRetriever = new EvaSqlDatabaseContentRetriever();
-        // 构建向量检索器
-        VectorStoreDocumentRetriever embeddingRetriever = VectorStoreDocumentRetriever
-                .builder()
-                .vectorStore(vectorStore) // 必需：绑定向量存储
-                .topK(5) // 返回最相似的 5 个文档
-                .similarityThreshold(0.6) // 相似度低于 0.6 的过滤掉
-//                .filterExpression() 元数据过滤表达式
-                .build();
+        // 构建混合检索器BM25 + 向量检索
+        HybridDocumentRetriever hybridRetriever = new HybridDocumentRetriever(elasticSearchService, vectorStore);
         // TODO 其他检索器 图数据库或者ES检索器
 
         // 返回检索器列表
-        return List.of(sqlRetriever, embeddingRetriever);
+        return List.of(sqlRetriever, hybridRetriever);
     }
 }
