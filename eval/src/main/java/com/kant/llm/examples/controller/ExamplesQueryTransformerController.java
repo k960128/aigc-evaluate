@@ -11,17 +11,26 @@ import com.kant.llm.rag.moduler.EvalQueryTransformer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.rag.Query;
 import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
+import org.springframework.ai.rag.generation.augmentation.ContextualQueryAugmenter;
+import org.springframework.ai.rag.generation.augmentation.QueryAugmenter;
+import org.springframework.ai.rag.postretrieval.document.DocumentPostProcessor;
+import org.springframework.ai.rag.retrieval.join.ConcatenationDocumentJoiner;
+import org.springframework.ai.rag.retrieval.join.DocumentJoiner;
 import org.springframework.ai.rag.retrieval.search.DocumentRetriever;
 import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -48,9 +57,7 @@ public class ExamplesQueryTransformerController {
     public String testRoute(@RequestParam("query") String query) {
 
         // 构建文档检索器列表
-        List<DocumentRetriever> documentRetrievers = new ArrayList<>();
-        documentRetrievers.add(new EvaSqlDatabaseContentRetriever());
-        documentRetrievers.add(VectorStoreDocumentRetriever.builder().vectorStore(vectorStore).build());
+        List<DocumentRetriever> documentRetrievers = buildRoutingRetrievers();
 
         // 执行检索路由
         EvalQueryRouter evalQueryRouter = new EvalQueryRouter(documentRetrievers, chatClient);
@@ -59,14 +66,79 @@ public class ExamplesQueryTransformerController {
     }
 
     @GetMapping("testPromptRouter")
-    public String testPromptRouter(String query) {
+    public String testPromptRouter(@RequestParam("query") String query) {
         IntentRecognitionResult intentRecognitionResult = intentRecognitionService.chat(query);
         return promptService.getPrompt(intentRecognitionResult);
     }
 
-    @GetMapping("/testRetrievalAugmentationAdvisor")
-    public String testRetrievalAugmentationAdvisor(){
-        RetrievalAugmentationAdvisor retrievalAugmentationAdvisor = RetrievalAugmentationAdvisor.builder().build();
-        return "testRetrievalAugmentationAdvisor";
+    @GetMapping(path = "/testRetrievalAugmentationAdvisor", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<String> testRetrievalAugmentationAdvisor(@RequestParam("query") String query) {
+        String finalConversationId = UUID.randomUUID().toString();
+        // 1. 意图识别 + 获取业务 system prompt
+        IntentRecognitionResult intentRecognitionResult = intentRecognitionService.chat(query);
+        String systemPrompt = promptService.getPrompt(intentRecognitionResult);
+
+        // 2. 构建查询改写器
+        EvalQueryTransformer evalQueryTransformer = new EvalQueryTransformer(chatClient, null);
+
+        // 3. 构建检索路由器
+        EvalQueryRouter evalQueryRouter = new EvalQueryRouter(buildRoutingRetrievers(), chatClient);
+
+        // 4. 构建文档合并器
+        DocumentJoiner documentJoiner = new ConcatenationDocumentJoiner();
+
+        // 5. 构建后处理器：过滤低分文档，最多保留 5 条
+        DocumentPostProcessor filterProcessor = (originalQuery, documents) -> documents.stream()
+                .filter(document -> document.getScore() == null || document.getScore() >= 0.70)
+                .limit(5)
+                .toList();
+
+        // 6. 构建上下文注入器
+        QueryAugmenter queryAugmenter = ContextualQueryAugmenter.builder()
+                .allowEmptyContext(false)
+                .promptTemplate(new PromptTemplate(systemPrompt))
+                .build();
+
+        // 7. 构建 RetrievalAugmentationAdvisor
+        RetrievalAugmentationAdvisor retrievalAugmentationAdvisor = RetrievalAugmentationAdvisor
+                .builder()
+                .queryTransformers(evalQueryTransformer)
+                .documentRetriever(evalQueryRouter)
+                .documentJoiner(documentJoiner)
+                .documentPostProcessors(filterProcessor)
+                .queryAugmenter(queryAugmenter)
+                .build();
+
+        // 8. 发起流式调用
+        return Flux.just("开始处理...")
+                .concatWith(chatClient.prompt()
+                        .user(query)
+                        .advisors(retrievalAugmentationAdvisor)
+                        .stream()
+                        .content())
+                .doOnError(e -> log.error("流式对话异常: conversationId={}", finalConversationId, e))
+                .concatWith(Mono.just("[DONE]:" + finalConversationId));
+    }
+
+
+    /**
+     * 构建多渠道检索器
+     * @return list
+     */
+    private List<DocumentRetriever> buildRoutingRetrievers() {
+        // 构建数据库检索器
+        EvaSqlDatabaseContentRetriever sqlRetriever = new EvaSqlDatabaseContentRetriever();
+        // 构建向量检索器
+        VectorStoreDocumentRetriever embeddingRetriever = VectorStoreDocumentRetriever
+                .builder()
+                .vectorStore(vectorStore) // 必需：绑定向量存储
+                .topK(5) // 返回最相似的 5 个文档
+                .similarityThreshold(0.6) // 相似度低于 0.6 的过滤掉
+//                .filterExpression() 元数据过滤表达式
+                .build();
+        // TODO 其他检索器 图数据库或者ES检索器
+
+        // 返回检索器列表
+        return List.of(sqlRetriever, embeddingRetriever);
     }
 }

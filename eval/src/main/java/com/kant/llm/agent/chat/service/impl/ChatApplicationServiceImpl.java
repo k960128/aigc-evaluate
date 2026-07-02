@@ -159,58 +159,7 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
 
         // 5. 聚合-去重-按 score 排序（仅用于本地验证 ConcatenationDocumentJoiner）
         DocumentJoiner documentJoiner = new ConcatenationDocumentJoiner();
-        Query brakeNoiseQuery = new Query("车辆低速刹车时出现尖锐异响");
-        Query engineShakeQuery = new Query("发动机怠速抖动并伴随故障灯点亮");
-        Map<Query, List<List<Document>>> documentsForQuery = Map.of(
-                brakeNoiseQuery, List.of(
-                        List.of(
-                                Document.builder()
-                                        .id("repair-brake-pad-noise")
-                                        .text("低速刹车出现尖锐异响时，优先检查刹车片磨损极限片、刹车盘表面拉槽以及刹车片背板是否缺少消音膏。若刹车片厚度低于 3mm，应成套更换并清洁卡钳导向销。")
-                                        .metadata("source", "knowledge_base")
-                                        .metadata("category", "brake_system")
-                                        .score(0.92)
-                                        .build(),
-                                Document.builder()
-                                        .id("repair-caliper-guide-pin")
-                                        .text("制动卡钳导向销缺油或卡滞会导致刹车片偏磨、拖滞和异响。维修时应拆检导向销，清除旧油泥后涂抹耐高温制动润滑脂。")
-                                        .metadata("source", "knowledge_base")
-                                        .metadata("category", "brake_system")
-                                        .score(0.81)
-                                        .build()),
-                        List.of(
-                                Document.builder()
-                                        .id("repair-brake-pad-noise")
-                                        .text("刹车异响常见原因包括刹车片磨损报警片接触刹车盘、刹车盘锈蚀、卡钳回位不良。重复 ID 用于验证 joiner 去重时保留第一次出现的文档。")
-                                        .metadata("source", "relational_db")
-                                        .metadata("category", "brake_system")
-                                        .score(0.88)
-                                        .build(),
-                                Document.builder()
-                                        .id("repair-brake-disc-runout")
-                                        .text("车辆高速制动时方向盘抖动，多与刹车盘端面跳动量过大或盘面厚薄不均有关。应使用百分表检测端面跳动，并结合盘厚数据判断是否光盘或更换。")
-                                        .metadata("source", "relational_db")
-                                        .metadata("category", "brake_system")
-                                        .score(0.76)
-                                        .build())),
-                engineShakeQuery, List.of(
-                        List.of(
-                                Document.builder()
-                                        .id("repair-spark-plug-misfire")
-                                        .text("发动机怠速抖动且故障灯点亮时，应读取故障码。若出现 P0300 或单缸失火码，重点检查火花塞间隙、点火线圈、高压包插头和喷油嘴雾化状态。")
-                                        .metadata("source", "knowledge_base")
-                                        .metadata("category", "engine")
-                                        .score(0.95)
-                                        .build(),
-                                Document.builder()
-                                        .id("repair-throttle-body-cleaning")
-                                        .text("节气门积碳会造成怠速不稳、冷启动转速波动和加速响应迟滞。清洗节气门后，部分车型需要执行怠速学习或节气门匹配。")
-                                        .metadata("source", "knowledge_base")
-                                        .metadata("category", "engine")
-                                        .score(0.71)
-                                        .build())));
-        List<Document> joinedDocuments = documentJoiner.join(documentsForQuery);
-        log.info("ConcatenationDocumentJoiner test documents: {}", joinedDocuments);
+//        List<Document> joinedDocuments = documentJoiner.join()));
 
         DocumentPostProcessor filterProcessor = (query, documents) -> documents.stream()
                 .filter(document -> document.getScore() == null || document.getScore() >= 0.75)

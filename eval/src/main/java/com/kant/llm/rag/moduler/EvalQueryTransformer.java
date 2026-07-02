@@ -154,7 +154,9 @@ public class EvalQueryTransformer implements QueryTransformer {
                 });
             }
         }
-        return compressedQuery;
+//        return compressedQuery;
+        // 测试用，返回原始问题，不进行改写
+        return query;
     }
 
 
