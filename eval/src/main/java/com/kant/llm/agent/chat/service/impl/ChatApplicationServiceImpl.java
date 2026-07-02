@@ -138,7 +138,6 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
 //                .concatWith(Mono.just("[DONE]:" + finalConversationId));
     }
 
-
     /**
      * RAG 流式对话。
      * <p>
@@ -212,5 +211,10 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
 
         // 返回检索器列表
         return List.of(sqlRetriever, embeddingRetriever);
+    }
+
+    @Override
+    public Flux<String> evalChat(String userId, String content, String conversationId, ChatSource chatSource) {
+        return null;
     }
 }
