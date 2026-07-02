@@ -157,20 +157,19 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
         // 4. 获取业务系统提示词
         String prompt = promptService.getPrompt(chatParam.intentRecognitionResult());
 
-        // 5. 聚合-去重-按 score 排序（仅用于本地验证 ConcatenationDocumentJoiner）
+        // 5. 聚合-去重-按 score 排序（仅用于本地验证 ConcatenationDocumentJoiner） TODO 优化更改为多路结果怎么合并
         DocumentJoiner documentJoiner = new ConcatenationDocumentJoiner();
-//        List<Document> joinedDocuments = documentJoiner.join()));
 
+        // 6. 构建后处理器：解决“合并后的结果怎么筛选、排序、压缩”。 TODO 优化调用重排序模型
         DocumentPostProcessor filterProcessor = (query, documents) -> documents.stream()
                 .filter(document -> document.getScore() == null || document.getScore() >= 0.75)
                 .limit(5)
                 .toList();
 
-
-        // 5. 上下文的注入
+        // 7. 上下文的注入
         QueryAugmenter queryAugmenter = ContextualQueryAugmenter.builder()
-                .allowEmptyContext(true)
-                .emptyContextPromptTemplate(new PromptTemplate("请回答以下用户问题"))
+                .allowEmptyContext(true) // 允许空上下文，避免空指针异常
+                .emptyContextPromptTemplate(new PromptTemplate(prompt)) // 将提示词作为上下文注入
                 .build();
 
         // 6. 构建检索增强器
@@ -185,7 +184,6 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
 
         // 7. 构建流式对话
         return chatClient.prompt()
-                .system(prompt)
                 .user(chatParam.content())
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chatParam.conversationId()))
                 .advisors(augmentationAdvisor)
