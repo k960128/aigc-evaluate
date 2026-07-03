@@ -10,7 +10,6 @@ import java.io.Serializable;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ChatSendReq implements Serializable {
-    private String userId;
     private String conversationId;
     private String content;
 }

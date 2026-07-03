@@ -1,5 +1,6 @@
 package com.kant.llm.agent.chat.controller;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.kant.llm.agent.chat.constant.ChatSource;
 import com.kant.llm.agent.chat.req.ChatSendReq;
 import com.kant.llm.agent.chat.service.ChatApplicationService;
@@ -24,7 +25,7 @@ public class ChatController {
     /**
      * 流式对话接口
      * <p>
-     * 入参：userId、content（用户问题）、conversationId（可选）
+     * 入参content（用户问题）、conversationId（可选）
      * 返回：SSE 流，每个 token 逐字推送；流结束前推送一条 [DONE] 事件携带 conversationId
      * <p>
      * 进度通知格式：{@code [PROGRESS]:xxx...}，用于在前端展示当前处理阶段，减少等待焦虑。
@@ -32,7 +33,7 @@ public class ChatController {
      */
     @PostMapping(value = "/send", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<String> send(@RequestBody ChatSendReq req) {
-        return chatApplicationService.chat(req.getUserId(), req.getContent(), req.getConversationId(), ChatSource.USER_WEB);
+        return chatApplicationService.chat(StpUtil.getLoginIdAsString(), req.getContent(), req.getConversationId(), ChatSource.USER_WEB);
     }
 
 }
