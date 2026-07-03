@@ -1,5 +1,6 @@
 package com.kant.llm.agent.chat.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.kant.llm.agent.chat.constant.ChatConversationStatus;
@@ -10,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -47,6 +49,37 @@ public class ChatConversationServiceImpl extends ServiceImpl<ChatConversationMap
         return this.update(new LambdaUpdateWrapper<ChatConversationDO>()
                 .eq(ChatConversationDO::getConversationId, conversationId)
                 .set(ChatConversationDO::getTitle, title)
+                .set(ChatConversationDO::getUpdateTime, LocalDateTime.now()));
+    }
+
+    @Override
+    public List<ChatConversationDO> getConversationsByUserId(String userId) {
+        return this.list(new LambdaQueryWrapper<ChatConversationDO>()
+                .eq(ChatConversationDO::getUserId, userId)
+                .ne(ChatConversationDO::getStatus, "deleted")
+                .orderByDesc(ChatConversationDO::getUpdateTime));
+    }
+
+    @Override
+    public ChatConversationDO getByConversationId(String conversationId) {
+        return this.getOne(new LambdaQueryWrapper<ChatConversationDO>()
+                .eq(ChatConversationDO::getConversationId, conversationId)
+                .ne(ChatConversationDO::getStatus, "deleted"));
+    }
+
+    @Override
+    public boolean archiveConversation(String conversationId) {
+        return this.update(new LambdaUpdateWrapper<ChatConversationDO>()
+                .eq(ChatConversationDO::getConversationId, conversationId)
+                .set(ChatConversationDO::getStatus, "archived")
+                .set(ChatConversationDO::getUpdateTime, LocalDateTime.now()));
+    }
+
+    @Override
+    public boolean deleteConversation(String conversationId) {
+        return this.update(new LambdaUpdateWrapper<ChatConversationDO>()
+                .eq(ChatConversationDO::getConversationId, conversationId)
+                .set(ChatConversationDO::getStatus, "deleted")
                 .set(ChatConversationDO::getUpdateTime, LocalDateTime.now()));
     }
 }

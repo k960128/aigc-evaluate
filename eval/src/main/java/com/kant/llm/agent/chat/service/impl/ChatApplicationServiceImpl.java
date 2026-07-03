@@ -32,9 +32,12 @@ import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 @Slf4j
 @Service
@@ -116,26 +119,23 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
         String messageId = chatMessageService.saveUserMessage(finalConversationId, content);
         log.info("保存用户消息: messageId={}, conversationId={}, content={}", messageId, finalConversationId, content);
         String assistantMessageId = chatMessageService.saveAssistantMessage(finalConversationId);
-        // 3. 意图识别
-        IntentRecognitionResult intentRecognitionResult = intentRecognitionService.chat(content);
-        // 4. 如果用户问题不相关，调用一个通用LLM做对话
-        if (!intentRecognitionResult.related()) {
-            return commonChatService.chatStream(content)
-                    .concatWith(Flux.just("[DONE]:" + finalConversationId));
-        } else {
-            return ragChat(new ChatParam(userId, finalConversationId, messageId, content, assistantMessageId, intentRecognitionResult, chatSource));
-        }
-
-//        // 3. 流式返回：先发送意图识别进度，再执行意图识别
-//        return Flux.just("[PROGRESS]:正在识别您的意图...")
-//                .concatWith(Flux.concat(
-//                        Flux.just("[PROGRESS]:正在生成回答..."),
-//                        Flux.just("balibajiasdofjoewfgenwgojoiejriojgog")
-//                ))
-//                .subscribeOn(Schedulers.boundedElastic())
-//                .doOnError(e ->  log.error("流式对话异常: conversationId={}", finalConversationId, e))
-//                // 6. 在流末尾追加一条 [DONE] 事件，携带 conversationId
-//                .concatWith(Mono.just("[DONE]:" + finalConversationId));
+        // 3. 组装流程内容返回给前端
+        return Flux.just("[PROGRESS]:正在识别您的意图...")
+                .concatWith(Mono.fromCallable(() -> intentRecognitionService.chat(content))
+                        .subscribeOn(Schedulers.boundedElastic())
+                        .flatMapMany(intentRecognitionResult -> {
+                            // 不相关问题：走通用对话
+                            if (!intentRecognitionResult.related()) {
+                                return Flux.concat(
+                                        Flux.just("[PROGRESS]:正在为您生成回答..."),
+                                        commonChatService.chatStream(userId, content)
+                                );
+                            }
+                            // 相关问题：走 RAG 流程
+                            return ragChatProcess(new ChatParam(userId, finalConversationId, messageId, content, assistantMessageId, intentRecognitionResult, chatSource));
+                        }))
+                .doOnError(e -> log.error("流式对话异常", e))
+                .concatWith(Mono.just("[DONE]:" + finalConversationId));
     }
 
     /**
@@ -188,6 +188,68 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
                 .advisors(augmentationAdvisor)
                 .stream()
                 .content();
+    }
+
+
+    /**
+     * RAG 流式对话。
+     * <p>
+     * 1. 根据意图识别结果，判断是否需要车辆信息
+     * 2. 如果车辆信息不完善，则返回车辆信息不完善提示
+     * 3. 根据意图识别结果，判断是否需要车辆信息
+     * </p>
+     */
+    public Flux<String> ragChatProcess(ChatParam chatParam) {
+        return Flux.<String>create(sink -> {
+                    // 进度回调：同时写入 sink 和外部回调
+                    Consumer<String> processCallback = sink::next;
+
+                    // 1. 构建查询转换器(自定义回调进度)
+                    EvalQueryTransformer evalQueryTransformer = new EvalQueryTransformer(chatClient, chatParam.messageId(), processCallback);
+
+                    // 2. 多检索器路由
+                    EvalQueryRouter evalQueryRouter = new EvalQueryRouter(buildRoutingRetrievers(), chatClient, processCallback);
+
+                    // 4. 获取业务系统提示词
+                    String prompt = promptService.getPrompt(chatParam.intentRecognitionResult());
+
+                    // 5. 聚合-去重-按 score 排序（仅用于本地验证 ConcatenationDocumentJoiner） TODO 优化更改为多路结果怎么合并
+                    DocumentJoiner documentJoiner = new ConcatenationDocumentJoiner();
+
+                    // 6. 构建后处理器：解决“合并后的结果怎么筛选、排序、压缩”。 TODO 优化调用重排序模型
+                    DocumentPostProcessor filterProcessor = (query, documents) -> documents.stream()
+                            .filter(document -> document.getScore() == null || document.getScore() >= 0.75)
+                            .limit(5)
+                            .toList();
+
+                    // 7. 上下文的注入
+                    QueryAugmenter queryAugmenter = ContextualQueryAugmenter.builder()
+                            .allowEmptyContext(true) // 允许空上下文，避免空指针异常
+                            .emptyContextPromptTemplate(new PromptTemplate(prompt)) // 将提示词作为上下文注入
+                            .build();
+
+                    // 6. 构建检索增强器
+                    RetrievalAugmentationAdvisor augmentationAdvisor = RetrievalAugmentationAdvisor
+                            .builder()
+                            .documentRetriever(evalQueryRouter)
+                            .queryTransformers(evalQueryTransformer) // 自定义改写起
+                            .documentJoiner(documentJoiner) // 自定义聚合器（多层去重+RRF）
+                            .documentPostProcessors(filterProcessor)
+                            .queryAugmenter(queryAugmenter) // 自定义注入模板
+                            .build();
+
+                    chatClient.prompt()
+                            .user(chatParam.content())
+                            .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chatParam.conversationId()))
+                            .advisors(augmentationAdvisor)
+                            .stream()
+                            .content()
+                            .subscribe(sink::next,
+                                    sink::error,
+                                    sink::complete);
+                })
+                .subscribeOn(Schedulers.boundedElastic())
+                .publishOn(Schedulers.parallel());
     }
 
 

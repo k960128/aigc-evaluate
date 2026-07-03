@@ -20,10 +20,11 @@ public class CommonChatService {
 
     /**
      * 通用会话服务 - 流式返回会话内容
-      * @param userMessage 用户问题
+     * @param userId 用户ID
+     * @param userMessage 用户问题
      * @return 流式返回会话内容的Flux对象
      */
-    public Flux<String> chatStream(String userMessage){
+    public Flux<String> chatStream(String userId, String userMessage) {
         return chatClient.prompt()
                 .system("你是一个智能客服，请回答用户的问题。")
                 .user(u -> u.text(userMessage))
