@@ -56,7 +56,7 @@ public class ChatConversationServiceImpl extends ServiceImpl<ChatConversationMap
     public List<ChatConversationDO> getConversationsByUserId(String userId) {
         return this.list(new LambdaQueryWrapper<ChatConversationDO>()
                 .eq(ChatConversationDO::getUserId, userId)
-                .ne(ChatConversationDO::getStatus, "deleted")
+                .ne(ChatConversationDO::getStatus, ChatConversationStatus.DELETED)
                 .orderByDesc(ChatConversationDO::getUpdateTime));
     }
 
@@ -64,14 +64,14 @@ public class ChatConversationServiceImpl extends ServiceImpl<ChatConversationMap
     public ChatConversationDO getByConversationId(String conversationId) {
         return this.getOne(new LambdaQueryWrapper<ChatConversationDO>()
                 .eq(ChatConversationDO::getConversationId, conversationId)
-                .ne(ChatConversationDO::getStatus, "deleted"));
+                .ne(ChatConversationDO::getStatus, ChatConversationStatus.DELETED));
     }
 
     @Override
     public boolean archiveConversation(String conversationId) {
         return this.update(new LambdaUpdateWrapper<ChatConversationDO>()
                 .eq(ChatConversationDO::getConversationId, conversationId)
-                .set(ChatConversationDO::getStatus, "archived")
+                .set(ChatConversationDO::getStatus, ChatConversationStatus.ARCHIVED)
                 .set(ChatConversationDO::getUpdateTime, LocalDateTime.now()));
     }
 
@@ -79,7 +79,7 @@ public class ChatConversationServiceImpl extends ServiceImpl<ChatConversationMap
     public boolean deleteConversation(String conversationId) {
         return this.update(new LambdaUpdateWrapper<ChatConversationDO>()
                 .eq(ChatConversationDO::getConversationId, conversationId)
-                .set(ChatConversationDO::getStatus, "deleted")
+                .set(ChatConversationDO::getStatus, ChatConversationStatus.DELETED)
                 .set(ChatConversationDO::getUpdateTime, LocalDateTime.now()));
     }
 }
