@@ -31,12 +31,14 @@ import org.springframework.ai.rag.retrieval.search.DocumentRetriever;
 import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
+import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 @Slf4j
@@ -237,16 +239,26 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
                             .documentPostProcessors(filterProcessor)
                             .queryAugmenter(queryAugmenter) // 自定义注入模板
                             .build();
+                    // 订阅 LLM 流式输出，桥接到 sink
+                    AtomicBoolean firstToken = new AtomicBoolean(true);
+                    StringBuilder contentBuilder = new StringBuilder();
 
-                    chatClient.prompt()
+                    Disposable disposable = chatClient.prompt()
                             .user(chatParam.content())
                             .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chatParam.conversationId()))
                             .advisors(augmentationAdvisor)
                             .stream()
-                            .content()
-                            .subscribe(sink::next,
-                                    sink::error,
-                                    sink::complete);
+                            .content().doOnNext(token -> {
+                                // 首个 token 到达时，如果之前没有发出"正在生成回答"，则补发
+                                // （正常情况下由 ProgressAwareContentAggregator 已发出，此处为兜底）
+                                firstToken.compareAndSet(true, false);// 标记已开始接收 token
+                                contentBuilder.append(token);
+                            })
+                            .doOnComplete(() -> chatMessageService.updateContent(chatParam.assistantMessageId(), contentBuilder.toString()))
+                            .subscribe(sink::next, sink::error, sink::complete);
+
+                    // 取消时同步取消内部订阅
+                    sink.onCancel(disposable);
                 })
                 .subscribeOn(Schedulers.boundedElastic())
                 .publishOn(Schedulers.parallel());
