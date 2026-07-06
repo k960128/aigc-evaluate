@@ -5,6 +5,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.zhipuai.ZhiPuAiChatModel;
 import org.springframework.ai.zhipuai.ZhiPuAiChatOptions;
 import org.springframework.ai.zhipuai.api.ZhiPuAiApi;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 /**
@@ -14,19 +15,17 @@ import org.springframework.stereotype.Component;
 @Component
 public class TitleSummaryService {
 
-    private final ChatClient chatClient;
+    private final ChatClient titleChatClient;
 
-    public TitleSummaryService(ChatClient chatClient) {
-        this.chatClient = chatClient;
+    public TitleSummaryService(@Qualifier("titleChatClient") ChatClient titleChatClient) {
+        this.titleChatClient = titleChatClient;
     }
 
     /**
      * 生成会话标题
-     * TODO : 这里有一个问题，因为chatClient配置了会话记忆，如果这里不传的话，会默认放入一个default，这里优化单独配置一个chatClient，不用默认的
-     *
      */
     public String generateTitle(String userQuestion) {
-        return chatClient.prompt()
+        return titleChatClient.prompt()
                 .system("你是一个对话标题生成助手。根据用户的第一句话，生成一个简洁的中文会话标题，要求：不超过20个字，不加引号，直接输出标题内容。")
                 .user(u -> u.text("请根据以下用户问题生成会话标题：{question}").param("question", userQuestion))
                 .call()

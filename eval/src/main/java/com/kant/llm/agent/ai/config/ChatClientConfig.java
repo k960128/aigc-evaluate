@@ -35,7 +35,7 @@ public class ChatClientConfig {
                 .build();
     }
 
-    @Bean
+    @Bean(name = "chatClient")
     public ChatClient chatClient() {
 //        ZhiPuAiChatModel chatModel = new ZhiPuAiChatModel(ZhiPuAiApi.builder()
 //                .apiKey("bae3e679181f4b659fe87ad698ff89d2.HlZWH3hYAesVxxwk")
@@ -61,6 +61,30 @@ public class ChatClientConfig {
         return ChatClient
                 .builder(chatModel)
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatDataBaseMemory()).build())
+                .defaultAdvisors(new SimpleLoggerAdvisor())
+                .build();
+    }
+
+    /**
+     * 会话标题生成ChatClient
+     * @return ChatClient
+     */
+    @Bean(name = "titleChatClient")
+    public ChatClient titleChatClient() {
+        OpenAiChatModel chatModel = OpenAiChatModel.builder()
+                .openAiApi(OpenAiApi.builder()
+                        .apiKey("wpetVSMuHrEGEKvbmtot:vcqcnLgqiqnAuKtEjZFn")
+                        .baseUrl("https://spark-api-open.xf-yun.com/")
+                        .build())
+                .defaultOptions(
+                        OpenAiChatOptions.builder()
+                                .model("Lite")
+                                .build()
+                )
+                .build();
+
+        return ChatClient
+                .builder(chatModel)
                 .defaultAdvisors(new SimpleLoggerAdvisor())
                 .build();
     }
