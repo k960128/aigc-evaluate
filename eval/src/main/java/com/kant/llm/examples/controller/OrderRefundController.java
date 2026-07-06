@@ -13,9 +13,12 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.ChatMemoryRepository;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -36,12 +39,14 @@ public class OrderRefundController {
     private final OrderTools orderTools;
     private final ChatMemory examplesChatMemory;
     private ChatClient chatClient;
-
+    private final ChatMemory examplesDataBaseChatMemory;
 
     public OrderRefundController(OrderTools orderTools,
-                                 ChatMemory examplesChatMemory) {
+                                 ChatMemory examplesChatMemory,
+                                 @Qualifier("examplesDataBaseChatMemory") ChatMemory examplesDataBaseChatMemory) {
         this.orderTools = orderTools;
         this.examplesChatMemory = examplesChatMemory;
+        this.examplesDataBaseChatMemory = examplesDataBaseChatMemory;
     }
 
 
@@ -88,7 +93,7 @@ public class OrderRefundController {
                 .build();
 
         chatClient = ChatClient.builder(chatModel)
-                .defaultAdvisors(MessageChatMemoryAdvisor.builder(examplesChatMemory).build())
+                .defaultAdvisors(MessageChatMemoryAdvisor.builder(examplesDataBaseChatMemory).build())
                 .defaultAdvisors(new SimpleLoggerAdvisor())
                 .defaultSystem(ExamplesPromptTemplate.REFUND_PROMPT)
                 .build();

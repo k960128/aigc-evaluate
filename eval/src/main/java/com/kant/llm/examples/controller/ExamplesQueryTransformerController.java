@@ -11,9 +11,7 @@ import com.kant.llm.rag.moduler.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.prompt.PromptTemplate;
-import org.springframework.ai.document.Document;
 import org.springframework.ai.rag.Query;
 import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
 import org.springframework.ai.rag.generation.augmentation.ContextualQueryAugmenter;
@@ -22,7 +20,6 @@ import org.springframework.ai.rag.postretrieval.document.DocumentPostProcessor;
 import org.springframework.ai.rag.retrieval.join.ConcatenationDocumentJoiner;
 import org.springframework.ai.rag.retrieval.join.DocumentJoiner;
 import org.springframework.ai.rag.retrieval.search.DocumentRetriever;
-import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -70,7 +67,7 @@ public class ExamplesQueryTransformerController {
 
     @GetMapping("testPromptRouter")
     public String testPromptRouter(@RequestParam("query") String query) {
-        IntentRecognitionResult intentRecognitionResult = intentRecognitionService.chat(query);
+        IntentRecognitionResult intentRecognitionResult = intentRecognitionService.chat(UUID.randomUUID().toString(), query);
         return promptService.getPrompt(intentRecognitionResult);
     }
 
@@ -114,7 +111,7 @@ public class ExamplesQueryTransformerController {
     public Flux<String> testRetrievalAugmentationAdvisor(@RequestParam("query") String query) {
         String finalConversationId = UUID.randomUUID().toString();
         // 1. 意图识别 + 获取业务 system prompt
-        IntentRecognitionResult intentRecognitionResult = intentRecognitionService.chat(query);
+        IntentRecognitionResult intentRecognitionResult = intentRecognitionService.chat(finalConversationId, query);
         String systemPrompt = promptService.getPrompt(intentRecognitionResult);
 
         // 2. 构建查询改写器

@@ -7,6 +7,7 @@ import com.kant.llm.agent.ai.service.CommonChatService;
 import com.kant.llm.agent.ai.service.IntentRecognitionService;
 import com.kant.llm.agent.ai.service.PromptService;
 import com.kant.llm.agent.chat.constant.ChatSource;
+import com.kant.llm.agent.chat.memory.DataBaseChatMemoryRepository;
 import com.kant.llm.agent.chat.service.ChatApplicationService;
 import com.kant.llm.agent.chat.service.ChatConversationService;
 import com.kant.llm.agent.chat.service.ChatMessageService;
@@ -55,8 +56,6 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
     private final ChatConversationService chatConversationService;
     private final IntentRecognitionService intentRecognitionService;
 
-    private final ChatMemory examplesChatMemory;
-
     public ChatApplicationServiceImpl(ChatClient chatClient,
                                       VectorStore vectorStore,
                                       PromptService promptService,
@@ -64,8 +63,7 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
                                       ChatMessageService chatMessageService,
                                       TitleSummaryService titleSummaryService,
                                       CommonChatService commonChatService,
-                                      IntentRecognitionService intentRecognitionService,
-                                      ChatMemory examplesChatMemory) {
+                                      IntentRecognitionService intentRecognitionService) {
         this.chatClient = chatClient;
         this.vectorStore = vectorStore;
         this.promptService = promptService;
@@ -74,7 +72,6 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
         this.titleSummaryService = titleSummaryService;
         this.commonChatService = commonChatService;
         this.intentRecognitionService = intentRecognitionService;
-        this.examplesChatMemory = examplesChatMemory;
     }
 
     /**
@@ -123,9 +120,10 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
         String assistantMessageId = chatMessageService.saveAssistantMessage(finalConversationId);
         // 3. 组装流程内容返回给前端
         return Flux.just("[PROGRESS]:正在识别您的意图...")
-                .concatWith(Mono.fromCallable(() -> intentRecognitionService.chat(content))
+                .concatWith(Mono.fromCallable(() -> intentRecognitionService.chat(finalConversationId, content))
                         .subscribeOn(Schedulers.boundedElastic())
                         .flatMapMany(intentRecognitionResult -> {
+
                             // 不相关问题：走通用对话
                             if (!intentRecognitionResult.related()) {
                                 return Flux.concat(

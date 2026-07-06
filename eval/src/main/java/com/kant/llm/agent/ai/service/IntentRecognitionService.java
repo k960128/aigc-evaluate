@@ -3,11 +3,7 @@ package com.kant.llm.agent.ai.service;
 import com.kant.llm.agent.ai.model.IntentRecognitionResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
-import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.zhipuai.ZhiPuAiChatModel;
-import org.springframework.ai.zhipuai.ZhiPuAiChatOptions;
-import org.springframework.ai.zhipuai.api.ZhiPuAiApi;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.stereotype.Service;
 
 /**
@@ -247,11 +243,12 @@ public class IntentRecognitionService {
     }
 
 
-    public IntentRecognitionResult chat(String query) {
+    public IntentRecognitionResult chat(String finalConversationId, String query) {
         return chatClient
                 .prompt()
                 .system(INTENT_RECOGNITION_NEW_PROMPT)
                 .user(u -> u.text(query))
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, finalConversationId))
                 .call().entity(IntentRecognitionResult.class);
     }
 
