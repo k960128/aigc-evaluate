@@ -819,3 +819,39 @@ CREATE TABLE `t_user`  (
 INSERT INTO `t_user` VALUES ('2001523723396308993', 'admin', 'admin123', 'admin', 'http://47.103.193.177:9001/images/%E5%A4%B4%E5%83%8F.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=PMD7BRXEQ3Q1SU8I8YDQ%2F20260520%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260520T031544Z&X-Amz-Expires=3600&X-Amz-Security-Token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJleHAiOjE3NzkyOTAwNTAsInBhcmVudCI6ImthbnQifQ.BXw8My-fCPgOqOMZUuKBAjdwKKhYlVILhvl0v0zyOqPEQqCSBRmgra8H7Lesdmw-3P_tD8axAgpNYiZjAbAgzw&X-Amz-Signature=bf0d07d0a19e9849413b20148776d587706c30da387d9c7623d21ac22a59e3da&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject', '2026-03-26 23:05:27', '2026-03-26 23:05:27', 0);
 
 SET FOREIGN_KEY_CHECKS = 1;
+
+
+CREATE TABLE `chat_conversation` (
+                                     `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+                                     `conversation_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '会话唯一标识',
+                                     `user_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用户ID',
+                                     `title` varchar(512) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '会话标题',
+                                     `lock_version` int NOT NULL DEFAULT '0' COMMENT '乐观锁版本号',
+                                     `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active' COMMENT '状态',
+                                     `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                                     `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+                                     `deleted` tinyint NOT NULL DEFAULT '0' COMMENT '是否删除：0-未删除，1-已删除',
+                                     PRIMARY KEY (`id`),
+                                     UNIQUE KEY `uk_conversation_id` (`conversation_id`)
+) ENGINE = InnoDB AUTO_INCREMENT = 5 DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'AI对话会话表'
+
+CREATE TABLE `chat_message` (
+                                `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+                                `message_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '消息唯一标识',
+                                `conversation_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '所属会话ID',
+                                `type` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '角色：USER/ASSISTANT',
+                                `content` longtext COLLATE utf8mb4_unicode_ci COMMENT '消息内容',
+                                `transform_content` longtext COLLATE utf8mb4_unicode_ci COMMENT '改写后的内容',
+                                `token_count` int DEFAULT NULL COMMENT 'Token数量',
+                                `model_name` varchar(128) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '使用的模型名称',
+                                `rag_references` json DEFAULT NULL COMMENT 'RAG引用内容JSON数组，包含document_id、document_title、chunk_id、chunk_content、similarity_score、retrieval_source等字段',
+                                `lock_version` int NOT NULL DEFAULT '0' COMMENT '乐观锁版本号',
+                                `metadata` json DEFAULT NULL COMMENT '扩展元数据JSON格式',
+                                `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                                `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+                                `deleted` tinyint NOT NULL DEFAULT '0' COMMENT '是否删除：0-未删除，1-已删除',
+                                PRIMARY KEY (`id`),
+                                UNIQUE KEY `uk_message_id` (`message_id`),
+                                KEY `idx_conversation_id` (`conversation_id`),
+                                KEY `idx_create_time` (`create_time`)
+) ENGINE = InnoDB AUTO_INCREMENT = 13 DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'AI对话消息表'
