@@ -146,59 +146,6 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
      * 3. 根据意图识别结果，判断是否需要车辆信息
      * </p>
      */
-    public Flux<String> ragChat(ChatParam chatParam) {
-        // 1. 构建查询转换器
-        EvalQueryTransformer evalQueryTransformer = new EvalQueryTransformer(chatClient, chatParam.messageId());
-
-        // 2. 多检索器路由
-        EvalQueryRouter evalQueryRouter = new EvalQueryRouter(buildRoutingRetrievers(), chatClient);
-
-        // 4. 获取业务系统提示词
-        String prompt = promptService.getPrompt(chatParam.intentRecognitionResult());
-
-        // 5. 聚合-去重-按 score 排序（仅用于本地验证 ConcatenationDocumentJoiner） TODO 优化更改为多路结果怎么合并
-        DocumentJoiner documentJoiner = new ConcatenationDocumentJoiner();
-
-        // 6. 构建后处理器：解决“合并后的结果怎么筛选、排序、压缩”。 TODO 优化调用重排序模型
-        DocumentPostProcessor filterProcessor = (query, documents) -> documents.stream()
-                .filter(document -> document.getScore() == null || document.getScore() >= 0.75)
-                .limit(5)
-                .toList();
-
-        // 7. 上下文的注入
-        QueryAugmenter queryAugmenter = ContextualQueryAugmenter.builder()
-                .allowEmptyContext(true) // 允许空上下文，避免空指针异常
-                .emptyContextPromptTemplate(new PromptTemplate(prompt)) // 将提示词作为上下文注入
-                .build();
-
-        // 6. 构建检索增强器
-        RetrievalAugmentationAdvisor augmentationAdvisor = RetrievalAugmentationAdvisor
-                .builder()
-                .documentRetriever(evalQueryRouter)
-                .queryTransformers(evalQueryTransformer) // 自定义改写起
-                .documentJoiner(documentJoiner) // 自定义聚合器（多层去重+RRF）
-                .documentPostProcessors(filterProcessor)
-                .queryAugmenter(queryAugmenter) // 自定义注入模板
-                .build();
-
-        // 7. 构建流式对话
-        return chatClient.prompt()
-                .user(chatParam.content())
-                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chatParam.conversationId()))
-                .advisors(augmentationAdvisor)
-                .stream()
-                .content();
-    }
-
-
-    /**
-     * RAG 流式对话。
-     * <p>
-     * 1. 根据意图识别结果，判断是否需要车辆信息
-     * 2. 如果车辆信息不完善，则返回车辆信息不完善提示
-     * 3. 根据意图识别结果，判断是否需要车辆信息
-     * </p>
-     */
     public Flux<String> ragChatProcess(ChatParam chatParam) {
         return Flux.<String>create(sink -> {
                     // 进度回调：同时写入 sink 和外部回调
