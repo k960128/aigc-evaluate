@@ -48,7 +48,7 @@ public class ExamplesQueryTransformerController {
     @GetMapping("/testTransformQuery")
     public String transformQuery(@RequestParam("query") String query) {
         String messageId = chatMessageService.saveUserMessage(UUID.randomUUID().toString(), query);
-        EvalQueryTransformer evalQueryTransformer = new EvalQueryTransformer(chatClient, messageId, UUID.randomUUID().toString());
+        EvalQueryTransformer evalQueryTransformer = new EvalQueryTransformer(chatClient, messageId);
         Query transform = evalQueryTransformer.transform(new Query(query));
         return transform.text();
     }
@@ -60,7 +60,7 @@ public class ExamplesQueryTransformerController {
         List<DocumentRetriever> documentRetrievers = buildRoutingRetrievers();
 
         // 执行检索路由
-        EvalQueryRouter evalQueryRouter = new EvalQueryRouter(documentRetrievers, chatClient,UUID.randomUUID().toString());
+        EvalQueryRouter evalQueryRouter = new EvalQueryRouter(documentRetrievers, chatClient);
         List<DocumentRetriever> route = evalQueryRouter.route(new Query(query));
         return JSON.toJSONString(route);
     }
@@ -115,10 +115,10 @@ public class ExamplesQueryTransformerController {
         String systemPrompt = promptService.getPrompt(intentRecognitionResult);
 
         // 2. 构建查询改写器
-        EvalQueryTransformer evalQueryTransformer = new EvalQueryTransformer(chatClient, null, finalConversationId);
+        EvalQueryTransformer evalQueryTransformer = new EvalQueryTransformer(chatClient, null);
 
         // 3. 构建检索路由器
-        EvalQueryRouter evalQueryRouter = new EvalQueryRouter(buildRoutingRetrievers(), chatClient, finalConversationId);
+        EvalQueryRouter evalQueryRouter = new EvalQueryRouter(buildRoutingRetrievers(), chatClient);
 
         // 4. 构建文档合并器
         DocumentJoiner documentJoiner = new ConcatenationDocumentJoiner();

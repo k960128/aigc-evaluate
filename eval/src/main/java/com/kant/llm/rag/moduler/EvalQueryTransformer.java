@@ -37,11 +37,6 @@ public class EvalQueryTransformer implements QueryTransformer {
     private final String chatMessageId;
 
     /**
-     * 会话ID，用于存储会话记忆
-     */
-    private final String conversationId;
-
-    /**
      * 进度回调，用于流式返回前端进度信息
      */
     private final Consumer<String> progressCallback;
@@ -116,28 +111,24 @@ public class EvalQueryTransformer implements QueryTransformer {
             """).build();
 
     public EvalQueryTransformer(ChatClient chatClient,
-                                String chatMessageId,
-                                String conversationId) {
-        this(chatClient, LG_AGENT_PROMPT, chatMessageId, conversationId, null);
+                                String chatMessageId) {
+        this(chatClient, LG_AGENT_PROMPT, chatMessageId, null);
     }
 
     public EvalQueryTransformer(ChatClient chatClient,
                                 String chatMessageId,
-                                String conversationId,
                                 Consumer<String> progressCallback) {
-        this(chatClient, LG_AGENT_PROMPT, chatMessageId, conversationId, progressCallback);
+        this(chatClient, LG_AGENT_PROMPT, chatMessageId, progressCallback);
     }
 
     public EvalQueryTransformer(ChatClient chatClient,
                                 PromptTemplate promptTemplate,
                                 String chatMessageId,
-                                String conversationId,
                                 Consumer<String> progressCallback) {
         this.promptTemplate = promptTemplate;
         this.chatClient = chatClient;
         this.chatMessageId = chatMessageId;
         this.progressCallback = progressCallback;
-        this.conversationId = conversationId;
     }
 
     @Override
@@ -152,7 +143,6 @@ public class EvalQueryTransformer implements QueryTransformer {
 
         String newQuery = chatClient
                 .prompt(createPrompt(query, format(history)))
-                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
                 .call()
                 .chatResponse()
                 .getResult()

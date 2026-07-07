@@ -31,6 +31,7 @@ import org.springframework.ai.rag.retrieval.join.DocumentJoiner;
 import org.springframework.ai.rag.retrieval.search.DocumentRetriever;
 import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
@@ -49,6 +50,7 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
 
     private final ChatClient chatClient;
     private final VectorStore vectorStore;
+    private final ChatClient plainChatClient;
     private final PromptService promptService;
     private final CommonChatService commonChatService;
     private final ChatMessageService chatMessageService;
@@ -56,7 +58,8 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
     private final ChatConversationService chatConversationService;
     private final IntentRecognitionService intentRecognitionService;
 
-    public ChatApplicationServiceImpl(ChatClient chatClient,
+    public ChatApplicationServiceImpl(@Qualifier("chatClient") ChatClient chatClient,
+                                      @Qualifier("plainChatClient") ChatClient plainChatClient,
                                       VectorStore vectorStore,
                                       PromptService promptService,
                                       ChatConversationService chatConversationService,
@@ -67,10 +70,11 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
         this.chatClient = chatClient;
         this.vectorStore = vectorStore;
         this.promptService = promptService;
-        this.chatConversationService = chatConversationService;
+        this.plainChatClient = plainChatClient;
+        this.commonChatService = commonChatService;
         this.chatMessageService = chatMessageService;
         this.titleSummaryService = titleSummaryService;
-        this.commonChatService = commonChatService;
+        this.chatConversationService = chatConversationService;
         this.intentRecognitionService = intentRecognitionService;
     }
 
@@ -152,15 +156,13 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
                     Consumer<String> processCallback = sink::next;
 
                     // 1. 构建查询转换器(自定义回调进度)
-                    EvalQueryTransformer evalQueryTransformer = new EvalQueryTransformer(chatClient,
+                    EvalQueryTransformer evalQueryTransformer = new EvalQueryTransformer(plainChatClient,
                             chatParam.messageId(),
-                            chatParam.conversationId(),
                             processCallback);
 
                     // 2. 多检索器路由
                     EvalQueryRouter evalQueryRouter = new EvalQueryRouter(buildRoutingRetrievers(),
-                            chatClient,
-                            chatParam.conversationId(),
+                            plainChatClient,
                             processCallback);
 
                     // 4. 获取业务系统提示词

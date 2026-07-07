@@ -66,6 +66,30 @@ public class ChatClientConfig {
     }
 
     /**
+     * 用于意图识别、问题改写、路由
+     * 该ChatClient不使用内存，仅用于处理文本，不存储任何状态
+     * @return ChatClient
+     */
+    @Bean(name = "plainChatClient")
+    public ChatClient plainChatClient() {
+        OpenAiChatModel chatModel = OpenAiChatModel.builder()
+                .openAiApi(OpenAiApi.builder()
+                        .apiKey("QflVuNNAlVBZPwYKUfar:YCkTXhZTNkPfyrQJBaVf")
+                        .baseUrl("https://spark-api-open.xf-yun.com/")
+                        .build())
+                .defaultOptions(
+                        OpenAiChatOptions.builder()
+                                .model("4.0Ultra")
+                                .build()
+                )
+                .build();
+        return ChatClient
+                .builder(chatModel)
+                .defaultAdvisors(new SimpleLoggerAdvisor())
+                .build();
+    }
+
+    /**
      * 会话标题生成ChatClient
      * @return ChatClient
      */

@@ -4,6 +4,7 @@ import com.kant.llm.agent.ai.model.IntentRecognitionResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 /**
@@ -236,19 +237,18 @@ public class IntentRecognitionService {
             "}\n" +
             "```";
 
-    private final ChatClient chatClient;
+    private final ChatClient plainChatClient;
 
-    public IntentRecognitionService(ChatClient chatClient) {
-        this.chatClient = chatClient;
+    public IntentRecognitionService(@Qualifier("plainChatClient") ChatClient plainChatClient) {
+        this.plainChatClient = plainChatClient;
     }
 
 
-    public IntentRecognitionResult chat(String finalConversationId, String query) {
-        return chatClient
+    public IntentRecognitionResult chat(String query) {
+        return plainChatClient
                 .prompt()
                 .system(INTENT_RECOGNITION_NEW_PROMPT)
                 .user(u -> u.text(query))
-                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, finalConversationId))
                 .call().entity(IntentRecognitionResult.class);
     }
 

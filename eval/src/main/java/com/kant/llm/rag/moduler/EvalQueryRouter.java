@@ -26,8 +26,6 @@ public class EvalQueryRouter implements DocumentRetriever {
 
     protected final ChatClient chatClient;
 
-    protected final String conversationId;
-
     protected final PromptTemplate promptTemplate;
 
     private final Consumer<String> progressCallback;
@@ -69,22 +67,19 @@ public class EvalQueryRouter implements DocumentRetriever {
             """).build();
 
     public EvalQueryRouter(List<DocumentRetriever> documentRetrievers,
-                           ChatClient chatClient,
-                           String conversationId) {
-        this(documentRetrievers, QUERY_ROUTE_PROMPT, chatClient, conversationId, null);
+                           ChatClient chatClient) {
+        this(documentRetrievers, QUERY_ROUTE_PROMPT, chatClient, null);
     }
 
     public EvalQueryRouter(List<DocumentRetriever> documentRetrievers,
                            ChatClient chatClient,
-                           String conversationId,
                            Consumer<String> progressCallback) {
-        this(documentRetrievers, QUERY_ROUTE_PROMPT, chatClient, conversationId, progressCallback);
+        this(documentRetrievers, QUERY_ROUTE_PROMPT, chatClient, progressCallback);
     }
 
     public EvalQueryRouter(List<DocumentRetriever> documentRetrievers,
                            PromptTemplate promptTemplate,
                            ChatClient chatClient,
-                           String conversationId,
                            Consumer<String> progressCallback) {
         this.promptTemplate = promptTemplate == null ? QUERY_ROUTE_PROMPT : promptTemplate;
         this.documentRetrievers = documentRetrievers == null
@@ -92,7 +87,6 @@ public class EvalQueryRouter implements DocumentRetriever {
                 : documentRetrievers.stream().filter(Objects::nonNull).toList();
         this.chatClient = chatClient;
         this.progressCallback = progressCallback;
-        this.conversationId = conversationId;
     }
 
     @Override
@@ -116,7 +110,6 @@ public class EvalQueryRouter implements DocumentRetriever {
 
         try {
             QueryRouteResult queryRouteResult = chatClient.prompt(createPrompt(query))
-                    .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
                     .call()
                     .entity(QueryRouteResult.class);
 
