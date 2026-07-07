@@ -4,6 +4,7 @@ import com.google.common.base.Stopwatch;
 import com.kant.llm.agent.chat.service.ChatMessageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -34,6 +35,11 @@ public class EvalQueryTransformer implements QueryTransformer {
      * assistant 消息的 messageId，用于回写改写结果
      */
     private final String chatMessageId;
+
+    /**
+     * 会话ID，用于存储会话记忆
+     */
+    private final String conversationId;
 
     /**
      * 进度回调，用于流式返回前端进度信息
@@ -109,19 +115,29 @@ public class EvalQueryTransformer implements QueryTransformer {
             非常重要的一点是：你只需要提供重新组织后的提问，不要包含任何其他内容！绝对不要在提问前添加任何多余的文字！
             """).build();
 
-    public EvalQueryTransformer(ChatClient chatClient, String chatMessageId) {
-        this(chatClient, LG_AGENT_PROMPT, chatMessageId, null);
+    public EvalQueryTransformer(ChatClient chatClient,
+                                String chatMessageId,
+                                String conversationId) {
+        this(chatClient, LG_AGENT_PROMPT, chatMessageId, conversationId, null);
     }
 
-    public EvalQueryTransformer(ChatClient chatClient, String chatMessageId, Consumer<String> progressCallback) {
-        this(chatClient, LG_AGENT_PROMPT, chatMessageId, progressCallback);
+    public EvalQueryTransformer(ChatClient chatClient,
+                                String chatMessageId,
+                                String conversationId,
+                                Consumer<String> progressCallback) {
+        this(chatClient, LG_AGENT_PROMPT, chatMessageId, conversationId, progressCallback);
     }
 
-    public EvalQueryTransformer(ChatClient chatClient, PromptTemplate promptTemplate, String chatMessageId, Consumer<String> progressCallback) {
+    public EvalQueryTransformer(ChatClient chatClient,
+                                PromptTemplate promptTemplate,
+                                String chatMessageId,
+                                String conversationId,
+                                Consumer<String> progressCallback) {
         this.promptTemplate = promptTemplate;
         this.chatClient = chatClient;
         this.chatMessageId = chatMessageId;
         this.progressCallback = progressCallback;
+        this.conversationId = conversationId;
     }
 
     @Override
@@ -134,7 +150,14 @@ public class EvalQueryTransformer implements QueryTransformer {
         List<Message> history = query.history();
         Stopwatch stopwatch = Stopwatch.createStarted();
 
-        String newQuery = chatClient.prompt(createPrompt(query, format(history))).call().chatResponse().getResult().getOutput().getText();
+        String newQuery = chatClient
+                .prompt(createPrompt(query, format(history)))
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
+                .call()
+                .chatResponse()
+                .getResult()
+                .getOutput()
+                .getText();
         log.info("问题改写完成, 改写结果 : {} ,耗时: {}", newQuery, stopwatch.stop().elapsed(TimeUnit.MILLISECONDS));
 
         Query compressedQuery = query.mutate().text(newQuery).build();

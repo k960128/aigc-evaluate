@@ -128,7 +128,7 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
                             if (!intentRecognitionResult.related()) {
                                 return Flux.concat(
                                         Flux.just("[PROGRESS]:正在为您生成回答..."),
-                                        commonChatService.chatStream(userId, content)
+                                        commonChatService.chatStream(userId, content, finalConversationId)
                                 );
                             }
                             // 相关问题：走 RAG 流程
@@ -152,10 +152,16 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
                     Consumer<String> processCallback = sink::next;
 
                     // 1. 构建查询转换器(自定义回调进度)
-                    EvalQueryTransformer evalQueryTransformer = new EvalQueryTransformer(chatClient, chatParam.messageId(), processCallback);
+                    EvalQueryTransformer evalQueryTransformer = new EvalQueryTransformer(chatClient,
+                            chatParam.messageId(),
+                            chatParam.conversationId(),
+                            processCallback);
 
                     // 2. 多检索器路由
-                    EvalQueryRouter evalQueryRouter = new EvalQueryRouter(buildRoutingRetrievers(), chatClient, processCallback);
+                    EvalQueryRouter evalQueryRouter = new EvalQueryRouter(buildRoutingRetrievers(),
+                            chatClient,
+                            chatParam.conversationId(),
+                            processCallback);
 
                     // 4. 获取业务系统提示词
                     String prompt = promptService.getPrompt(chatParam.intentRecognitionResult());

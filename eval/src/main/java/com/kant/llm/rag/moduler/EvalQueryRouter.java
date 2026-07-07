@@ -3,6 +3,7 @@ package com.kant.llm.rag.moduler;
 import com.kant.llm.rag.model.QueryRouteResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.document.Document;
@@ -24,6 +25,8 @@ public class EvalQueryRouter implements DocumentRetriever {
     private final List<DocumentRetriever> documentRetrievers;
 
     protected final ChatClient chatClient;
+
+    protected final String conversationId;
 
     protected final PromptTemplate promptTemplate;
 
@@ -65,19 +68,23 @@ public class EvalQueryRouter implements DocumentRetriever {
             {query}
             """).build();
 
-    public EvalQueryRouter(List<DocumentRetriever> documentRetrievers, ChatClient chatClient) {
-        this(documentRetrievers, QUERY_ROUTE_PROMPT, chatClient, null);
+    public EvalQueryRouter(List<DocumentRetriever> documentRetrievers,
+                           ChatClient chatClient,
+                           String conversationId) {
+        this(documentRetrievers, QUERY_ROUTE_PROMPT, chatClient, conversationId, null);
     }
 
     public EvalQueryRouter(List<DocumentRetriever> documentRetrievers,
                            ChatClient chatClient,
+                           String conversationId,
                            Consumer<String> progressCallback) {
-        this(documentRetrievers, QUERY_ROUTE_PROMPT, chatClient, progressCallback);
+        this(documentRetrievers, QUERY_ROUTE_PROMPT, chatClient, conversationId, progressCallback);
     }
 
     public EvalQueryRouter(List<DocumentRetriever> documentRetrievers,
                            PromptTemplate promptTemplate,
                            ChatClient chatClient,
+                           String conversationId,
                            Consumer<String> progressCallback) {
         this.promptTemplate = promptTemplate == null ? QUERY_ROUTE_PROMPT : promptTemplate;
         this.documentRetrievers = documentRetrievers == null
@@ -85,6 +92,7 @@ public class EvalQueryRouter implements DocumentRetriever {
                 : documentRetrievers.stream().filter(Objects::nonNull).toList();
         this.chatClient = chatClient;
         this.progressCallback = progressCallback;
+        this.conversationId = conversationId;
     }
 
     @Override
@@ -108,6 +116,7 @@ public class EvalQueryRouter implements DocumentRetriever {
 
         try {
             QueryRouteResult queryRouteResult = chatClient.prompt(createPrompt(query))
+                    .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
                     .call()
                     .entity(QueryRouteResult.class);
 
