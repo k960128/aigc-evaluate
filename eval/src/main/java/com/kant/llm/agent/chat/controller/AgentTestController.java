@@ -30,6 +30,6 @@ public class AgentTestController {
      */
     @GetMapping("/testInterRecognition")
     public Result<IntentRecognitionResult> testInterRecognition(@RequestParam("query") String query) {
-        return Results.success(intentRecognitionService.chat(UUID.randomUUID().toString(), query));
+        return Results.success(intentRecognitionService.chat(query));
     }
 }

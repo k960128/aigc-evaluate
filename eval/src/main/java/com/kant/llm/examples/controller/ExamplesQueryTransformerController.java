@@ -67,7 +67,7 @@ public class ExamplesQueryTransformerController {
 
     @GetMapping("testPromptRouter")
     public String testPromptRouter(@RequestParam("query") String query) {
-        IntentRecognitionResult intentRecognitionResult = intentRecognitionService.chat(UUID.randomUUID().toString(), query);
+        IntentRecognitionResult intentRecognitionResult = intentRecognitionService.chat(query);
         return promptService.getPrompt(intentRecognitionResult);
     }
 
@@ -111,7 +111,7 @@ public class ExamplesQueryTransformerController {
     public Flux<String> testRetrievalAugmentationAdvisor(@RequestParam("query") String query) {
         String finalConversationId = UUID.randomUUID().toString();
         // 1. 意图识别 + 获取业务 system prompt
-        IntentRecognitionResult intentRecognitionResult = intentRecognitionService.chat(finalConversationId, query);
+        IntentRecognitionResult intentRecognitionResult = intentRecognitionService.chat(query);
         String systemPrompt = promptService.getPrompt(intentRecognitionResult);
 
         // 2. 构建查询改写器
