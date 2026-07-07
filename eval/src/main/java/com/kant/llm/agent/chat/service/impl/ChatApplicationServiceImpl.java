@@ -124,7 +124,7 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
         String assistantMessageId = chatMessageService.saveAssistantMessage(finalConversationId);
         // 3. 组装流程内容返回给前端
         return Flux.just("[PROGRESS]:正在识别您的意图...")
-                .concatWith(Mono.fromCallable(() -> intentRecognitionService.chat(finalConversationId, content))
+                .concatWith(Mono.fromCallable(() -> intentRecognitionService.chat(content))
                         .subscribeOn(Schedulers.boundedElastic())
                         .flatMapMany(intentRecognitionResult -> {
 
