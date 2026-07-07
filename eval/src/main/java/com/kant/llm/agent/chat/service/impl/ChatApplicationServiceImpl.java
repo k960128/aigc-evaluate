@@ -130,9 +130,12 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
 
                             // 不相关问题：走通用对话
                             if (!intentRecognitionResult.related()) {
+                                StringBuilder contentBuilder = new StringBuilder();
                                 return Flux.concat(
                                         Flux.just("[PROGRESS]:正在为您生成回答..."),
                                         commonChatService.chatStream(userId, content, finalConversationId)
+                                                .doOnNext(contentBuilder::append)
+                                                .doOnComplete(() -> chatMessageService.updateContent(assistantMessageId, contentBuilder.toString()))
                                 );
                             }
                             // 相关问题：走 RAG 流程
