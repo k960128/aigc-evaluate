@@ -37,7 +37,7 @@ public class ChatController {
      * @param req 对话请求，包含用户问题和可选会话 ID
      * @return SSE 流式响应
      */
-    @PostMapping(value = "/send", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @PostMapping(value = "/car/send", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<String> send(@RequestBody ChatSendReq req) {
         return chatApplicationService.chat(StpUtil.getLoginIdAsString(), req.getContent(), req.getConversationId(), ChatSource.USER_WEB);
     }
@@ -52,7 +52,7 @@ public class ChatController {
      * @param req 安全评测助手请求，包含用户问题和可选会话 ID
      * @return SSE 流式响应
      */
-    @PostMapping(value = "/eval/send", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @PostMapping(value = "/send", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<String> evalSend(@RequestBody ChatSendReq req) {
         return chatApplicationService.evalChat("2001523723396308993", req.getContent(), req.getConversationId(), ChatSource.USER_WEB);
     }
