@@ -3,6 +3,7 @@ package com.kant.llm.agent.chat.service.impl;
 import com.alibaba.cloud.ai.advisor.RetrievalRerankAdvisor;
 import com.kant.llm.agent.ai.model.ChatParam;
 import com.kant.llm.agent.ai.model.IntentRecognitionResult;
+import com.kant.llm.agent.ai.model.SecurityEvalChatParam;
 import com.kant.llm.agent.ai.model.SecurityEvalIntentRecognitionResult;
 import com.kant.llm.agent.ai.model.SecurityEvalSlotValidationResult;
 import com.kant.llm.agent.ai.service.CommonChatService;
@@ -18,6 +19,7 @@ import com.kant.llm.agent.ai.service.TitleSummaryService;
 import com.kant.llm.rag.moduler.EvaSqlDatabaseContentRetriever;
 import com.kant.llm.rag.moduler.EvalQueryRouter;
 import com.kant.llm.rag.moduler.EvalQueryTransformer;
+import com.kant.llm.rag.moduler.SecurityEvalQueryTransformer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
@@ -319,8 +321,14 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
                             }
 
                             // 当前还未接 Skill Router，先返回已识别和已校验的结构化结果，方便前后端联调。
-                            return saveAndEmit(assistantMessageId,
-                                    buildSecurityEvalSlotValidatedReply(intentRecognitionResult, validationResult));
+                            return securityEvalRagChatProcess(new SecurityEvalChatParam(userId,
+                                    finalConversationId,
+                                    messageId,
+                                    content,
+                                    assistantMessageId,
+                                    intentRecognitionResult,
+                                    validationResult,
+                                    chatSource));
                         }))
                 .doOnError(e -> log.error("安全评测流式对话异常", e))
                 .concatWith(Mono.just("[DONE]:" + finalConversationId));
@@ -336,6 +344,108 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
      * @param content            要保存并返回的助手内容
      * @return 单段响应流
      */
+    /**
+     * 安全评测 RAG 流式处理。
+     *
+     * <p>该流程发生在安全评测意图识别和 Slot Validator 之后：
+     * 先使用 {@link SecurityEvalQueryTransformer} 基于 intent 与 slots 改写检索问题，
+     * 再将改写后的问题交给检索增强生成链路。</p>
+     *
+     * <p>当前阶段还没有引入独立的安全评测 Skill Router，因此这里先作为安全评测 RAG 的统一入口。
+     * 后续可以按 intent 拆分为链路诊断、资产查询、判例检索、报告辅助等独立 Skill。</p>
+     *
+     * @param chatParam 安全评测 RAG 对话参数
+     * @return SSE 流式响应
+     */
+    public Flux<String> securityEvalRagChatProcess(SecurityEvalChatParam chatParam) {
+        return Flux.<String>create(sink -> {
+                    Consumer<String> processCallback = sink::next;
+
+                    SecurityEvalQueryTransformer queryTransformer = new SecurityEvalQueryTransformer(
+                            plainChatClient,
+                            chatMessageService,
+                            chatParam.slotValidationResult().intent(),
+                            chatParam.intentRecognitionResult().entities(),
+                            chatParam.messageId(),
+                            processCallback);
+
+                    DocumentRetriever documentRetriever = query -> {
+                        processCallback.accept("[PROGRESS]:正在检索安全评测上下文...");
+                        return buildRoutingRetrievers().stream()
+                                .flatMap(retriever -> retriever.retrieve(query).stream())
+                                .toList();
+                    };
+
+                    DocumentJoiner documentJoiner = new ConcatenationDocumentJoiner();
+
+                    DocumentPostProcessor filterProcessor = (query, documents) -> documents.stream()
+                            .filter(document -> document.getScore() == null || document.getScore() >= 0.75)
+                            .limit(8)
+                            .toList();
+
+                    QueryAugmenter queryAugmenter = ContextualQueryAugmenter.builder()
+                            .allowEmptyContext(true)
+                            .emptyContextPromptTemplate(new PromptTemplate(buildSecurityEvalRagPrompt(chatParam)))
+                            .build();
+
+                    RetrievalAugmentationAdvisor augmentationAdvisor = RetrievalAugmentationAdvisor
+                            .builder()
+                            .documentRetriever(documentRetriever)
+                            .queryTransformers(queryTransformer)
+                            .documentJoiner(documentJoiner)
+                            .documentPostProcessors(filterProcessor)
+                            .queryAugmenter(queryAugmenter)
+                            .build();
+
+                    StringBuilder contentBuilder = new StringBuilder();
+
+                    Disposable disposable = chatClient.prompt()
+                            .user(chatParam.content())
+                            .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chatParam.conversationId()))
+                            .advisors(augmentationAdvisor)
+                            .stream()
+                            .content()
+                            .doOnNext(contentBuilder::append)
+                            .doOnComplete(() -> chatMessageService.updateContent(chatParam.assistantMessageId(), contentBuilder.toString()))
+                            .subscribe(sink::next, sink::error, sink::complete);
+
+                    sink.onCancel(disposable);
+                })
+                .subscribeOn(Schedulers.boundedElastic())
+                .publishOn(Schedulers.parallel());
+    }
+
+    /**
+     * 构造安全评测 RAG 生成阶段的系统提示词。
+     *
+     * <p>该 Prompt 只约束最终回答风格和业务边界，不承担意图识别职责。
+     * 意图识别与槽位校验已经在进入本方法之前完成。</p>
+     *
+     * @param chatParam 安全评测 RAG 对话参数
+     * @return 安全评测 RAG 回答生成提示词
+     */
+    private String buildSecurityEvalRagPrompt(SecurityEvalChatParam chatParam) {
+        return """
+                你是大模型安全评测平台的安全评测诊断与知识决策助手。
+
+                当前请求已经完成意图识别和槽位校验，请基于检索到的上下文回答用户问题。
+
+                当前意图：%s
+                是否需要人工复核：%s
+                意图识别理由：%s
+
+                回答要求：
+                1. 只回答安全评测助手范围内的问题。
+                2. 优先依据检索上下文回答；上下文不足时明确说明缺少哪些依据。
+                3. 涉及评测链路时，按 L1 规则/关键词、L2 向量召回、L3 裁判模型说明。
+                4. 涉及误杀漏判时，优先从词库、特征、向量边界、白样本、阈值、裁判规则、数据集绑定角度分析。
+                5. 涉及规则、特征、阈值、报告发布等变更建议时，必须提示需要人工复核和留痕审批。
+                6. 不生成攻击样本、样本变异、红队 payload 或批量测试用例。
+                """.formatted(chatParam.slotValidationResult().intent(),
+                chatParam.intentRecognitionResult().requireHumanReview(),
+                chatParam.intentRecognitionResult().reasoning());
+    }
+
     private Flux<String> saveAndEmit(String assistantMessageId, String content) {
         chatMessageService.updateContent(assistantMessageId, content);
         return Flux.just(content);
