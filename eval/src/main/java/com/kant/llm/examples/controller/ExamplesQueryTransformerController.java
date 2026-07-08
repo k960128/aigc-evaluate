@@ -2,6 +2,8 @@ package com.kant.llm.examples.controller;
 
 import com.alibaba.fastjson2.JSON;
 import com.kant.ai.infra.rerank.RerankService;
+import com.kant.framework.convention.Result;
+import com.kant.framework.web.Results;
 import com.kant.llm.agent.ai.model.IntentRecognitionResult;
 import com.kant.llm.agent.ai.service.IntentRecognitionService;
 import com.kant.llm.agent.ai.service.PromptService;
@@ -44,6 +46,17 @@ public class ExamplesQueryTransformerController {
     private final PromptService promptService;
     private final ElasticSearchService elasticSearchService;
     private final RerankService rerankService;
+
+    /**
+     * 测试意图识别服务
+     *
+     * @param query query
+     * @return resp
+     */
+    @GetMapping("/testInterRecognition")
+    public Result<IntentRecognitionResult> testInterRecognition(@RequestParam("query") String query) {
+        return Results.success(intentRecognitionService.chat(query));
+    }
 
     @GetMapping("/testTransformQuery")
     public String transformQuery(@RequestParam("query") String query) {
