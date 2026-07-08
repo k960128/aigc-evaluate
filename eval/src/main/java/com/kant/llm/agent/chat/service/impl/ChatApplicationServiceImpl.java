@@ -3,9 +3,12 @@ package com.kant.llm.agent.chat.service.impl;
 import com.alibaba.cloud.ai.advisor.RetrievalRerankAdvisor;
 import com.kant.llm.agent.ai.model.ChatParam;
 import com.kant.llm.agent.ai.model.IntentRecognitionResult;
+import com.kant.llm.agent.ai.model.SecurityEvalIntentRecognitionResult;
+import com.kant.llm.agent.ai.model.SecurityEvalSlotValidationResult;
 import com.kant.llm.agent.ai.service.CommonChatService;
 import com.kant.llm.agent.ai.service.IntentRecognitionService;
 import com.kant.llm.agent.ai.service.PromptService;
+import com.kant.llm.agent.ai.slot.SecurityEvalSlotValidator;
 import com.kant.llm.agent.chat.constant.ChatSource;
 import com.kant.llm.agent.chat.memory.DataBaseChatMemoryRepository;
 import com.kant.llm.agent.chat.service.ChatApplicationService;
@@ -57,6 +60,10 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
     private final TitleSummaryService titleSummaryService;
     private final ChatConversationService chatConversationService;
     private final IntentRecognitionService intentRecognitionService;
+    /**
+     * 安全评测槽位校验器，用于在意图识别后、后续能力执行前做后端确定性校验。
+     */
+    private final SecurityEvalSlotValidator securityEvalSlotValidator;
 
     public ChatApplicationServiceImpl(@Qualifier("chatClient") ChatClient chatClient,
                                       @Qualifier("plainChatClient") ChatClient plainChatClient,
@@ -66,7 +73,8 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
                                       ChatMessageService chatMessageService,
                                       TitleSummaryService titleSummaryService,
                                       CommonChatService commonChatService,
-                                      IntentRecognitionService intentRecognitionService) {
+                                      IntentRecognitionService intentRecognitionService,
+                                      SecurityEvalSlotValidator securityEvalSlotValidator) {
         this.chatClient = chatClient;
         this.vectorStore = vectorStore;
         this.promptService = promptService;
@@ -76,6 +84,7 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
         this.titleSummaryService = titleSummaryService;
         this.chatConversationService = chatConversationService;
         this.intentRecognitionService = intentRecognitionService;
+        this.securityEvalSlotValidator = securityEvalSlotValidator;
     }
 
     /**
@@ -243,8 +252,130 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
         return List.of(sqlRetriever, embeddingRetriever);
     }
 
+    /**
+     * 安全评测助手流式对话入口。
+     *
+     * <p>当前阶段只完成安全评测专用意图识别和 Slot Validator 接入：
+     * 先使用 {@link IntentRecognitionService#securityEvalChat(String)} 得到结构化意图，
+     * 再使用 {@link SecurityEvalSlotValidator} 做后端确定性槽位校验。</p>
+     *
+     * <p>后续接入 Skill Router 时，可以将 {@code validationResult.executable() == true}
+     * 的分支替换为具体安全评测 Skill 分发逻辑。</p>
+     *
+     * @param userId         当前登录用户 ID
+     * @param content        用户输入内容
+     * @param conversationId 会话 ID；为空时自动创建新会话
+     * @param chatSource     对话来源
+     * @return SSE 流式响应
+     */
     @Override
-    public Flux<String> evalChat(String userId, String content, String conversationId, ChatSource chatSource) {
-        return null;
+    public Flux<String> evalChat(String userId,
+                                 String content,
+                                 String conversationId,
+                                 ChatSource chatSource) {
+        final String finalConversationId;
+        if (conversationId == null || conversationId.isBlank()) {
+            // 没有传入会话 ID 时，沿用普通聊天的会话创建方式，先用用户问题前 20 个字符作为临时标题。
+            String tempTitle = content.substring(0, Math.min(content.length(), 20));
+            finalConversationId = chatConversationService.createConversation(userId, tempTitle);
+            log.info("创建安全评测会话: conversationId={}, tempTitle={}", finalConversationId, tempTitle);
+
+            // 标题生成不阻塞主对话链路，失败时保留临时标题即可。
+            Thread.ofVirtual().name("title-summary-" + finalConversationId).start(() -> {
+                try {
+                    String aiTitle = titleSummaryService.generateTitle(content);
+                    Boolean respFlag = chatConversationService.updateTitle(finalConversationId, aiTitle);
+                    log.info("安全评测会话标题更新完成: respFlag={}, conversationId={}, title={}", respFlag, finalConversationId, aiTitle);
+                } catch (Exception e) {
+                    log.warn("安全评测会话标题生成失败, 保留临时标题: conversationId={}", finalConversationId, e);
+                }
+            });
+        } else {
+            finalConversationId = conversationId;
+        }
+
+        // 先保存用户消息和空的助手消息，后续将识别/校验结果回写到助手消息中。
+        String messageId = chatMessageService.saveUserMessage(finalConversationId, content);
+        log.info("保存安全评测用户消息: messageId={}, conversationId={}, content={}", messageId, finalConversationId, content);
+        String assistantMessageId = chatMessageService.saveAssistantMessage(finalConversationId);
+
+        return Flux.just("[PROGRESS]:正在识别安全评测意图...")
+                // 意图识别是阻塞式 LLM 调用，放到 boundedElastic，避免占用响应式主线程。
+                .concatWith(Mono.fromCallable(() -> intentRecognitionService.securityEvalChat(content))
+                        .subscribeOn(Schedulers.boundedElastic())
+                        .flatMapMany(intentRecognitionResult -> {
+                            // 后端重新校验关键槽位，不直接相信模型返回的 needClarification/missingSlots。
+                            SecurityEvalSlotValidationResult validationResult =
+                                    securityEvalSlotValidator.validate(intentRecognitionResult);
+
+                            // 缺少关键槽位时，直接返回稳定的后端澄清问题。
+                            if (validationResult.needClarification()) {
+                                return saveAndEmit(assistantMessageId, validationResult.clarificationQuestion());
+                            }
+
+                            // 越界、无关或未知意图不进入后续执行链路。
+                            if (!validationResult.executable()) {
+                                return saveAndEmit(assistantMessageId, buildSecurityEvalNotExecutableReply(validationResult));
+                            }
+
+                            // 当前还未接 Skill Router，先返回已识别和已校验的结构化结果，方便前后端联调。
+                            return saveAndEmit(assistantMessageId,
+                                    buildSecurityEvalSlotValidatedReply(intentRecognitionResult, validationResult));
+                        }))
+                .doOnError(e -> log.error("安全评测流式对话异常", e))
+                .concatWith(Mono.just("[DONE]:" + finalConversationId));
+    }
+
+    /**
+     * 保存助手消息内容并作为单段 SSE 内容返回。
+     *
+     * <p>当前安全评测链路还没有真正的流式 Skill 执行，因此这里先以单段文本返回结果。
+     * 后续接入 Skill Router 后，可以替换为真正的流式执行结果。</p>
+     *
+     * @param assistantMessageId 预创建的助手消息 ID
+     * @param content            要保存并返回的助手内容
+     * @return 单段响应流
+     */
+    private Flux<String> saveAndEmit(String assistantMessageId, String content) {
+        chatMessageService.updateContent(assistantMessageId, content);
+        return Flux.just(content);
+    }
+
+    /**
+     * 构造安全评测不可执行时的兜底回复。
+     *
+     * <p>不可执行通常意味着请求不属于安全评测助手范围、意图为 OUT_OF_SCOPE，
+     * 或模型输出了后端无法识别的 UNKNOWN 意图。</p>
+     *
+     * @param validationResult 槽位校验结果
+     * @return 面向用户的边界提示
+     */
+    private String buildSecurityEvalNotExecutableReply(SecurityEvalSlotValidationResult validationResult) {
+        return "当前请求不属于安全评测助手可处理范围，或意图识别结果无法进入安全评测执行链路。"
+                + "请围绕评测链路诊断、规则特征溯源、误杀漏判分析、合规问答、历史案例检索、"
+                + "资产查询、特征提取或报告辅助重新描述。"
+                + "\n\nintent: " + validationResult.intent();
+    }
+
+    /**
+     * 构造安全评测意图识别与槽位校验通过后的临时回复。
+     *
+     * <p>该方法是 Skill Router 接入前的过渡实现，主要用于验证专用意图识别 Prompt
+     * 和 Slot Validator 是否工作正常。后续接入具体 Skill 后，该方法可以被路由分发逻辑替代。</p>
+     *
+     * @param intentRecognitionResult 大模型返回的安全评测意图识别结果
+     * @param validationResult        后端槽位校验结果
+     * @return 面向用户的临时调试型回复
+     */
+    private String buildSecurityEvalSlotValidatedReply(SecurityEvalIntentRecognitionResult intentRecognitionResult,
+                                                       SecurityEvalSlotValidationResult validationResult) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("已完成安全评测意图识别，槽位校验通过。");
+        builder.append("\n\nintent: ").append(validationResult.intent());
+        builder.append("\nconfidence: ").append(intentRecognitionResult.confidence());
+        builder.append("\nrequireHumanReview: ").append(intentRecognitionResult.requireHumanReview());
+        builder.append("\nreasoning: ").append(intentRecognitionResult.reasoning());
+        builder.append("\n\n当前暂未接入具体 Skill Router，后续可以把该校验结果交给对应安全评测能力执行。");
+        return builder.toString();
     }
 }
