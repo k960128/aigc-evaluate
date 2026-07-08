@@ -74,12 +74,12 @@ public class ChatClientConfig {
     public ChatClient plainChatClient() {
         OpenAiChatModel chatModel = OpenAiChatModel.builder()
                 .openAiApi(OpenAiApi.builder()
-                        .apiKey("QflVuNNAlVBZPwYKUfar:YCkTXhZTNkPfyrQJBaVf")
+                        .apiKey("xOnfGHdiOJNynQLthuiC:QKPlrZbSbzbahVlUjQxq")
                         .baseUrl("https://spark-api-open.xf-yun.com/")
                         .build())
                 .defaultOptions(
                         OpenAiChatOptions.builder()
-                                .model("4.0Ultra")
+                                .model("Pro")
                                 .build()
                 )
                 .build();
