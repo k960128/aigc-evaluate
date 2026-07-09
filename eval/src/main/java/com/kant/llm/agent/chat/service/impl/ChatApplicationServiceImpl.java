@@ -19,6 +19,7 @@ import com.kant.llm.agent.ai.service.TitleSummaryService;
 import com.kant.llm.rag.moduler.EvaSqlDatabaseContentRetriever;
 import com.kant.llm.rag.moduler.EvalQueryRouter;
 import com.kant.llm.rag.moduler.EvalQueryTransformer;
+import com.kant.llm.rag.moduler.SecurityEvalQueryRouter;
 import com.kant.llm.rag.moduler.SecurityEvalQueryTransformer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -361,6 +362,7 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
         return Flux.<String>create(sink -> {
                     Consumer<String> processCallback = sink::next;
 
+                    //1. 改写检索问题
                     SecurityEvalQueryTransformer queryTransformer = new SecurityEvalQueryTransformer(
                             plainChatClient,
                             chatMessageService,
@@ -368,13 +370,13 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
                             chatParam.intentRecognitionResult().entities(),
                             chatParam.messageId(),
                             processCallback);
-
-                    DocumentRetriever documentRetriever = query -> {
-                        processCallback.accept("[PROGRESS]:正在检索安全评测上下文...");
-                        return buildRoutingRetrievers().stream()
-                                .flatMap(retriever -> retriever.retrieve(query).stream())
-                                .toList();
-                    };
+                    //2. 问题路由检索
+                    SecurityEvalQueryRouter queryRouter = new SecurityEvalQueryRouter(
+                            buildRoutingRetrievers(),
+                            plainChatClient,
+                            chatParam.slotValidationResult().intent(),
+                            chatParam.intentRecognitionResult().entities(),
+                            processCallback);
 
                     DocumentJoiner documentJoiner = new ConcatenationDocumentJoiner();
 
@@ -390,7 +392,7 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
 
                     RetrievalAugmentationAdvisor augmentationAdvisor = RetrievalAugmentationAdvisor
                             .builder()
-                            .documentRetriever(documentRetriever)
+                            .documentRetriever(queryRouter)
                             .queryTransformers(queryTransformer)
                             .documentJoiner(documentJoiner)
                             .documentPostProcessors(filterProcessor)

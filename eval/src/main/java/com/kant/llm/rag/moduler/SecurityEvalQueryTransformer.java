@@ -57,7 +57,8 @@ public class SecurityEvalQueryTransformer implements QueryTransformer {
             2. 必须保留明确的 ID、风险小类、规则、特征、时间范围、模型名称、任务信息等关键槽位。
             3. 不要生成攻击样本、测试样本或红队 payload。
             4. 如果原问题已经足够清晰，可以在保留原意的基础上补充安全评测检索关键词。
-            5. 根据不同 intent 使用不同改写策略：
+            5. 结合历史对话和最新提问，识别出所有相关的细节、术语和上下文信息。最后，将这条提问重新组织成一个清晰、简洁且独立完整的格式，以便于进行信息检索。
+            6. 根据不同 intent 使用不同改写策略：
                - FULL_LINK_TRACE：强调 L1/L2/L3 判定链路、命中规则、向量召回、L3 裁判结果。
                - RULE_FEATURE_TRACE：强调规则、词库、特征、风险小类、版本、状态、来源、同步关系。
                - MISJUDGEMENT_ANALYSIS：强调误杀、漏判、阈值、白样本、向量边界、裁判规则、相似案例。
@@ -92,7 +93,7 @@ public class SecurityEvalQueryTransformer implements QueryTransformer {
     @Override
     public Query transform(Query query) {
         if (progressCallback != null) {
-            progressCallback.accept("[PROGRESS]:正在优化安全评测检索问题...");
+            progressCallback.accept("[PROGRESS]:正在优化检索问题...");
         }
 
         log.info("开始安全评测问题改写, intent={}, sourceQuery={}", intent, query.text());
