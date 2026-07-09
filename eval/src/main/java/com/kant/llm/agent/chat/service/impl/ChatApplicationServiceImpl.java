@@ -46,6 +46,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import javax.sql.DataSource;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -58,6 +59,7 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
 
     private final ChatClient chatClient;
     private final VectorStore vectorStore;
+    private final DataSource dataSource;
     private final ChatClient plainChatClient;
     private final PromptService promptService;
     private final CommonChatService commonChatService;
@@ -75,6 +77,7 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
     public ChatApplicationServiceImpl(@Qualifier("chatClient") ChatClient chatClient,
                                       @Qualifier("plainChatClient") ChatClient plainChatClient,
                                       VectorStore vectorStore,
+                                      DataSource dataSource,
                                       PromptService promptService,
                                       ChatConversationService chatConversationService,
                                       ChatMessageService chatMessageService,
@@ -86,6 +89,7 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
                                       SecurityEvalSlotValidator securityEvalSlotValidator) {
         this.chatClient = chatClient;
         this.vectorStore = vectorStore;
+        this.dataSource = dataSource;
         this.promptService = promptService;
         this.plainChatClient = plainChatClient;
         this.commonChatService = commonChatService;
@@ -248,7 +252,8 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
      */
     private List<DocumentRetriever> buildRoutingRetrievers() {
         // 构建数据库检索器
-        EvaSqlDatabaseContentRetriever sqlRetriever = new EvaSqlDatabaseContentRetriever();
+        EvaSqlDatabaseContentRetriever sqlRetriever = new EvaSqlDatabaseContentRetriever(plainChatClient,
+                dataSource);
         // 构建向量检索器
         VectorStoreDocumentRetriever embeddingRetriever = VectorStoreDocumentRetriever
                 .builder()
