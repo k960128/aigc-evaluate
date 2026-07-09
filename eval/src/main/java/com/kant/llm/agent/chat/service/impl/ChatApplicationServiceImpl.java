@@ -9,6 +9,7 @@ import com.kant.llm.agent.ai.model.SecurityEvalSlotValidationResult;
 import com.kant.llm.agent.ai.service.CommonChatService;
 import com.kant.llm.agent.ai.service.IntentRecognitionService;
 import com.kant.llm.agent.ai.service.PromptService;
+import com.kant.llm.agent.ai.service.SecurityEvalPromptService;
 import com.kant.llm.agent.ai.slot.SecurityEvalSlotValidator;
 import com.kant.llm.agent.chat.constant.ChatSource;
 import com.kant.llm.agent.chat.memory.DataBaseChatMemoryRepository;
@@ -63,6 +64,7 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
     private final TitleSummaryService titleSummaryService;
     private final ChatConversationService chatConversationService;
     private final IntentRecognitionService intentRecognitionService;
+    private final SecurityEvalPromptService securityEvalPromptService;
     /**
      * 安全评测槽位校验器，用于在意图识别后、后续能力执行前做后端确定性校验。
      */
@@ -77,6 +79,7 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
                                       TitleSummaryService titleSummaryService,
                                       CommonChatService commonChatService,
                                       IntentRecognitionService intentRecognitionService,
+                                      SecurityEvalPromptService securityEvalPromptService,
                                       SecurityEvalSlotValidator securityEvalSlotValidator) {
         this.chatClient = chatClient;
         this.vectorStore = vectorStore;
@@ -87,6 +90,7 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
         this.titleSummaryService = titleSummaryService;
         this.chatConversationService = chatConversationService;
         this.intentRecognitionService = intentRecognitionService;
+        this.securityEvalPromptService = securityEvalPromptService;
         this.securityEvalSlotValidator = securityEvalSlotValidator;
     }
 
@@ -387,7 +391,7 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
 
                     QueryAugmenter queryAugmenter = ContextualQueryAugmenter.builder()
                             .allowEmptyContext(true)
-                            .emptyContextPromptTemplate(new PromptTemplate(buildSecurityEvalRagPrompt(chatParam)))
+                            .emptyContextPromptTemplate(new PromptTemplate(securityEvalPromptService.getRagAnswerPrompt(chatParam)))
                             .build();
 
                     RetrievalAugmentationAdvisor augmentationAdvisor = RetrievalAugmentationAdvisor
