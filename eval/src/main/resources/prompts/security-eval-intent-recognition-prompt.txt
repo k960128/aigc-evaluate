@@ -184,7 +184,7 @@ related=true, intent=OUT_OF_SCOPE
 - dataset_id：数据集 ID。
 - sample_id：样本 ID。
 - rule_id：规则 ID。
-- feature_id：攻击特征、知识库特征或风险特征 ID。
+- feature_id：知识库特征或风险特征 ID。
 - keyword_id：词库关键词 ID。
 - time_range：查询时间范围。
 - top_k：期望返回数量。
@@ -193,7 +193,7 @@ related=true, intent=OUT_OF_SCOPE
 - risk_scope_ids：本次诊断限定的风险小类范围。
 - judge_version：本次沙箱诊断使用的 L3 裁判模型或 Prompt 版本。
 - output_format：用户要求的输出格式。
-- candidate_features：疑似新风险特征、关键词、payload 或越狱片段。
+- candidate_features：疑似新风险特征、关键词或越界线索。
 - keywords：其他关键词。
 
 # Clarification Rules

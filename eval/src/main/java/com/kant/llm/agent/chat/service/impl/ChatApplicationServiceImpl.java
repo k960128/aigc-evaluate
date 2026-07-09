@@ -4,11 +4,12 @@ import com.alibaba.cloud.ai.advisor.RetrievalRerankAdvisor;
 import com.kant.llm.agent.ai.model.ChatParam;
 import com.kant.llm.agent.ai.model.IntentRecognitionResult;
 import com.kant.llm.agent.ai.model.SecurityEvalChatParam;
-import com.kant.llm.agent.ai.model.SecurityEvalIntentRecognitionResult;
+import com.kant.llm.agent.ai.model.SecurityEvalPendingClarification;
 import com.kant.llm.agent.ai.model.SecurityEvalSlotValidationResult;
 import com.kant.llm.agent.ai.service.CommonChatService;
 import com.kant.llm.agent.ai.service.IntentRecognitionService;
 import com.kant.llm.agent.ai.service.PromptService;
+import com.kant.llm.agent.ai.service.SecurityEvalClarificationService;
 import com.kant.llm.agent.ai.service.SecurityEvalPromptService;
 import com.kant.llm.agent.ai.slot.SecurityEvalSlotValidator;
 import com.kant.llm.agent.chat.constant.ChatSource;
@@ -64,6 +65,7 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
     private final TitleSummaryService titleSummaryService;
     private final ChatConversationService chatConversationService;
     private final IntentRecognitionService intentRecognitionService;
+    private final SecurityEvalClarificationService securityEvalClarificationService;
     private final SecurityEvalPromptService securityEvalPromptService;
     /**
      * 安全评测槽位校验器，用于在意图识别后、后续能力执行前做后端确定性校验。
@@ -79,6 +81,7 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
                                       TitleSummaryService titleSummaryService,
                                       CommonChatService commonChatService,
                                       IntentRecognitionService intentRecognitionService,
+                                      SecurityEvalClarificationService securityEvalClarificationService,
                                       SecurityEvalPromptService securityEvalPromptService,
                                       SecurityEvalSlotValidator securityEvalSlotValidator) {
         this.chatClient = chatClient;
@@ -90,6 +93,7 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
         this.titleSummaryService = titleSummaryService;
         this.chatConversationService = chatConversationService;
         this.intentRecognitionService = intentRecognitionService;
+        this.securityEvalClarificationService = securityEvalClarificationService;
         this.securityEvalPromptService = securityEvalPromptService;
         this.securityEvalSlotValidator = securityEvalSlotValidator;
     }
@@ -306,6 +310,19 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
         log.info("保存安全评测用户消息: messageId={}, conversationId={}, content={}", messageId, finalConversationId, content);
         String assistantMessageId = chatMessageService.saveAssistantMessage(finalConversationId);
 
+        // 如果当前会话存在待补槽状态，本轮只做槽位补充，不再重新识别 intent。
+        SecurityEvalPendingClarification pendingClarification =
+                securityEvalClarificationService.findPending(finalConversationId).orElse(null);
+        if (pendingClarification != null) {
+            return securityEvalPendingClarificationProcess(userId,
+                    finalConversationId,
+                    messageId,
+                    content,
+                    assistantMessageId,
+                    chatSource,
+                    pendingClarification);
+        }
+
         return Flux.just("[PROGRESS]:正在识别安全评测意图...")
                 // 意图识别是阻塞式 LLM 调用，放到 boundedElastic，避免占用响应式主线程。
                 .concatWith(Mono.fromCallable(() -> intentRecognitionService.securityEvalChat(content))
@@ -317,6 +334,10 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
 
                             // 缺少关键槽位时，直接返回稳定的后端澄清问题。
                             if (validationResult.needClarification()) {
+                                securityEvalClarificationService.savePending(finalConversationId,
+                                        content,
+                                        intentRecognitionResult,
+                                        validationResult);
                                 return saveAndEmit(assistantMessageId, validationResult.clarificationQuestion());
                             }
 
@@ -340,15 +361,78 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
     }
 
     /**
-     * 保存助手消息内容并作为单段 SSE 内容返回。
+     * 安全评测多轮补槽处理流程。
      *
-     * <p>当前安全评测链路还没有真正的流式 Skill 执行，因此这里先以单段文本返回结果。
-     * 后续接入 Skill Router 后，可以替换为真正的流式执行结果。</p>
+     * <p>该方法只在当前 {@code conversationId} 存在待补槽状态时执行。
+     * 与完整意图识别不同，这里会沿用上一轮已经确认的 intent，只从本轮用户输入中抽取缺失槽位，
+     * 再交给 {@link SecurityEvalSlotValidator} 做一次后端确定性校验。</p>
      *
-     * @param assistantMessageId 预创建的助手消息 ID
-     * @param content            要保存并返回的助手内容
-     * @return 单段响应流
+     * <p>处理结果分三类：</p>
+     * <ul>
+     *     <li>仍然缺槽：更新 pending 状态，并继续返回后端生成的澄清问题。</li>
+     *     <li>补槽通过：清理 pending 状态，并使用累计上下文进入安全评测 RAG 流程。</li>
+     *     <li>状态异常不可执行：清理 pending 状态，并返回安全评测助手边界提示。</li>
+     * </ul>
+     *
+     * @param userId                 当前登录用户 ID
+     * @param finalConversationId    当前会话 ID
+     * @param messageId              当前用户消息 ID
+     * @param content                用户本轮补充内容
+     * @param assistantMessageId     当前助手消息 ID
+     * @param chatSource             对话来源
+     * @param pendingClarification   当前会话待补槽状态
+     * @return SSE 流式响应
      */
+    private Flux<String> securityEvalPendingClarificationProcess(String userId,
+                                                                 String finalConversationId,
+                                                                 String messageId,
+                                                                 String content,
+                                                                 String assistantMessageId,
+                                                                 ChatSource chatSource,
+                                                                 SecurityEvalPendingClarification pendingClarification) {
+        return Flux.just("[PROGRESS]:正在补充安全评测槽位...")
+                .concatWith(Mono.fromCallable(() -> securityEvalClarificationService.fillSlots(pendingClarification, content))
+                        .subscribeOn(Schedulers.boundedElastic())
+                        .flatMapMany(intentRecognitionResult -> {
+                            // 将本轮补充追加到累计上下文，后续进入 RAG 时能同时看到原问题和补充信息。
+                            String mergedContent = securityEvalClarificationService.appendUserContext(
+                                    pendingClarification.userContext(),
+                                    content);
+
+                            // 补槽后仍然由后端 Slot Validator 重新计算是否满足执行条件。
+                            SecurityEvalSlotValidationResult validationResult =
+                                    securityEvalSlotValidator.validate(intentRecognitionResult);
+
+                            // 仍缺关键槽位时，更新 pending，下一轮继续沿用同一个 intent 补槽。
+                            if (validationResult.needClarification()) {
+                                securityEvalClarificationService.savePending(finalConversationId,
+                                        mergedContent,
+                                        intentRecognitionResult,
+                                        validationResult);
+                                return saveAndEmit(assistantMessageId, validationResult.clarificationQuestion());
+                            }
+
+                            // 如果 pending 状态异常导致不可执行，清理状态后返回边界提示。
+                            if (!validationResult.executable()) {
+                                securityEvalClarificationService.clearPending(finalConversationId);
+                                return saveAndEmit(assistantMessageId, buildSecurityEvalNotExecutableReply(validationResult));
+                            }
+
+                            // 补槽通过后必须清理 pending，避免下一轮正常问题被误当作补充信息。
+                            securityEvalClarificationService.clearPending(finalConversationId);
+                            return securityEvalRagChatProcess(new SecurityEvalChatParam(userId,
+                                    finalConversationId,
+                                    messageId,
+                                    mergedContent,
+                                    assistantMessageId,
+                                    intentRecognitionResult,
+                                    validationResult,
+                                    chatSource));
+                        }))
+                .doOnError(e -> log.error("安全评测多轮补槽异常", e))
+                .concatWith(Mono.just("[DONE]:" + finalConversationId));
+    }
+
     /**
      * 安全评测 RAG 流式处理。
      *
@@ -422,36 +506,15 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
     }
 
     /**
-     * 构造安全评测 RAG 生成阶段的系统提示词。
+     * 保存助手消息内容并作为单段 SSE 内容返回。
      *
-     * <p>该 Prompt 只约束最终回答风格和业务边界，不承担意图识别职责。
-     * 意图识别与槽位校验已经在进入本方法之前完成。</p>
+     * <p>该方法用于澄清追问、越界提示等不需要进入流式 RAG 的场景。
+     * 内容会先回写助手消息，再作为 SSE 单段内容返回给前端。</p>
      *
-     * @param chatParam 安全评测 RAG 对话参数
-     * @return 安全评测 RAG 回答生成提示词
+     * @param assistantMessageId 预创建的助手消息 ID
+     * @param content            要保存并返回的助手内容
+     * @return 单段响应流
      */
-    private String buildSecurityEvalRagPrompt(SecurityEvalChatParam chatParam) {
-        return """
-                你是大模型安全评测平台的安全评测诊断与知识决策助手。
-
-                当前请求已经完成意图识别和槽位校验，请基于检索到的上下文回答用户问题。
-
-                当前意图：%s
-                是否需要人工复核：%s
-                意图识别理由：%s
-
-                回答要求：
-                1. 只回答安全评测助手范围内的问题。
-                2. 优先依据检索上下文回答；上下文不足时明确说明缺少哪些依据。
-                3. 涉及评测链路时，按 L1 规则/关键词、L2 向量召回、L3 裁判模型说明。
-                4. 涉及误杀漏判时，优先从词库、特征、向量边界、白样本、阈值、裁判规则、数据集绑定角度分析。
-                5. 涉及规则、特征、阈值、报告发布等变更建议时，必须提示需要人工复核和留痕审批。
-                6. 不生成攻击样本、样本变异、红队 payload 或批量测试用例。
-                """.formatted(chatParam.slotValidationResult().intent(),
-                chatParam.intentRecognitionResult().requireHumanReview(),
-                chatParam.intentRecognitionResult().reasoning());
-    }
-
     private Flux<String> saveAndEmit(String assistantMessageId, String content) {
         chatMessageService.updateContent(assistantMessageId, content);
         return Flux.just(content);
@@ -471,27 +534,5 @@ public class ChatApplicationServiceImpl implements ChatApplicationService {
                 + "请围绕评测链路诊断、规则特征溯源、误杀漏判分析、合规问答、历史案例检索、"
                 + "资产查询、特征提取或报告辅助重新描述。"
                 + "\n\nintent: " + validationResult.intent();
-    }
-
-    /**
-     * 构造安全评测意图识别与槽位校验通过后的临时回复。
-     *
-     * <p>该方法是 Skill Router 接入前的过渡实现，主要用于验证专用意图识别 Prompt
-     * 和 Slot Validator 是否工作正常。后续接入具体 Skill 后，该方法可以被路由分发逻辑替代。</p>
-     *
-     * @param intentRecognitionResult 大模型返回的安全评测意图识别结果
-     * @param validationResult        后端槽位校验结果
-     * @return 面向用户的临时调试型回复
-     */
-    private String buildSecurityEvalSlotValidatedReply(SecurityEvalIntentRecognitionResult intentRecognitionResult,
-                                                       SecurityEvalSlotValidationResult validationResult) {
-        StringBuilder builder = new StringBuilder();
-        builder.append("已完成安全评测意图识别，槽位校验通过。");
-        builder.append("\n\nintent: ").append(validationResult.intent());
-        builder.append("\nconfidence: ").append(intentRecognitionResult.confidence());
-        builder.append("\nrequireHumanReview: ").append(intentRecognitionResult.requireHumanReview());
-        builder.append("\nreasoning: ").append(intentRecognitionResult.reasoning());
-        builder.append("\n\n当前暂未接入具体 Skill Router，后续可以把该校验结果交给对应安全评测能力执行。");
-        return builder.toString();
     }
 }
