@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS `eval_es_sync_event` (
+  `event_id` varchar(64) NOT NULL COMMENT '事件唯一ID，使用雪花ID字符串，作为 MQ 消费与补偿幂等标识',
+  `aggregate_type` varchar(32) NOT NULL COMMENT '聚合类型：RESULT_DETAIL-评测结果明细，PIPELINE_NODE-流水线节点日志',
+  `aggregate_id` bigint NOT NULL COMMENT '聚合主键ID，对应 eval_result_detail.id 或 eval_pipeline_node_detail.id',
+  `operation_type` varchar(16) NOT NULL COMMENT '操作类型：UPSERT-写入或更新，DELETE-删除预留',
+  `task_id` bigint DEFAULT NULL COMMENT '评测任务ID，冗余字段，方便按任务排查同步事件',
+  `task_detail_id` bigint DEFAULT NULL COMMENT '评测任务执行批次ID，冗余字段，方便按批次排查同步事件',
+  `result_detail_id` bigint DEFAULT NULL COMMENT '评测结果明细ID，结果明细事件等于 aggregate_id，节点事件指向所属结果明细',
+  `sample_id` bigint DEFAULT NULL COMMENT '数据集样本ID，冗余字段，方便排查单样本同步链路',
+  `sync_status` tinyint NOT NULL DEFAULT 0 COMMENT '同步状态：0-待同步，1-已同步，2-同步失败',
+  `retry_count` int NOT NULL DEFAULT 0 COMMENT '同步重试次数',
+  `next_retry_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '下次允许调度重试时间',
+  `last_error` varchar(2000) DEFAULT NULL COMMENT '最近一次同步失败原因，做长度保护避免异常文本撑爆行',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`event_id`),
+  UNIQUE KEY `uk_eval_es_sync_event_event_id` (`event_id`),
+  KEY `idx_eval_es_sync_event_status_retry` (`sync_status`, `next_retry_time`),
+  KEY `idx_eval_es_sync_event_aggregate` (`aggregate_type`, `aggregate_id`),
+  KEY `idx_eval_es_sync_event_task_detail` (`task_detail_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='评测结果与流水线节点 ES 投影同步 outbox 事件表';

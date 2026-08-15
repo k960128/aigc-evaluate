@@ -1,9 +1,9 @@
 package com.kant.llm.eval;
 
-import com.kant.llm.eval.client.*;
-import com.kant.llm.eval.common.enums.ModelManufacturerEnum;
-import com.kant.llm.eval.dao.entity.ModelInfoDO;
-import com.kant.llm.eval.service.ModelInfoService;
+import com.kant.ai.infra.client.*;
+import com.kant.ai.infra.enums.ModelManufacturerEnum;
+import com.kant.llm.eval.basesource.dao.entity.ModelInfoDO;
+import com.kant.llm.eval.basesource.service.ModelInfoService;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +23,7 @@ public class ModelClientStrategyTest {
     @Test
     void testModelCall() {
         ModelInfoDO modelInfoDO = modelInfoService.getById(3L);
-        ModelInfo modelInfo = ModelInfo.builder()
+        ClientModelInfo clientModelInfo = ClientModelInfo.builder()
                 .modelId(modelInfoDO.getId())
                 .model(modelInfoDO.getModel())
                 .apiKey(modelInfoDO.getApiKey())
@@ -32,10 +32,10 @@ public class ModelClientStrategyTest {
                 .build();
         log.info("modelInfoDO:{}", modelInfoDO);
         ModelRequest request = ModelRequest.builder()
-                .modelInfo(modelInfo)
+                .clientModelInfo(clientModelInfo)
                 .inputText("你是什么大模型?")
                 .build();
-        ModelClientStrategy strategy = modelClientStrategyFactory.getStrategy(modelInfo);
+        ModelClientStrategy strategy = modelClientStrategyFactory.getStrategy(clientModelInfo);
         ModelResponse call = strategy.call(request);
         log.info("call: {}", call);
     }

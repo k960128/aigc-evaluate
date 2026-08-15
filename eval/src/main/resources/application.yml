@@ -9,6 +9,8 @@ spring:
     multipart:
       max-file-size: 50MB
       max-request-size: 100MB
+
+# 数据库配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     type: com.zaxxer.hikari.HikariDataSource
@@ -23,6 +25,13 @@ spring:
       minimum-idle: 5
       pool-name: LLMEvalHikariPool
 
+# Elasticsearch 配置
+  elasticsearch:
+    uris: http://47.103.193.177:9200
+    username: elastic
+    password: G3a5tB7nD9f1
+
+# Redis 配置
   data:
     redis:
       host: 127.0.0.1
@@ -33,14 +42,37 @@ spring:
     resources:
       add-mappings: false
 
-app:
-  demo-mode: false
+# RAG 配置
+rag:
+  vector:
+    type: pg # 预留，后续支持Milvus和pg
+    pg:
+      url: jdbc:postgresql://47.103.193.177:5432/aigc_eval
+      username: postgres
+      password: G3a5tB7nD9f1
+      driver-class-name: org.postgresql.Driver
+      initialize-schema: false
+      schema-name: public
+      table-name: t_knowledge_vector
+      dimensions: 1024
+      max-document-batch-size: 10
 
+# L2 配置
+app:
+  l2:
+    # mysql-mock：使用 MySQL Mock 召回；real：使用 ES + PGVector；empty：空召回降级
+    recall-mode: real
+  l3:
+    # real：调用 JudgeConfiguration 中的裁判大模型；default：不调用模型，直接降级人工核验
+    judge-mode: real
+
+# RocketMQ 配置
 rocketmq:
   name-server: 47.103.193.177:9876
   producer:
     group: aigc-eval-producer-group
 
+# Sa-Token 配置
 sa-token:
   token-name: satoken
   timeout: 604800
@@ -49,3 +81,8 @@ sa-token:
   is-share: true
   token-style: uuid
   is-log: true
+
+
+logging:
+  level:
+    org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor: DEBUG

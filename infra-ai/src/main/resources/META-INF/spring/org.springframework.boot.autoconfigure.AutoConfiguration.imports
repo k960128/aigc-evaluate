@@ -1,0 +1,4 @@
+com.kant.ai.infra.config.InfraAiConfiguration
+com.kant.ai.infra.config.InfraElasticsearchConfiguration
+com.kant.ai.infra.config.InfraPgVectorConfiguration
+com.kant.ai.infra.config.InfraRerankConfiguration

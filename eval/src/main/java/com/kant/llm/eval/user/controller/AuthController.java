@@ -1,0 +1,37 @@
+package com.kant.llm.eval.user.controller;
+
+import cn.dev33.satoken.stp.SaTokenInfo;
+import cn.dev33.satoken.stp.StpUtil;
+
+import com.kant.framework.convention.Result;
+import com.kant.framework.web.Results;
+
+import com.kant.llm.eval.user.dto.req.LoginRequest;
+import com.kant.llm.eval.user.service.UserService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/auth")
+public class AuthController {
+
+    private final UserService userService;
+
+    @PostMapping("/login")
+    public Result<SaTokenInfo> login(@Validated @RequestBody LoginRequest request) {
+        return Results.success(userService.login(request));
+    }
+
+    @PostMapping("/logout")
+    public Result<Void> logout() {
+        if (StpUtil.isLogin()) {
+            StpUtil.logout();
+        }
+        return Results.success();
+    }
+}
