@@ -94,6 +94,7 @@ public class EvalTaskSplitConsumer implements RocketMQListener<MessageWrapper<Ev
         log.info("评测任务批次进入拆分初始化状态，taskDetailId: {}, datasetId: {}",
                 taskDetail.getId(), taskDetail.getDatasetId());
 
+        // TODO 优化为毒丸（读写模式）
         List<DataSetSampleDO> samples = dataSetSampleMapper.selectList(new LambdaQueryWrapper<>(DataSetSampleDO.class)
                 .eq(DataSetSampleDO::getDatasetId, taskDetail.getDatasetId()));
         if (CollectionUtil.isEmpty(samples)) {

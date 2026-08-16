@@ -176,7 +176,6 @@ public class EvalTaskServiceImpl implements EvalTaskService {
                                 .serialNo(serialNo)
                                 .build())
                         .build());
-
             } catch (Exception ex) {
                 // 保留 ERROR 批次，方便后续排查是哪一次提交没有进入拆分链路。
                 evalTaskDetailDO.setStatus(TaskStatusEnums.ERROR.getCode());
