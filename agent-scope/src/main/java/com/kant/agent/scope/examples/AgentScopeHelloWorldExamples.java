@@ -6,7 +6,7 @@ import io.agentscope.core.message.Msg;
 import io.agentscope.core.model.DashScopeChatModel;
 import io.agentscope.core.tool.Toolkit;
 
-public class AgentScopeHelloWorld {
+public class AgentScopeHelloWorldExamples {
 
     public static void main(String[] args) {
         // 准备工具
