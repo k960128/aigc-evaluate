@@ -34,6 +34,7 @@ public class ModelClientStrategyFactory {
             case GLM -> new GlmModelClientStrategy();
             case GPT -> new GptModelClientStrategy();
             case MOCK -> new MockModelClientStrategy();
+            case OLLAMA -> new OllamaModelClientStrategy();
             default -> throw new ServiceException("不支持的大模型厂商标识：" + modelInfo.getManufacturerType());
         };
     }
