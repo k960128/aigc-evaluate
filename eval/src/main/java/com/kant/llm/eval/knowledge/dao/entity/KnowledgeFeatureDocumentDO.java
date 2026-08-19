@@ -14,8 +14,8 @@ import java.time.LocalDateTime;
  * ES/Milvus 只保存该表同步后的检索索引。</p>
  */
 @Data
-@TableName("knowledge_attack_feature_document")
-public class KnowledgeAttackFeatureDocumentDO {
+@TableName("knowledge_feature_document")
+public class KnowledgeFeatureDocumentDO {
 
     /** 主键 ID，同时作为 ES 文档 ID 和 Milvus feature_id。 */
     @TableId(type = IdType.AUTO)
@@ -48,20 +48,14 @@ public class KnowledgeAttackFeatureDocumentDO {
     /** 归一化内容 hash，用于幂等去重。 */
     private String contentHash;
 
-    /** 特征版本，每次内容变更递增，防止旧同步事件覆盖新数据。 */
-    private Integer version;
+    /** 当前样本版本，来源knowledge_attack_feature_document_version_snapshot.version */
+    private Integer currentVersion;
+
+    /** 当前激活版本ID，指向 knowledge_attack_feature_document_version_snapshot.version_id */
+    private Long currentVersionId;
 
     /** 综合同步状态：0-待同步，1-已同步，2-同步失败，3-已删除待同步。 */
     private Integer syncStatus;
-
-    /** ES 同步状态：0-待同步，1-已同步，2-同步失败。 */
-    private Integer esSyncStatus;
-
-    /** Milvus 同步状态：0-待同步，1-已同步，2-同步失败。 */
-    private Integer milvusSyncStatus;
-
-    /** pg 同步状态：0-待同步，1-已同步，2-同步失败。 */
-    private Integer pgSyncStatus;
 
     /** 业务状态：0-禁用，1-启用。 */
     private Integer status;
