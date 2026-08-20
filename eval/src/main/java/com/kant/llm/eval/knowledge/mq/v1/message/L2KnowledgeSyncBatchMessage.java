@@ -1,4 +1,4 @@
-package com.kant.llm.eval.knowledge.mq.message;
+package com.kant.llm.eval.knowledge.mq.v1.message;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

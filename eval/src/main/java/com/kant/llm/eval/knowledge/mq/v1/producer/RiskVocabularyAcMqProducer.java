@@ -1,9 +1,9 @@
-package com.kant.llm.eval.knowledge.mq.producer;
+package com.kant.llm.eval.knowledge.mq.v1.producer;
 
 import com.kant.framework.mq.producer.MessageQueueProducer;
 import com.kant.framework.mq.producer.MessageSendRequest;
 import com.kant.llm.common.constant.EvalMqTopics;
-import com.kant.llm.eval.knowledge.mq.message.RiskVocabularyAcPublishMessage;
+import com.kant.llm.eval.knowledge.mq.v1.message.RiskVocabularyAcPublishMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

@@ -1,7 +1,7 @@
-package com.kant.llm.eval.knowledge.mq.consumer;
+package com.kant.llm.eval.knowledge.mq.v1.consumer;
 
 import com.kant.llm.common.constant.EvalMqTopics;
-import com.kant.llm.eval.knowledge.mq.message.L2KnowledgeSyncBatchMessage;
+import com.kant.llm.eval.knowledge.mq.v1.message.L2KnowledgeSyncBatchMessage;
 import com.kant.llm.eval.knowledge.service.L2KnowledgeSyncService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -21,6 +21,9 @@ public class KnowledgeFeatureDocumentDO {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    /** 样本ID */
+    private Long documentId;
+
     /** 关联 risk_details.id，L2 聚合和后续 L3 回查都以该字段为核心粒度。 */
     private Long riskDetailsId;
 

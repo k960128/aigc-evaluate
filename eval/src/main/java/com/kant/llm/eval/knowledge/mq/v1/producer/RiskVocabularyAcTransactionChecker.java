@@ -1,4 +1,4 @@
-package com.kant.llm.eval.knowledge.mq.producer;
+package com.kant.llm.eval.knowledge.mq.v1.producer;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.kant.framework.mq.MessageWrapper;
@@ -7,7 +7,7 @@ import com.kant.framework.mq.producer.TransactionChecker;
 import com.kant.llm.common.constant.EvalMqTopics;
 import com.kant.llm.common.enums.AcSnapshotPublishStatusEnums;
 import com.kant.llm.eval.knowledge.dao.entity.AcSnapshotPublishRecordDO;
-import com.kant.llm.eval.knowledge.mq.message.RiskVocabularyAcPublishMessage;
+import com.kant.llm.eval.knowledge.mq.v1.message.RiskVocabularyAcPublishMessage;
 import com.kant.llm.eval.knowledge.service.AcSnapshotPublishRecordService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;

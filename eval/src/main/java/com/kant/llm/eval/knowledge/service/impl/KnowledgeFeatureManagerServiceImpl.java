@@ -1,11 +1,14 @@
 package com.kant.llm.eval.knowledge.service.impl;
 
+import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.IdUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.kant.framework.exception.ServiceException;
+import com.kant.framework.mq.producer.MessageQueueProducer;
+import com.kant.framework.mq.producer.MessageSendRequest;
 import com.kant.llm.common.enums.KbSyncStatusEnums;
 import com.kant.llm.eval.knowledge.dao.entity.KnowledgeFeatureDocumentDO;
 import com.kant.llm.eval.knowledge.dao.entity.KnowledgeFeatureDocumentVersionDO;
@@ -38,6 +41,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 
+import static com.kant.llm.common.constant.EvalMqTopics.KNOWLEDGE_PUBLISH_VERSION_TOPIC;
+
 /**
  * 攻击语义知识库聚合管理Service
  */
@@ -51,6 +56,7 @@ public class KnowledgeFeatureManagerServiceImpl implements KnowledgeFeatureManag
     private final KnowledgeFeatureDocumentVersionService knowledgeFeatureDocumentVersionService;
     private final KnowledgeFeatureDocumentVersionSnapshotService knowledgeFeatureDocumentVersionSnapshotService;
     private final RiskDetailsService riskDetailsService;
+    private final MessageQueueProducer messageQueueProducer;
     // ======================================
 
     @Override
@@ -141,6 +147,7 @@ public class KnowledgeFeatureManagerServiceImpl implements KnowledgeFeatureManag
 
         KnowledgeFeatureDocumentDO knowledgeFeatureDocumentDO = BeanUtil.copyProperties(req, KnowledgeFeatureDocumentDO.class);
         knowledgeFeatureDocumentDO.setId(IdUtil.getSnowflakeNextId());
+        knowledgeFeatureDocumentDO.setDocumentId(IdUtil.getSnowflakeNextId());
         knowledgeFeatureDocumentDO.setRiskDetailsName(riskDetailsDO.getDetailsName());
         knowledgeFeatureDocumentDO.setCategoryId(riskDetailsDO.getCategoryId());
         knowledgeFeatureDocumentDO.setNormalizedText(normalizedText);
@@ -231,10 +238,38 @@ public class KnowledgeFeatureManagerServiceImpl implements KnowledgeFeatureManag
         if (count == 0) {
             throw new ServiceException("当前风险分类下不存在未发布的样本,无需发布");
         }
+        //2. 查询是否存在当前版本
+        KnowledgeFeatureDocumentVersionSnapshotDO versionSnapshotDO = knowledgeFeatureDocumentVersionSnapshotService.getOne(
+                new LambdaQueryWrapper<KnowledgeFeatureDocumentVersionSnapshotDO>()
+                        .eq(KnowledgeFeatureDocumentVersionSnapshotDO::getRiskDetailsId, req.getRiskDetailsId())
+                        .orderByDesc(KnowledgeFeatureDocumentVersionSnapshotDO::getUpdateTime));
 
-        //2. 获取当前风险分类下的最新版本
-        //3. 生成新版本记录
-        //4. 发送消息事件，开始更新索引信息
+        if (versionSnapshotDO == null) {
+            versionSnapshotDO = new KnowledgeFeatureDocumentVersionSnapshotDO();
+            // 当前版本不存在，直接初始化一个全新版本
+            versionSnapshotDO.setVersionId(IdUtil.getSnowflakeNextId());
+            versionSnapshotDO.setRiskDetailsId(req.getRiskDetailsId());
+            versionSnapshotDO.setVersion(1);
+            versionSnapshotDO.setStatus("INIT");
+            versionSnapshotDO.setCreator("admin");
+            versionSnapshotDO.setUpdater("admin");
+            versionSnapshotDO.setCreateTime(LocalDateTime.now());
+            versionSnapshotDO.setUpdateTime(LocalDateTime.now());
+            knowledgeFeatureDocumentVersionSnapshotService.save(versionSnapshotDO);
+        }else {
+            versionSnapshotDO.setVersionId(IdUtil.getSnowflakeNextId());
+            versionSnapshotDO.setVersion(versionSnapshotDO.getVersion() + 1);
+            versionSnapshotDO.setUpdateTime(LocalDateTime.now());
+            knowledgeFeatureDocumentVersionSnapshotService.save(versionSnapshotDO);
+        }
+
+        // 发送消息
+        messageQueueProducer.send(MessageSendRequest.builder()
+                        .topic(KNOWLEDGE_PUBLISH_VERSION_TOPIC)
+                        .keys(versionSnapshotDO.getVersionId().toString())
+                        .body(versionSnapshotDO)
+                        .bizDesc("发布知识特征版本")
+                .build());
         return true;
     }
 }

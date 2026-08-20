@@ -35,7 +35,7 @@ public class KnowledgeFeatureDocumentVersionSnapshotDO {
     private Integer lockVersion;
 
     /**
-     * 版本状态：UPLOADED, CONVERTING, CONVERTED, CHUNKED, VECTOR_STORED, STORED
+     * 版本状态：INIT, CONVERTING, CONVERTED, CHUNKED, VECTOR_STORED, STORED
      */
     private String status;
 

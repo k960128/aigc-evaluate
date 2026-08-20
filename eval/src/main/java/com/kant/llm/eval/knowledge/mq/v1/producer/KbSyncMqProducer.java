@@ -1,8 +1,8 @@
-package com.kant.llm.eval.knowledge.mq.producer;
+package com.kant.llm.eval.knowledge.mq.v1.producer;
 
 import com.kant.llm.common.constant.EvalMqTopics;
-import com.kant.llm.eval.knowledge.mq.message.KbSyncEventMessage;
-import com.kant.llm.eval.knowledge.mq.message.L2KnowledgeSyncBatchMessage;
+import com.kant.llm.eval.knowledge.mq.v1.message.KbSyncEventMessage;
+import com.kant.llm.eval.knowledge.mq.v1.message.L2KnowledgeSyncBatchMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
