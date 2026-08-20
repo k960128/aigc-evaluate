@@ -29,6 +29,7 @@ public class KnowledgeFeatureManagerController {
 
     /**
      * 获取当前知识库版本信息
+     *
      * @return 当前知识库版本信息
      */
     @PostMapping("/current-version")
@@ -38,6 +39,7 @@ public class KnowledgeFeatureManagerController {
 
     /**
      * 获取知识库版本快照列表
+     *
      * @return 知识库版本快照列表
      */
     @PostMapping("/version-snapshot-list")
@@ -47,6 +49,7 @@ public class KnowledgeFeatureManagerController {
 
     /**
      * 获取知识库特征文档分页列表
+     *
      * @return 知识库特征文档分页列表
      */
     @PostMapping("/page")
@@ -56,6 +59,7 @@ public class KnowledgeFeatureManagerController {
 
     /**
      * 保存攻击语义知识库特征文档
+     *
      * @param req 请求体
      * @return Boolean 结果
      */
@@ -66,10 +70,11 @@ public class KnowledgeFeatureManagerController {
 
     /**
      * 发布版本
+     *
      * @param req 请求体
      */
     @PostMapping("/publish-version")
     public Result<Boolean> publishVersion(@RequestBody PublishVersionReq req) {
-        return Results.success(knowledgeFeatureManagerService.publishVersion(req));
+        return Results.success(knowledgeFeatureManagerService.publishVersion(req), "已提交发布版本请求");
     }
 }

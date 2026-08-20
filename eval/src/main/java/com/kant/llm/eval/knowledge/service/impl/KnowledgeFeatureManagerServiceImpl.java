@@ -242,7 +242,8 @@ public class KnowledgeFeatureManagerServiceImpl implements KnowledgeFeatureManag
         KnowledgeFeatureDocumentVersionSnapshotDO versionSnapshotDO = knowledgeFeatureDocumentVersionSnapshotService.getOne(
                 new LambdaQueryWrapper<KnowledgeFeatureDocumentVersionSnapshotDO>()
                         .eq(KnowledgeFeatureDocumentVersionSnapshotDO::getRiskDetailsId, req.getRiskDetailsId())
-                        .orderByDesc(KnowledgeFeatureDocumentVersionSnapshotDO::getUpdateTime));
+                        .orderByDesc(KnowledgeFeatureDocumentVersionSnapshotDO::getUpdateTime)
+                        .last("limit 1"));
 
         if (versionSnapshotDO == null) {
             versionSnapshotDO = new KnowledgeFeatureDocumentVersionSnapshotDO();
