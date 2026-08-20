@@ -28,7 +28,11 @@ public class RocketMQProducerAdapter implements MessageQueueProducer {
         messageSendRequest.setKeys(StrUtil.isEmpty(messageSendRequest.getKeys()) ? UUID.randomUUID().toString() : messageSendRequest.getKeys());
 
         Message<MessageWrapper<Object>> message = MessageBuilder
-                .withPayload(MessageWrapper.builder().keys(messageSendRequest.getKeys()).body(messageSendRequest.getBody()).build())
+                .withPayload(MessageWrapper.builder()
+                        .keys(messageSendRequest.getKeys())
+                        .body(messageSendRequest.getBody())
+                        .bizDesc(messageSendRequest.getBizDesc())
+                        .build())
                 .setHeader(MessageConst.PROPERTY_KEYS, messageSendRequest.getKeys())
                 .build();
 
@@ -53,7 +57,11 @@ public class RocketMQProducerAdapter implements MessageQueueProducer {
         transactionListener.registerLocalTransaction(txId, messageSendRequest.getLocalTransaction());
 
         Message<MessageWrapper<Object>> message = MessageBuilder
-                .withPayload(MessageWrapper.builder().keys(messageSendRequest.getKeys()).body(messageSendRequest.getBody()).build())
+                .withPayload(MessageWrapper.builder()
+                        .keys(messageSendRequest.getKeys())
+                        .body(messageSendRequest.getBody())
+                        .bizDesc(messageSendRequest.getBizDesc())
+                        .build())
                 .setHeader(MessageConst.PROPERTY_KEYS, messageSendRequest.getKeys())
                 .setHeader(DelegatingTransactionListener.HEADER_TX_ID, txId)
                 .setHeader(DelegatingTransactionListener.HEADER_TOPIC, messageSendRequest.getTopic())
