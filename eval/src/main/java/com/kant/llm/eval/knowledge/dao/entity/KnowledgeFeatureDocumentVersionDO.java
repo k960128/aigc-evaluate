@@ -24,6 +24,11 @@ public class KnowledgeFeatureDocumentVersionDO {
     private Long currentVersionId;
 
     /**
+     * 风险详情ID
+     */
+    private Long riskDetailsId;
+
+    /**
      * 乐观锁版本号
      */
     @Version

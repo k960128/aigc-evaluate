@@ -39,7 +39,7 @@ public class KnowledgeFeatureDocumentDO {
     /** 特征极性：UNSAFE-风险特征，SAFE_EXCEPTION-安全例外。 */
     private String polarity;
 
-    /** 来源：manual、dataset、redteam、incident、generated。 */
+    /** 样本来源：互联网、AI合成、人工标注等 */
     private String source;
 
     /** 特征权重，用于召回融合和阈值调整。 */

@@ -22,4 +22,9 @@ public class KnowledgeFeatureDocumentVersionVO {
      * 当前激活版本ID，指向 knowledge_attack_feature_document_version_snapshot.version_id
      */
     private Long currentVersionId;
+
+    /**
+     * 风险详情ID
+     */
+    private Long riskDetailsId;
 }
