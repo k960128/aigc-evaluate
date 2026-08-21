@@ -14,6 +14,12 @@ import java.time.LocalDateTime;
 public class KnowledgeFeatureDocumentVersionDO {
 
     /**
+     * 主键ID
+     */
+    @TableId(type = IdType.AUTO)
+    private Long id;
+
+    /**
      * 状态：INIT, UPLOADED, CONVERTING, CONVERTED, CHUNKED, VECTOR_STORED
      */
     private String status;

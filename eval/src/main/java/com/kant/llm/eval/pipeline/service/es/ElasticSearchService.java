@@ -10,6 +10,7 @@ import co.elastic.clients.elasticsearch.indices.ExistsRequest;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kant.llm.common.constant.EsDocumentChunk;
+import com.kant.llm.common.constant.EsKnowledgeFeatureDocumentChunk;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -399,5 +400,27 @@ public class ElasticSearchService {
         if (client == null) {
             throw new IllegalStateException("ElasticsearchClient 未配置，无法执行 ES 操作");
         }
+    }
+
+    /**
+     * 单条存储
+     */
+    public void indexSingleVersion2(EsKnowledgeFeatureDocumentChunk doc) throws Exception {
+        ensureClientAvailable();
+        if (doc == null || doc.getDocumentId() == null) {
+            throw new IllegalArgumentException("Document or ID cannot be null");
+        }
+
+        String docJson = mapper.writeValueAsString(doc);
+
+        IndexRequest<EsDocumentChunk> request = IndexRequest.of(b -> b
+                .index("knowledge_feature_document_index")
+                .id(String.valueOf(doc.getDocumentId()))
+                .withJson(new StringReader(docJson))
+                .refresh(Refresh.True)
+        );
+
+        client.index(request);
+        log.debug("Indexed doc document id={}", doc.getDocumentId());
     }
 }
