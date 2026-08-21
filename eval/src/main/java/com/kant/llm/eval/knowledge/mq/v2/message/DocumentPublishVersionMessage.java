@@ -20,4 +20,9 @@ public class DocumentPublishVersionMessage {
      * 版本ID
      */
     private Long versionId;
+
+    /**
+     * 上一个版本ID
+     */
+    private Long beforeVersionId;
 }

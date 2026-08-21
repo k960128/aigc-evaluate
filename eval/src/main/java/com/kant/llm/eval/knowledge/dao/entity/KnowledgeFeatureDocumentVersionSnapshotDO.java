@@ -19,6 +19,11 @@ public class KnowledgeFeatureDocumentVersionSnapshotDO {
     private Long versionId;
 
     /**
+     * 前一个版本ID
+     */
+    private Long beforeVersionId;
+
+    /**
      * 版本号（语义化版本，如 1|2|3）
      */
     private Integer version;
