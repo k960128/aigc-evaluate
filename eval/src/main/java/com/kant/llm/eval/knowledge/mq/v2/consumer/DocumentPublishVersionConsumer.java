@@ -71,7 +71,7 @@ public class DocumentPublishVersionConsumer
         List<KnowledgeFeatureDocumentDO> knowledgeFeatureDocumentDOS = knowledgeFeatureDocumentService.listByRiskDetailsIdAndVersionId(riskDetailsId, beforeVersionId);
         log.info("待发布文档数量: {}", knowledgeFeatureDocumentDOS.size());
         // 原子递增计数器
-        AtomicInteger count = new AtomicInteger(0);
+        AtomicInteger count = new AtomicInteger(1);
         knowledgeFeatureDocumentDOS.forEach(knowledgeFeatureDocumentDO -> {
             try {
                 //2. 发布ES
