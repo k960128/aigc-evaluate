@@ -12,7 +12,7 @@ import java.util.Map;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class EsKnowledgeFeatureDocumentChunk {
     /** 样本ID ，同时作为 ES 文档 ID 和 Milvus documentId*/
-    private Long documentId;
+    private String documentId;
 
     /** 关联 risk_details.id，L2 聚合和后续 L3 回查都以该字段为核心粒度。 */
     private Long riskDetailsId;
@@ -60,10 +60,10 @@ public class EsKnowledgeFeatureDocumentChunk {
     private String updater;
 
     /** 创建时间。 */
-    private LocalDateTime createTime;
+    private String createTime;
 
     /** 更新时间。 */
-    private LocalDateTime updateTime;
+    private String updateTime;
 
     /** 元数据。 */
     private Map<String, Object> metadata;

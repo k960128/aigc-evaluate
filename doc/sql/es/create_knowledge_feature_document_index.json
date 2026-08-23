@@ -7,7 +7,7 @@
     "dynamic": false,
     "properties": {
       "documentId": {
-        "type": "long"
+        "type": "text"
       },
       "riskDetailsId": {
         "type": "long"

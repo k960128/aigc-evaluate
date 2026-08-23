@@ -10,6 +10,9 @@ public class KnowledgeFeatureDocumentVO implements Serializable {
     /** 主键 ID，同时作为 ES 文档 ID 和 Milvus feature_id。 */
     private Long id;
 
+    /** 样本ID */
+    private String documentId;
+
     /** 关联 risk_details.id，L2 聚合和后续 L3 回查都以该字段为核心粒度。 */
     private Long riskDetailsId;
 

@@ -18,10 +18,10 @@ public class KnowledgeFeatureDocumentServiceImpl
     
     @Override
     public List<KnowledgeFeatureDocumentDO> listByRiskDetailsIdAndVersionId(Long riskDetailsId, Long versionId) {
-        return list( new LambdaQueryWrapper<KnowledgeFeatureDocumentDO>()
-                .eq(KnowledgeFeatureDocumentDO::getRiskDetailsId, riskDetailsId)
-                .eq(KnowledgeFeatureDocumentDO::getCurrentVersionId, versionId)
-                .isNull(KnowledgeFeatureDocumentDO::getCurrentVersion)
-                .isNull(KnowledgeFeatureDocumentDO::getCurrentVersionId));
+        return list(new LambdaQueryWrapper<KnowledgeFeatureDocumentDO>()
+                .and(w -> w.eq(KnowledgeFeatureDocumentDO::getRiskDetailsId, riskDetailsId)
+                        .eq(KnowledgeFeatureDocumentDO::getCurrentVersionId, versionId))
+                .or(w -> w.isNull(KnowledgeFeatureDocumentDO::getCurrentVersion)
+                        .isNull(KnowledgeFeatureDocumentDO::getCurrentVersionId)));
     }
 }

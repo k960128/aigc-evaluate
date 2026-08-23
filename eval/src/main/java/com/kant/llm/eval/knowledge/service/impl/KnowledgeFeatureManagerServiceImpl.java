@@ -43,6 +43,7 @@ import java.text.Normalizer;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 import static com.kant.llm.common.constant.EvalMqTopics.KNOWLEDGE_PUBLISH_VERSION_TOPIC;
 
@@ -151,7 +152,7 @@ public class KnowledgeFeatureManagerServiceImpl implements KnowledgeFeatureManag
 
         KnowledgeFeatureDocumentDO knowledgeFeatureDocumentDO = BeanUtil.copyProperties(req, KnowledgeFeatureDocumentDO.class);
         knowledgeFeatureDocumentDO.setId(IdUtil.getSnowflakeNextId());
-        knowledgeFeatureDocumentDO.setDocumentId(IdUtil.getSnowflakeNextId());
+        knowledgeFeatureDocumentDO.setDocumentId(UUID.randomUUID().toString());
         knowledgeFeatureDocumentDO.setRiskDetailsName(riskDetailsDO.getDetailsName());
         knowledgeFeatureDocumentDO.setCategoryId(riskDetailsDO.getCategoryId());
         knowledgeFeatureDocumentDO.setNormalizedText(normalizedText);

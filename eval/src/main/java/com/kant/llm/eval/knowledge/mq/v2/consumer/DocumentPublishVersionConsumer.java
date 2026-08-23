@@ -18,6 +18,8 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -96,8 +98,8 @@ public class DocumentPublishVersionConsumer
                 .riskDetailsId(knowledgeFeatureDocumentDO.getRiskDetailsId())
                 .categoryId(knowledgeFeatureDocumentDO.getCategoryId())
                 .contentHash(knowledgeFeatureDocumentDO.getContentHash())
-                .createTime(knowledgeFeatureDocumentDO.getCreateTime())
-                .updateTime(knowledgeFeatureDocumentDO.getUpdateTime())
+                .createTime(formatDateTime(knowledgeFeatureDocumentDO.getCreateTime()))
+                .updateTime(formatDateTime(knowledgeFeatureDocumentDO.getUpdateTime()))
                 .currentVersion(knowledgeFeatureDocumentDO.getCurrentVersion())
                 .currentVersionId(knowledgeFeatureDocumentDO.getCurrentVersionId())
                 .featureText(knowledgeFeatureDocumentDO.getFeatureText())
@@ -134,4 +136,7 @@ public class DocumentPublishVersionConsumer
         }
     }
 
+    private String formatDateTime(LocalDateTime dateTime) {
+        return dateTime == null ? null : dateTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+    }
 }
