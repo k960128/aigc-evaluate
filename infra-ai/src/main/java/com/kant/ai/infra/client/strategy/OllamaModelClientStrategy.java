@@ -48,7 +48,7 @@ public class OllamaModelClientStrategy implements ModelClientStrategy {
         long endTime = System.currentTimeMillis();
         log.info("OllamaModelClientStrategy connection response: {}", content);
         return ModelConnectionResponse.builder()
-                .result(ObjectUtil.equal(content, "1"))
+                .result(format(content))
                 .respContent(content)
                 .elapsed(endTime - startTime)
                 .build();
@@ -66,5 +66,14 @@ public class OllamaModelClientStrategy implements ModelClientStrategy {
                         .build())
                 .build();
         return ChatClient.builder(chatModel).build();
+    }
+
+    /**
+     * 格式化
+     */
+    private Boolean format(String content) {
+        // 剔除内容中包含的\n
+        content = content.replaceAll("\\n", "");
+        return ObjectUtil.equal(content, "1");
     }
 }
