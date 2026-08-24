@@ -7,6 +7,7 @@ import com.kant.llm.common.constant.EvalMqTopics;
 import com.kant.llm.eval.knowledge.dao.entity.KnowledgeAttackFeatureDO;
 import com.kant.llm.eval.knowledge.dao.entity.KnowledgeFeatureDocumentDO;
 import com.kant.llm.eval.knowledge.dao.entity.KnowledgeFeatureDocumentVersionSnapshotDO;
+import com.kant.llm.eval.knowledge.dto.resp.KnowledgeFeatureCurrentVersionVO;
 import com.kant.llm.eval.knowledge.mq.v2.message.DocumentPublishVersionMessage;
 import com.kant.llm.eval.knowledge.service.KnowledgeFeatureDocumentService;
 import com.kant.llm.eval.knowledge.service.KnowledgeFeatureDocumentVersionService;
@@ -64,8 +65,6 @@ public class DocumentPublishVersionConsumer
                 EvalMqTopics.KNOWLEDGE_PUBLISH_VERSION_TOPIC, message.getVersionId());
         // 执行发布操作
         execute(message);
-        // 更新缓存中指针指向最新版本ID
-        redisTemplate.opsForValue().set("knowledge_feature:version:current_version_id", message.getVersionId());
     }
 
     /**
@@ -99,6 +98,12 @@ public class DocumentPublishVersionConsumer
         knowledgeFeatureDocumentVersionService.updateCurrentVersion(message.getVersionId());
         // 删除发布状态缓存
         redisTemplate.delete("knowledge_feature_publish_version:lock");
+        // 更新缓存中指针指向最新版本ID
+        redisTemplate.opsForValue().set("knowledge_feature:version:current_version_id",
+                KnowledgeFeatureCurrentVersionVO.builder()
+                        .currentVersion(versionSnapshotDO.getVersion())
+                        .currentVersionId(versionSnapshotDO.getVersionId())
+                        .build());
     }
 
     private EsKnowledgeFeatureDocumentChunk buildEsDocument(KnowledgeFeatureDocumentDO knowledgeFeatureDocumentDO) {

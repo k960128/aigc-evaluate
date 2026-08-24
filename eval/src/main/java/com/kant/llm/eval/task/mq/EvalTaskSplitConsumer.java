@@ -147,6 +147,8 @@ public class EvalTaskSplitConsumer implements RocketMQListener<MessageWrapper<Ev
                         .inputText(sample.getQuestion())
                         .riskDetailsId(sample.getRiskDetailsId())
                         .status(EvalResultStatusEnums.PENDING.getCode())
+                        .knowledgeVersion(taskDetail.getKnowledgeVersion())
+                        .knowledgeVersionId(taskDetail.getKnowledgeVersionId())
                         .build();
                 try {
                     evalResultDetailMapper.insert(resultDetail);
@@ -174,18 +176,18 @@ public class EvalTaskSplitConsumer implements RocketMQListener<MessageWrapper<Ev
     private void sendSampleExecutionMessage(EvalTaskDetailDO taskDetail, EvalResultDetailDO resultDetail) {
         log.info("准备投递拆分后的单样本模型调用消息，taskDetailId: {}, resultDetailId: {}, sampleId: {}",
                 taskDetail.getId(), resultDetail.getId(), resultDetail.getSampleId());
-        messageQueueProducer.send(MessageSendRequest.builder()
-                .topic(MODEL_CALL_TOPIC)
-                .keys(resultDetail.getId().toString())
-                .bizDesc("单样本模型调用消息")
-                .body(ModelCallMessage.builder()
-                        .taskDetailId(taskDetail.getId())
-                        .resultDetailId(resultDetail.getId())
-                        .taskId(taskDetail.getTaskId())
-                        .sampleId(resultDetail.getSampleId())
-                        .modelId(taskDetail.getModelId())
-                        .build())
-                .build());
+//        messageQueueProducer.send(MessageSendRequest.builder()
+//                .topic(MODEL_CALL_TOPIC)
+//                .keys(resultDetail.getId().toString())
+//                .bizDesc("单样本模型调用消息")
+//                .body(ModelCallMessage.builder()
+//                        .taskDetailId(taskDetail.getId())
+//                        .resultDetailId(resultDetail.getId())
+//                        .taskId(taskDetail.getTaskId())
+//                        .sampleId(resultDetail.getSampleId())
+//                        .modelId(taskDetail.getModelId())
+//                        .build())
+//                .build());
     }
 
     /**
