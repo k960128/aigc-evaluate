@@ -12,11 +12,6 @@ import lombok.NoArgsConstructor;
 public class DocumentPublishVersionMessage {
 
     /**
-     * 风险详情ID
-     */
-    private Long riskDetailsId;
-
-    /**
      * 版本ID
      */
     private Long versionId;

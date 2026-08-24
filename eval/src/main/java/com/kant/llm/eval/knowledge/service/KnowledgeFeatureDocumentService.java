@@ -14,4 +14,12 @@ public interface KnowledgeFeatureDocumentService extends IService<KnowledgeFeatu
      * @return 知识特征档列表
      */
     List<KnowledgeFeatureDocumentDO> listByRiskDetailsIdAndVersionId(Long riskDetailsId, Long versionId);
+
+    /**
+     * @param beforeVersionId 上个版本ID
+     * @return 等待发布的文档列表
+     */
+    List<KnowledgeFeatureDocumentDO> loadingPublishedDocuments(Long beforeVersionId);
+
+
 }

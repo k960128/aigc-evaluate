@@ -16,14 +16,13 @@ public interface KnowledgeFeatureManagerService {
      * 获取攻击语义知识库版本
      * @return 攻击语义知识库版本响应体
      */
-    KnowledgeFeatureDocumentVersionVO getKnowledgeFeatureDocumentVersion(KnowledgeFeatureVersionReq req);
+    KnowledgeFeatureDocumentVersionVO getKnowledgeFeatureDocumentVersion();
 
     /**
      * 获取攻击语义知识库版本快照列表
-     * @param req 风险小类ID请求体
      * @return 攻击语义知识库版本快照列表响应体
      */
-    List<KnowledgeFeatureDocumentVersionSnapshotVO> getKnowledgeFeatureDocumentVersionSnapshotList(KnowledgeFeatureVersionReq req);
+    List<KnowledgeFeatureDocumentVersionSnapshotVO> getKnowledgeFeatureDocumentVersionSnapshotList();
 
     /**
      * 获取攻击语义知识库特征文档分页列表
@@ -41,8 +40,7 @@ public interface KnowledgeFeatureManagerService {
 
     /**
      * 发布版本
-     * @param req 请求体
      * @return 结果 结果
      */
-    Boolean publishVersion(PublishVersionReq req);
+    Boolean publishVersion();
 }

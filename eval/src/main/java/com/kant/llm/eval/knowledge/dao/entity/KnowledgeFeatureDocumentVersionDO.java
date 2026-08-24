@@ -2,6 +2,7 @@ package com.kant.llm.eval.knowledge.dao.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import lombok.Builder;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -10,6 +11,7 @@ import java.time.LocalDateTime;
  * 攻击语义知识库版本表
  */
 @Data
+@Builder
 @TableName("knowledge_feature_document_version")
 public class KnowledgeFeatureDocumentVersionDO {
 
@@ -28,11 +30,6 @@ public class KnowledgeFeatureDocumentVersionDO {
      * 当前激活版本ID，指向 knowledge_attack_feature_document_version_snapshot.version_id
      */
     private Long currentVersionId;
-
-    /**
-     * 风险详情ID
-     */
-    private Long riskDetailsId;
 
     /**
      * 乐观锁版本号

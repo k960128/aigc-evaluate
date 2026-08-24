@@ -33,8 +33,8 @@ public class KnowledgeFeatureManagerController {
      * @return 当前知识库版本信息
      */
     @PostMapping("/current-version")
-    public Result<KnowledgeFeatureDocumentVersionVO> getKnowledgeFeatureDocumentVersion(@RequestBody KnowledgeFeatureVersionReq req) {
-        return Results.success(knowledgeFeatureManagerService.getKnowledgeFeatureDocumentVersion(req));
+    public Result<KnowledgeFeatureDocumentVersionVO> getKnowledgeFeatureDocumentVersion() {
+        return Results.success(knowledgeFeatureManagerService.getKnowledgeFeatureDocumentVersion());
     }
 
     /**
@@ -43,8 +43,8 @@ public class KnowledgeFeatureManagerController {
      * @return 知识库版本快照列表
      */
     @PostMapping("/version-snapshot-list")
-    public Result<List<KnowledgeFeatureDocumentVersionSnapshotVO>> getKnowledgeFeatureDocumentVersionSnapshotList(@RequestBody KnowledgeFeatureVersionReq req) {
-        return Results.success(knowledgeFeatureManagerService.getKnowledgeFeatureDocumentVersionSnapshotList(req));
+    public Result<List<KnowledgeFeatureDocumentVersionSnapshotVO>> getKnowledgeFeatureDocumentVersionSnapshotList() {
+        return Results.success(knowledgeFeatureManagerService.getKnowledgeFeatureDocumentVersionSnapshotList());
     }
 
     /**
@@ -70,11 +70,10 @@ public class KnowledgeFeatureManagerController {
 
     /**
      * 发布版本
-     *
-     * @param req 请求体
-     */
+     * TODO 等待后期重新改造
+     **/
     @PostMapping("/publish-version")
-    public Result<Boolean> publishVersion(@RequestBody PublishVersionReq req) {
-        return Results.success(knowledgeFeatureManagerService.publishVersion(req), "已提交发布版本请求");
+    public Result<Boolean> publishVersion() {
+        return Results.success(knowledgeFeatureManagerService.publishVersion(), "已提交发布版本请求");
     }
 }

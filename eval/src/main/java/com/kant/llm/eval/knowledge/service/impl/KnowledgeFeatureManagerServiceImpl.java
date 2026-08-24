@@ -33,6 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -62,14 +63,13 @@ public class KnowledgeFeatureManagerServiceImpl implements KnowledgeFeatureManag
     private final RiskDetailsService riskDetailsService;
     private final MessageQueueProducer messageQueueProducer;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final TransactionTemplate transactionTemplate;
     // ======================================
 
     @Override
-    public KnowledgeFeatureDocumentVersionVO getKnowledgeFeatureDocumentVersion(KnowledgeFeatureVersionReq req) {
+    public KnowledgeFeatureDocumentVersionVO getKnowledgeFeatureDocumentVersion() {
         KnowledgeFeatureDocumentVersionDO knowledgeFeatureDocumentVersionDO =
-                knowledgeFeatureDocumentVersionService.getOne(
-                        new LambdaQueryWrapper<KnowledgeFeatureDocumentVersionDO>()
-                                .eq(KnowledgeFeatureDocumentVersionDO::getRiskDetailsId, req.getRiskDetailsId()));
+                knowledgeFeatureDocumentVersionService.getOne(null);
         if (knowledgeFeatureDocumentVersionDO == null) {
             return null;
         }
@@ -77,10 +77,8 @@ public class KnowledgeFeatureManagerServiceImpl implements KnowledgeFeatureManag
     }
 
     @Override
-    public List<KnowledgeFeatureDocumentVersionSnapshotVO> getKnowledgeFeatureDocumentVersionSnapshotList(KnowledgeFeatureVersionReq req) {
-        List<KnowledgeFeatureDocumentVersionSnapshotDO> list = knowledgeFeatureDocumentVersionSnapshotService.list(
-                new LambdaQueryWrapper<KnowledgeFeatureDocumentVersionSnapshotDO>()
-                        .eq(KnowledgeFeatureDocumentVersionSnapshotDO::getRiskDetailsId, req.getRiskDetailsId()));
+    public List<KnowledgeFeatureDocumentVersionSnapshotVO> getKnowledgeFeatureDocumentVersionSnapshotList() {
+        List<KnowledgeFeatureDocumentVersionSnapshotDO> list = knowledgeFeatureDocumentVersionSnapshotService.list();
         if (CollectionUtil.isEmpty(list)) {
             return CollectionUtil.newArrayList();
         }
@@ -233,68 +231,105 @@ public class KnowledgeFeatureManagerServiceImpl implements KnowledgeFeatureManag
     }
 
     @Override
-    public Boolean publishVersion(PublishVersionReq req) {
-        Object object = redisTemplate.opsForValue().get("knowledge_feature_publish_version:" + req.getRiskDetailsId());
+    public Boolean publishVersion() {
+        Object object = redisTemplate.opsForValue().get("knowledge_feature_publish_version:lock");
         if (ObjectUtil.isNotNull(object)) {
             throw new ServiceException("当前存在正在发布的版本,请稍候再试");
         }
-        //1. 先判断当前风险分类下是否有存在未发布样本
+        //1. 判断样本库中是否存在未发布的样本
         long count = knowledgeFeatureDocumentService.count(
                 new LambdaQueryWrapper<KnowledgeFeatureDocumentDO>()
-                        .eq(KnowledgeFeatureDocumentDO::getRiskDetailsId, req.getRiskDetailsId())
                         .isNull(KnowledgeFeatureDocumentDO::getCurrentVersion)
                         .isNull(KnowledgeFeatureDocumentDO::getCurrentVersionId));
         if (count == 0) {
-            throw new ServiceException("当前风险分类下不存在未发布的样本,无需发布");
+            throw new ServiceException("样本库中不存在未发布的样本,无需发布");
         }
-        redisTemplate.opsForValue().set("knowledge_feature_publish_version:" + req.getRiskDetailsId(), "INIT");
 
-        //2. 查询是否存在当前版本
-        KnowledgeFeatureDocumentVersionSnapshotDO versionSnapshotDO = knowledgeFeatureDocumentVersionSnapshotService.getOne(
-                new LambdaQueryWrapper<KnowledgeFeatureDocumentVersionSnapshotDO>()
-                        .eq(KnowledgeFeatureDocumentVersionSnapshotDO::getRiskDetailsId, req.getRiskDetailsId())
-                        .orderByDesc(KnowledgeFeatureDocumentVersionSnapshotDO::getUpdateTime)
-                        .last("limit 1"));
+        // redis记录发布状态
+        redisTemplate.opsForValue().set("knowledge_feature_publish_version:lock", "1");
+        Long versionId = null;
+        Long beforeVersionId = null;
+        // 2. 判断是否存在发布的版本
+        KnowledgeFeatureDocumentVersionDO documentVersionDO = knowledgeFeatureDocumentVersionService.getOne(null);
+        // 当前为第一次发布，初始化数据库信息
+        if (ObjectUtil.isNull(documentVersionDO)) {
+            // 创建版本流水记录
+            long snowflakeNextId = IdUtil.getSnowflakeNextId();
+            versionId = snowflakeNextId;
+            beforeVersionId = snowflakeNextId;
+            KnowledgeFeatureDocumentVersionSnapshotDO versionSnapshotDO = KnowledgeFeatureDocumentVersionSnapshotDO.builder()
+                    .versionId(snowflakeNextId)
+                    .version(1)
+                    .beforeVersionId(snowflakeNextId)
+                    .status("INIT")
+                    .creator("admin")
+                    .updater("admin")
+                    .createTime(LocalDateTime.now())
+                    .updateTime(LocalDateTime.now())
+                    .build();
+            // 创建版本记录
+            documentVersionDO = KnowledgeFeatureDocumentVersionDO.builder()
+                    .id(IdUtil.getSnowflakeNextId())
+                    .status("INIT")
+                    .currentVersionId(versionSnapshotDO.getVersionId())
+                    .lockVersion(0)
+                    .creator("admin")
+                    .updater("admin")
+                    .deleted(false)
+                    .build();
 
-        try {
-            if (versionSnapshotDO == null) {
-                versionSnapshotDO = new KnowledgeFeatureDocumentVersionSnapshotDO();
-                // 当前版本不存在，直接初始化一个全新版本
-                Long snowflakeNextId = IdUtil.getSnowflakeNextId();
-                versionSnapshotDO.setVersionId(snowflakeNextId);
-                versionSnapshotDO.setBeforeVersionId(snowflakeNextId);
-                versionSnapshotDO.setRiskDetailsId(req.getRiskDetailsId());
-                versionSnapshotDO.setVersion(1);
-                versionSnapshotDO.setStatus("INIT");
-                versionSnapshotDO.setCreator("admin");
-                versionSnapshotDO.setUpdater("admin");
-                versionSnapshotDO.setCreateTime(LocalDateTime.now());
-                versionSnapshotDO.setUpdateTime(LocalDateTime.now());
-                knowledgeFeatureDocumentVersionSnapshotService.save(versionSnapshotDO);
-            } else {
-                Long versionId = versionSnapshotDO.getVersionId();
-                versionSnapshotDO.setVersionId(IdUtil.getSnowflakeNextId());
-                versionSnapshotDO.setBeforeVersionId(versionId);
-                versionSnapshotDO.setVersion(versionSnapshotDO.getVersion() + 1);
-                versionSnapshotDO.setCreateTime(LocalDateTime.now());
-                versionSnapshotDO.setUpdateTime(LocalDateTime.now());
-                knowledgeFeatureDocumentVersionSnapshotService.save(versionSnapshotDO);
-            }
+            KnowledgeFeatureDocumentVersionDO finalDocumentVersionDO = documentVersionDO;
 
-        } catch (Exception e) {
-            log.error("发布知识特征版本失败", e);
-            redisTemplate.delete("knowledge_feature_publish_version:" + req.getRiskDetailsId());
-            throw new ServiceException("发布知识特征版本失败");
+            transactionTemplate.executeWithoutResult(status -> {
+                try {
+                    knowledgeFeatureDocumentVersionSnapshotService.save(versionSnapshotDO);
+                    knowledgeFeatureDocumentVersionService.save(finalDocumentVersionDO);
+                } catch (Exception e) {
+                    log.error("提交发布失败", e);
+                    redisTemplate.delete("knowledge_feature_publish_version:lock");
+                    throw new ServiceException("提交发布失败，请稍候重试，或者联系管理员！");
+                }
+            });
+        } else {
+            KnowledgeFeatureDocumentVersionSnapshotDO snapshotVersionDO = knowledgeFeatureDocumentVersionSnapshotService.getById(documentVersionDO.getCurrentVersionId());
+
+            long currentVersionId = IdUtil.getSnowflakeNextId();
+            versionId = currentVersionId;
+            beforeVersionId = snapshotVersionDO.getVersionId();
+
+            KnowledgeFeatureDocumentVersionSnapshotDO versionSnapshotDO = KnowledgeFeatureDocumentVersionSnapshotDO.builder()
+                    .versionId(currentVersionId)
+                    .beforeVersionId(snapshotVersionDO.getVersionId())
+                    .version(snapshotVersionDO.getVersion() + 1)
+                    .status("INIT")
+                    .creator("admin")
+                    .updater("admin")
+                    .build();
+            documentVersionDO.setCurrentVersionId(currentVersionId);
+            documentVersionDO.setStatus("INIT");
+
+            KnowledgeFeatureDocumentVersionDO finalDocumentVersionDO1 = documentVersionDO;
+            transactionTemplate.executeWithoutResult(status -> {
+                try {
+                    knowledgeFeatureDocumentVersionSnapshotService.save(versionSnapshotDO);
+                    knowledgeFeatureDocumentVersionService.updateById(finalDocumentVersionDO1);
+                } catch (Exception e) {
+                    log.error("提交发布失败", e);
+                    redisTemplate.delete("knowledge_feature_publish_version:lock");
+                    throw new ServiceException("提交发布失败，请稍候重试，或者联系管理员！");
+                }
+            });
         }
+
+
         // 发送消息
         messageQueueProducer.send(MessageSendRequest.builder()
                 .topic(KNOWLEDGE_PUBLISH_VERSION_TOPIC)
-                .keys(versionSnapshotDO.getVersionId().toString())
+                .keys(documentVersionDO.getCurrentVersionId().toString())
                 .body(DocumentPublishVersionMessage
                         .builder()
-                        .riskDetailsId(req.getRiskDetailsId())
-                        .versionId(versionSnapshotDO.getVersionId())
-                        .beforeVersionId(versionSnapshotDO.getBeforeVersionId())
+                        .versionId(versionId)
+                        .beforeVersionId(beforeVersionId)
                         .build())
                 .bizDesc("发布知识特征版本")
                 .build());

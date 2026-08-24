@@ -24,4 +24,12 @@ public class KnowledgeFeatureDocumentServiceImpl
                 .or(w -> w.isNull(KnowledgeFeatureDocumentDO::getCurrentVersion)
                         .isNull(KnowledgeFeatureDocumentDO::getCurrentVersionId)));
     }
+
+    @Override
+    public List<KnowledgeFeatureDocumentDO> loadingPublishedDocuments(Long beforeVersionId) {
+        return list(new LambdaQueryWrapper<KnowledgeFeatureDocumentDO>()
+                .and(w -> w.eq(KnowledgeFeatureDocumentDO::getCurrentVersionId, beforeVersionId)
+                        .or()
+                        .isNull(KnowledgeFeatureDocumentDO::getCurrentVersionId)));
+    }
 }

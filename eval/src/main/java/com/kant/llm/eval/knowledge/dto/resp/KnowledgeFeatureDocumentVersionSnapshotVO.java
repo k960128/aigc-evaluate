@@ -25,9 +25,4 @@ public class KnowledgeFeatureDocumentVersionSnapshotVO {
      * 版本状态：UPLOADED, CONVERTING, CONVERTED, CHUNKED, VECTOR_STORED, STORED
      */
     private String status;
-
-    /**
-     * 风险详情ID
-     */
-    private Long riskDetailsId;
 }

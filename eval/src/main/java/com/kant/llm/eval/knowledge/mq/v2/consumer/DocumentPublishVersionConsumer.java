@@ -6,9 +6,11 @@ import com.kant.llm.common.constant.EsKnowledgeFeatureDocumentChunk;
 import com.kant.llm.common.constant.EvalMqTopics;
 import com.kant.llm.eval.knowledge.dao.entity.KnowledgeAttackFeatureDO;
 import com.kant.llm.eval.knowledge.dao.entity.KnowledgeFeatureDocumentDO;
+import com.kant.llm.eval.knowledge.dao.entity.KnowledgeFeatureDocumentVersionSnapshotDO;
 import com.kant.llm.eval.knowledge.mq.v2.message.DocumentPublishVersionMessage;
 import com.kant.llm.eval.knowledge.service.KnowledgeFeatureDocumentService;
 import com.kant.llm.eval.knowledge.service.KnowledgeFeatureDocumentVersionService;
+import com.kant.llm.eval.knowledge.service.KnowledgeFeatureDocumentVersionSnapshotService;
 import com.kant.llm.eval.pipeline.service.es.ElasticSearchService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
@@ -39,36 +41,41 @@ public class DocumentPublishVersionConsumer
     private final ElasticSearchService elasticSearchService;
     private final KnowledgeFeatureDocumentService knowledgeFeatureDocumentService;
     private final KnowledgeFeatureDocumentVersionService knowledgeFeatureDocumentVersionService;
+    private final KnowledgeFeatureDocumentVersionSnapshotService knowledgeFeatureDocumentVersionSnapshotService;
 
     public DocumentPublishVersionConsumer(VectorStore vectorStore,
                                           ElasticSearchService elasticSearchService,
                                           RedisTemplate<String, Object> redisTemplate,
                                           KnowledgeFeatureDocumentService knowledgeFeatureDocumentService,
-                                          KnowledgeFeatureDocumentVersionService knowledgeFeatureDocumentVersionService) {
+                                          KnowledgeFeatureDocumentVersionService knowledgeFeatureDocumentVersionService,
+                                          KnowledgeFeatureDocumentVersionSnapshotService knowledgeFeatureDocumentVersionSnapshotService) {
         this.vectorStore = vectorStore;
         this.redisTemplate = redisTemplate;
         this.elasticSearchService = elasticSearchService;
         this.knowledgeFeatureDocumentService = knowledgeFeatureDocumentService;
         this.knowledgeFeatureDocumentVersionService = knowledgeFeatureDocumentVersionService;
+        this.knowledgeFeatureDocumentVersionSnapshotService = knowledgeFeatureDocumentVersionSnapshotService;
     }
 
     @Override
     public void onMessage(MessageWrapper<DocumentPublishVersionMessage> messageWrapper) {
         DocumentPublishVersionMessage message = messageWrapper.getBody();
-        log.info("[消费者] bizDesc: {}，topic: {}, riskDetailsId: {}, versionId: {}", messageWrapper.getBizDesc(),
-                EvalMqTopics.KNOWLEDGE_PUBLISH_VERSION_TOPIC, message.getRiskDetailsId(), message.getVersionId());
+        log.info("[消费者] bizDesc: {}，topic: {}, versionId: {}", messageWrapper.getBizDesc(),
+                EvalMqTopics.KNOWLEDGE_PUBLISH_VERSION_TOPIC, message.getVersionId());
         // 执行发布操作
         execute(message);
+        // 更新缓存中指针指向最新版本ID
+        redisTemplate.opsForValue().set("knowledge_feature:version:current_version_id", message.getVersionId());
     }
 
     /**
      * 执行发布操作
      */
     private void execute(DocumentPublishVersionMessage message) {
-        Long riskDetailsId = message.getRiskDetailsId();
         Long beforeVersionId = message.getBeforeVersionId();
+        KnowledgeFeatureDocumentVersionSnapshotDO versionSnapshotDO = knowledgeFeatureDocumentVersionSnapshotService.getById(message.getVersionId());
         //1. 获取待发布和上一个版本的所有文档内容
-        List<KnowledgeFeatureDocumentDO> knowledgeFeatureDocumentDOS = knowledgeFeatureDocumentService.listByRiskDetailsIdAndVersionId(riskDetailsId, beforeVersionId);
+        List<KnowledgeFeatureDocumentDO> knowledgeFeatureDocumentDOS = knowledgeFeatureDocumentService.loadingPublishedDocuments(beforeVersionId);
         log.info("待发布文档数量: {}", knowledgeFeatureDocumentDOS.size());
         // 原子递增计数器
         AtomicInteger count = new AtomicInteger(1);
@@ -80,16 +87,18 @@ public class DocumentPublishVersionConsumer
                 vectorStore.add(List.of(buildVectorDocument(knowledgeFeatureDocumentDO, String.valueOf(knowledgeFeatureDocumentDO.getDocumentId()))));
                 int andIncrement = count.getAndIncrement();
                 knowledgeFeatureDocumentDO.setSyncStatus(1);
+                knowledgeFeatureDocumentDO.setCurrentVersion(versionSnapshotDO.getVersion());
+                knowledgeFeatureDocumentDO.setCurrentVersionId(versionSnapshotDO.getVersionId());
                 knowledgeFeatureDocumentService.updateById(knowledgeFeatureDocumentDO);
-                log.info("当前已发布数量:{},总数量:{}", knowledgeFeatureDocumentDOS.size(), andIncrement);
+                log.info("当前已发布数量:{},总数量:{}", andIncrement, knowledgeFeatureDocumentDOS.size());
             } catch (Exception e) {
                 log.error("发布ES文档失败，documentId: {}", knowledgeFeatureDocumentDO.getDocumentId(), e);
             }
         });
         //4. 更新发布状态，并且将指针指向最新版本
-        knowledgeFeatureDocumentVersionService.updateCurrentVersion(riskDetailsId, message.getVersionId());
+        knowledgeFeatureDocumentVersionService.updateCurrentVersion(message.getVersionId());
         // 删除发布状态缓存
-        redisTemplate.delete("knowledge_feature_publish_version:" + message.getRiskDetailsId());
+        redisTemplate.delete("knowledge_feature_publish_version:lock");
     }
 
     private EsKnowledgeFeatureDocumentChunk buildEsDocument(KnowledgeFeatureDocumentDO knowledgeFeatureDocumentDO) {
