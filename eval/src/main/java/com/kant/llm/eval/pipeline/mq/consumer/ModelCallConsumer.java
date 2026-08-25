@@ -1,5 +1,6 @@
 package com.kant.llm.eval.pipeline.mq.consumer;
 
+import cn.hutool.core.bean.BeanUtil;
 import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -23,6 +24,7 @@ import com.kant.llm.common.enums.TaskStatusEnums;
 import com.kant.llm.eval.basesource.dao.entity.MockModelOutputContentDO;
 import com.kant.llm.eval.basesource.dao.entity.ModelInfoDO;
 import com.kant.llm.eval.basesource.dao.mapper.ModelInfoMapper;
+import com.kant.llm.eval.basesource.dto.resp.ModelInfoVO;
 import com.kant.llm.eval.basesource.service.MockModelOutputContentService;
 import com.kant.llm.eval.es.service.EvalEsSyncOutboxService;
 import com.kant.llm.eval.pipeline.mq.message.ModelCallMessage;
@@ -60,10 +62,10 @@ import java.util.concurrent.TimeUnit;
  */
 @Slf4j
 @Component
-@RocketMQMessageListener(
-        topic = EvalMqTopics.MODEL_CALL_TOPIC,
-        consumerGroup = "aigc-eval-model-call-consumer-group"
-)
+//@RocketMQMessageListener(
+//        topic = EvalMqTopics.MODEL_CALL_TOPIC,
+//        consumerGroup = "aigc-eval-model-call-consumer-group"
+//)
 public class ModelCallConsumer implements RocketMQListener<MessageWrapper<ModelCallMessage>>, ModelCallExecutionService {
 
     private static final String EXECUTION_LOCK_KEY_PREFIX = "aigc-eval:eval-result:execute:";
@@ -180,7 +182,7 @@ public class ModelCallConsumer implements RocketMQListener<MessageWrapper<ModelC
         try {
             ModelInfoDO modelInfoDO = loadModelInfoDO(message.getModelId());
             // 先获取分布式并发许可，再把样本置为 MODEL_RUNNING；拿不到许可时保持 PENDING，等待 MQ 重试。
-            permit = modelCallRateLimiter.acquire(modelInfoDO);
+            permit = modelCallRateLimiter.acquire(BeanUtil.copyProperties(modelInfoDO, ModelInfoVO.class));
             int runningRows = markResultModelRunning(resultDetail.getId());
             if (runningRows <= 0) {
                 EvalResultDetailDO latest = evalResultDetailMapper.selectById(resultDetail.getId());

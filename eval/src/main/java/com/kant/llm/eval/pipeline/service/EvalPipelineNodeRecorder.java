@@ -73,6 +73,42 @@ public class EvalPipelineNodeRecorder {
     }
 
     /**
+     * 创建节点开始记录。
+     *
+     * @param taskId 任务 ID
+     * @param taskDetailId 任务执行批次 ID
+     * @param resultDetail 评测结果明细
+     * @param nodeCode 节点编码
+     * @param inputSnapshot 节点输入快照对象，会被序列化为 JSON
+     * @return 节点记录 ID
+     */
+    public Long startNode(Long taskId,
+                          Long taskDetailId,
+                          EvalResultDetailDO resultDetail,
+                          PipelineNodeCodeEnums nodeCode,
+                          Object inputSnapshot) {
+        Long nodeRecordId = IdUtil.getSnowflake().nextId();
+        EvalPipelineNodeDetailDO nodeDetail = EvalPipelineNodeDetailDO.builder()
+                .id(nodeRecordId)
+                .taskId(taskId)
+                .taskDetailId(taskDetailId)
+                .resultDetailId(resultDetail.getId())
+                .sampleId(resultDetail.getSampleId())
+                .nodeCode(nodeCode.getCode())
+                .status(PipelineNodeStatusEnums.RUNNING.getCode())
+                .startTime(LocalDateTime.now())
+                .inputSnapshot(toJson(inputSnapshot))
+                .build();
+        transactionTemplate.executeWithoutResult(status -> {
+            evalPipelineNodeDetailMapper.insert(nodeDetail);
+            evalEsSyncOutboxService.recordPipelineNodeUpsert(nodeRecordId);
+        });
+        log.info("流水线节点开始记录已写入，nodeRecordId: {}, nodeCode: {}, taskDetailId: {}, resultDetailId: {}",
+                nodeRecordId, nodeCode.getCode(), taskDetailId, resultDetail.getId());
+        return nodeRecordId;
+    }
+
+    /**
      * 标记节点正常完成。
      */
     public void finishNode(Long nodeRecordId,

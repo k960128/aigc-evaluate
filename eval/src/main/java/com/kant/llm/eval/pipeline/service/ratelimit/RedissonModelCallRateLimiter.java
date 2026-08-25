@@ -1,6 +1,6 @@
 package com.kant.llm.eval.pipeline.service.ratelimit;
 
-import com.kant.llm.eval.basesource.dao.entity.ModelInfoDO;
+import com.kant.llm.eval.basesource.dto.resp.ModelInfoVO;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RPermitExpirableSemaphore;
 import org.redisson.api.RedissonClient;
@@ -31,7 +31,7 @@ public class RedissonModelCallRateLimiter implements ModelCallRateLimiter {
     }
 
     @Override
-    public ModelCallPermit acquire(ModelInfoDO modelInfo) {
+    public ModelCallPermit acquire(ModelInfoVO modelInfo) {
         if (modelInfo == null || modelInfo.getId() == null) {
             throw new ModelCallRateLimitedException("模型配置为空，无法获取模型调用并发许可");
         }
