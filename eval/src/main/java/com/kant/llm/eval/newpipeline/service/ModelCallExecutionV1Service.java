@@ -7,6 +7,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.kant.ai.infra.client.*;
 import com.kant.ai.infra.enums.ModelManufacturerEnum;
 import com.kant.framework.exception.ServiceException;
+import com.kant.framework.mq.producer.MessageQueueProducer;
+import com.kant.framework.mq.producer.MessageSendRequest;
+import com.kant.llm.common.constant.EvalMqTopics;
 import com.kant.llm.common.enums.EvalResultStatusEnums;
 import com.kant.llm.common.enums.PipelineNodeCodeEnums;
 import com.kant.llm.common.enums.PipelineNodeStatusEnums;
@@ -16,6 +19,7 @@ import com.kant.llm.eval.basesource.dto.resp.ModelInfoVO;
 import com.kant.llm.eval.basesource.service.MockModelOutputContentService;
 import com.kant.llm.eval.basesource.service.ModelInfoService;
 import com.kant.llm.eval.pipeline.mq.message.ModelCallMessage;
+import com.kant.llm.eval.pipeline.mq.message.SafetyEvaluateMessage;
 import com.kant.llm.eval.pipeline.service.EvalPipelineNodeRecorder;
 import com.kant.llm.eval.pipeline.service.ratelimit.ModelCallPermit;
 import com.kant.llm.eval.pipeline.service.ratelimit.ModelCallRateLimiter;
@@ -38,6 +42,7 @@ public class ModelCallExecutionV1Service {
 
     private final RedissonClient redissonClient;
     private final ModelInfoService modelInfoService;
+    private final MessageQueueProducer messageQueueProducer;
     private final ModelCallRateLimiter modelCallRateLimiter;
     private final EvalResultDetailService evalResultDetailService;
     private final EvalPipelineNodeRecorder evalPipelineNodeRecorder;
@@ -46,6 +51,7 @@ public class ModelCallExecutionV1Service {
 
     public ModelCallExecutionV1Service(RedissonClient redissonClient,
                                        ModelInfoService modelInfoService,
+                                       MessageQueueProducer messageQueueProducer,
                                        ModelCallRateLimiter modelCallRateLimiter,
                                        EvalResultDetailService evalResultDetailService,
                                        EvalPipelineNodeRecorder evalPipelineNodeRecorder,
@@ -53,6 +59,7 @@ public class ModelCallExecutionV1Service {
                                        MockModelOutputContentService mockModelOutputContentService) {
         this.redissonClient = redissonClient;
         this.modelInfoService = modelInfoService;
+        this.messageQueueProducer = messageQueueProducer;
         this.modelCallRateLimiter = modelCallRateLimiter;
         this.evalResultDetailService = evalResultDetailService;
         this.evalPipelineNodeRecorder = evalPipelineNodeRecorder;
@@ -118,6 +125,7 @@ public class ModelCallExecutionV1Service {
             writeBackToDB(resultDetail, modelResponse);
 
             // 发送SafeEval消息
+            sendSafetyEvaluateMessage(message);
         } catch (Exception e) {
             log.error("获取模型调用许可失败: {}", modelInfo, e);
         } finally {
@@ -125,6 +133,25 @@ public class ModelCallExecutionV1Service {
             acquire.release();
         }
 
+    }
+
+    /**
+     * 发送安全评测消息
+     * @param message msg
+     */
+    private void sendSafetyEvaluateMessage(ModelCallMessage message) {
+        messageQueueProducer.send(MessageSendRequest.builder()
+                .topic(EvalMqTopics.SAFETY_EVALUATE_TOPIC)
+                .keys(message.getResultDetailId().toString())
+                .bizDesc("单样本安全评测消息")
+                .body(SafetyEvaluateMessage.builder()
+                        .taskDetailId(message.getTaskDetailId())
+                        .resultDetailId(message.getResultDetailId())
+                        .taskId(message.getTaskId())
+                        .sampleId(message.getSampleId())
+                        .modelId(message.getModelId())
+                        .build())
+                .build());
     }
 
     /**
@@ -144,8 +171,12 @@ public class ModelCallExecutionV1Service {
                         .valueOf(modelInfo.getManufacturerCode().toUpperCase(Locale.ROOT)))
                 .build();
         // 2. 记录modelCall节点日志
-        Long modelCallNodeRecordId = evalPipelineNodeRecorder.startNode(resultDetail.getTaskId(), resultDetail.getTaskDetailId(), resultDetail,
-                PipelineNodeCodeEnums.MODEL_CALL, buildModelCallInputSnapshot(clientModelInfo, resultDetail));
+        Long modelCallNodeRecordId = evalPipelineNodeRecorder.startNode(
+                resultDetail.getTaskId(),
+                resultDetail.getTaskDetailId(),
+                resultDetail,
+                PipelineNodeCodeEnums.MODEL_CALL,
+                buildModelCallInputSnapshot(clientModelInfo, resultDetail));
         try {
             // 3. 获取模型调用策略
             ModelClientStrategy strategy = modelClientStrategyFactory.getStrategy(clientModelInfo);
@@ -156,13 +187,21 @@ public class ModelCallExecutionV1Service {
                     .mockModelOutput(mockModelOutput(clientModelInfo.getModelId(), resultDetail.getSampleId()))
                     .build());
             // 5. 记录modelCall节点处理完成日志
-            evalPipelineNodeRecorder.finishNode(modelCallNodeRecordId, PipelineNodeStatusEnums.PASSED,
-                    buildModelCallOutputSnapshot(modelResponse), buildModelCallNodeResult(modelResponse), null);
+            evalPipelineNodeRecorder.finishNode
+                    (modelCallNodeRecordId,
+                            PipelineNodeStatusEnums.PASSED,
+                            buildModelCallOutputSnapshot(modelResponse),
+                            buildModelCallNodeResult(modelResponse),
+                            null);
 
             return modelResponse;
         } catch (Exception e) {
             // 6. 记录modelCall节点处理失败日志
-            evalPipelineNodeRecorder.failNode(modelCallNodeRecordId, e, null, buildFailedNodeResult("MODEL_CALL_FAILED"));
+            evalPipelineNodeRecorder.failNode(
+                    modelCallNodeRecordId,
+                    e,
+                    null,
+                    buildFailedNodeResult("MODEL_CALL_FAILED"));
             throw e;
         }
     }
