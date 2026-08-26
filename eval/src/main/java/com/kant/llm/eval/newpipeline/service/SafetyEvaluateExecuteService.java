@@ -214,7 +214,7 @@ public class SafetyEvaluateExecuteService {
                 .build());
 
         // 判定是否违规
-        if (evaluateL2Result.getSafe()) {
+        if (!evaluateL2Result.getSafe()) {
             // ========== 回写结果明细状态
             resultDetailDO.setIsSafe(Boolean.FALSE);
             resultDetailDO.setErrorMsg(String.format("L2 安全判定：%s， riskDetailsId=%s， reason=%s",
@@ -267,7 +267,6 @@ public class SafetyEvaluateExecuteService {
     private void writeBackToDB(EvalResultDetailDO resultDetailDO) {
         resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
         evalResultDetailService.updateById(resultDetailDO);
-
 
         // 模拟整体任务完成，后续要做修改
         EvalTaskDetailDO evalTaskDetailDO = evalTaskDetailService.getById(resultDetailDO.getTaskDetailId());
