@@ -10,6 +10,7 @@ import co.elastic.clients.elasticsearch.indices.ExistsRequest;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kant.llm.common.constant.EsDocumentChunk;
+import com.kant.llm.common.constant.EsDocumentChunkV2;
 import com.kant.llm.common.constant.EsKnowledgeFeatureDocumentChunk;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -35,7 +36,7 @@ public class ElasticSearchService {
 
     private final ObjectMapper mapper = new ObjectMapper();
 
-    private static final String INDEX_NAME = "knowledge_attack_feature_index";
+    private static final String INDEX_NAME = "knowledge_feature_document_index";
 
     private static final String FIELD_CONTENT = "featureText";
 
@@ -422,5 +423,44 @@ public class ElasticSearchService {
 
         client.index(request);
         log.debug("Indexed doc document id={}", doc.getDocumentId());
+    }
+
+    /**
+     * 中文检索 - ik_max_word 建库 + ik_smart 检索
+     */
+    public List<EsDocumentChunkV2> searchByKeywordV2(String keyword) throws Exception {
+        return searchByKeywordV2(keyword, INDEX_NAME);
+    }
+
+    public List<EsDocumentChunkV2> searchByKeywordV2(String keyword, String indexName) throws Exception {
+        return searchByKeywordV2(keyword, 5, true, indexName);
+    }
+
+    /**
+     * 中文检索：ik_max_word / ik_smart 切换
+     */
+    public List<EsDocumentChunkV2> searchByKeywordV2(String keyword, int size, boolean useSmartAnalyzer, String indexName) throws Exception {
+        ensureClientAvailable();
+        SearchRequest request = SearchRequest.of(b -> b
+                .index(indexName)
+                .query(q -> q
+                        .match(m -> m
+                                .field(FIELD_CONTENT)
+                                .query(keyword)
+                        )
+                )
+                .size(size)
+        );
+
+        SearchResponse<EsDocumentChunkV2> response = client.search(request, EsDocumentChunkV2.class);
+
+        List<EsDocumentChunkV2> result = new ArrayList<>();
+        response.hits().hits().forEach(hit -> {
+            if (hit.source() != null) {
+                result.add(hit.source());
+            }
+        });
+
+        return result;
     }
 }
