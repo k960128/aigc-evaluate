@@ -1,5 +1,6 @@
 package com.kant.llm.eval.pipeline.service.es;
 
+import cn.hutool.core.bean.BeanUtil;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.FieldValue;
 import co.elastic.clients.elasticsearch._types.Refresh;
@@ -467,7 +468,9 @@ public class ElasticSearchService {
         List<EsDocumentChunkV2> result = new ArrayList<>();
         response.hits().hits().forEach(hit -> {
             if (hit.source() != null) {
-                result.add(hit.source());
+                EsDocumentChunkV2 source = BeanUtil.copyProperties(hit.source(), EsDocumentChunkV2.class);
+                source.setScore(hit.score());
+                result.add(source);
             }
         });
 
