@@ -32,6 +32,11 @@ public class MessageWrapper<T> implements Serializable {
     private T body;
 
     /**
+     * 业务描述，用于日志标识
+     */
+    String bizDesc;
+
+    /**
      * 唯一标识，用于客户端幂等验证
      */
     @Builder.Default

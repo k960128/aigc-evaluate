@@ -61,6 +61,16 @@ public class EvalResultDetailDO {
     /** 错误信息 */
     private String errorMsg;
 
+    /**
+     * 知识库版本
+     */
+    private Integer knowledgeVersion;
+
+    /**
+     * 知识库版本ID
+     */
+    private Long knowledgeVersionId;
+
     /** 创建时间 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField(fill = FieldFill.INSERT)

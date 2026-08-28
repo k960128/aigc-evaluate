@@ -1,6 +1,6 @@
 package com.kant.llm.eval.pipeline.service.ratelimit;
 
-import com.kant.llm.eval.basesource.dao.entity.ModelInfoDO;
+import com.kant.llm.eval.basesource.dto.resp.ModelInfoVO;
 
 /**
  * 被评测模型调用并发限流器。
@@ -15,5 +15,5 @@ public interface ModelCallRateLimiter {
      * @param modelInfo 被评测模型配置
      * @return 可释放的调用许可
      */
-    ModelCallPermit acquire(ModelInfoDO modelInfo);
+    ModelCallPermit acquire(ModelInfoVO modelInfo);
 }

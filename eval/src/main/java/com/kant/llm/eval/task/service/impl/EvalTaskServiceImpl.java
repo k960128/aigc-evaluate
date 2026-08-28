@@ -16,6 +16,8 @@ import com.kant.framework.exception.ServiceException;
 import com.kant.llm.eval.dataset.dao.entity.DataSetDO;
 import com.kant.llm.eval.dataset.dao.entity.DataSetSampleDO;
 import com.kant.llm.eval.es.service.EvalEsSyncOutboxService;
+import com.kant.llm.eval.knowledge.dto.resp.KnowledgeFeatureCurrentVersionVO;
+import com.kant.llm.eval.knowledge.service.KnowledgeFeatureDocumentVersionService;
 import com.kant.llm.eval.pipeline.dao.entity.EvalPipelineNodeDetailDO;
 import com.kant.llm.eval.task.dao.entity.EvalResultDetailDO;
 import com.kant.llm.eval.task.dao.entity.EvalTaskDO;
@@ -86,6 +88,7 @@ public class EvalTaskServiceImpl implements EvalTaskService {
     private final MessageQueueProducer messageQueueProducer;
     private final EvalEsSyncOutboxService evalEsSyncOutboxService;
     private final TransactionTemplate transactionTemplate;
+    private final KnowledgeFeatureDocumentVersionService knowledgeFeatureDocumentVersionService;
 
     public EvalTaskServiceImpl(EvalTaskMapper evalTaskMapper,
                                ModelInfoMapper modelInfoMapper,
@@ -97,7 +100,8 @@ public class EvalTaskServiceImpl implements EvalTaskService {
                                RedissonClient redissonClient,
                                MessageQueueProducer messageQueueProducer,
                                EvalEsSyncOutboxService evalEsSyncOutboxService,
-                               TransactionTemplate transactionTemplate) {
+                               TransactionTemplate transactionTemplate,
+                               KnowledgeFeatureDocumentVersionService knowledgeFeatureDocumentVersionService) {
         this.evalTaskMapper = evalTaskMapper;
         this.modelInfoMapper = modelInfoMapper;
         this.dataSetMapper = dataSetMapper;
@@ -109,6 +113,7 @@ public class EvalTaskServiceImpl implements EvalTaskService {
         this.messageQueueProducer = messageQueueProducer;
         this.evalEsSyncOutboxService = evalEsSyncOutboxService;
         this.transactionTemplate = transactionTemplate;
+        this.knowledgeFeatureDocumentVersionService = knowledgeFeatureDocumentVersionService;
     }
 
     @Override
@@ -143,12 +148,16 @@ public class EvalTaskServiceImpl implements EvalTaskService {
             if (sampleCount == null || sampleCount <= 0) {
                 throw new ServiceException("评测任务数据集为空，无法启动");
             }
-            // 4. 创建一次运行批次。同一个 eval_task 可以多次提交，但同一时间只能存在一个活跃批次。
+            // 4. 获取当前样本库版本
+            KnowledgeFeatureCurrentVersionVO currentVersionCache = knowledgeFeatureDocumentVersionService.getCurrentVersionCache();
+            // 5. 创建一次运行批次。同一个 eval_task 可以多次提交，但同一时间只能存在一个活跃批次。
             Long taskDetailId = IdUtil.getSnowflake().nextId();
             Long serialNo = IdUtil.getSnowflake().nextId();
             EvalTaskDetailDO evalTaskDetailDO = EvalTaskDetailDO.builder()
                     .id(taskDetailId)
                     .taskId(taskId)
+                    .knowledgeVersionId(currentVersionCache.getCurrentVersionId())
+                    .knowledgeVersion(currentVersionCache.getCurrentVersion())
                     .serialNo(serialNo)
                     .taskName(task.getTaskName())
                     .modelId(task.getModelId())
@@ -174,9 +183,10 @@ public class EvalTaskServiceImpl implements EvalTaskService {
                                 .modelId(task.getModelId())
                                 .datasetId(task.getDatasetId())
                                 .serialNo(serialNo)
+                                .knowledgeVersionId(currentVersionCache.getCurrentVersionId())
+                                .knowledgeVersion(currentVersionCache.getCurrentVersion())
                                 .build())
                         .build());
-
             } catch (Exception ex) {
                 // 保留 ERROR 批次，方便后续排查是哪一次提交没有进入拆分链路。
                 evalTaskDetailDO.setStatus(TaskStatusEnums.ERROR.getCode());

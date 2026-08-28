@@ -9,8 +9,8 @@ import com.kant.llm.common.enums.AcSnapshotPublishStatusEnums;
 import com.kant.llm.eval.knowledge.dao.entity.AcSnapshotNodeAckDO;
 import com.kant.llm.eval.knowledge.dao.entity.AcSnapshotPublishRecordDO;
 import com.kant.llm.eval.knowledge.dao.entity.KnowledgeVocabularyKeywordDO;
-import com.kant.llm.eval.knowledge.mq.message.RiskVocabularyAcPublishMessage;
-import com.kant.llm.eval.knowledge.mq.producer.RiskVocabularyAcMqProducer;
+import com.kant.llm.eval.knowledge.mq.v1.message.RiskVocabularyAcPublishMessage;
+import com.kant.llm.eval.knowledge.mq.v1.producer.RiskVocabularyAcMqProducer;
 import com.kant.llm.eval.knowledge.service.AcSnapshotDirtyShardService;
 import com.kant.llm.eval.knowledge.service.AcSnapshotNodeAckService;
 import com.kant.llm.eval.knowledge.service.AcSnapshotPublishRecordService;
@@ -55,7 +55,7 @@ public class RiskVocabularyAcPublishCoordinator {
 
     private final AcSnapshotDirtyShardService dirtyShardService;
 
-    @Scheduled(fixedDelay = 5_000L, initialDelay = 10_000L)
+//    @Scheduled(fixedDelay = 5_000L, initialDelay = 10_000L)
     public void coordinate() {
         List<AcSnapshotPublishRecordDO> records = publishRecordService.list(new LambdaQueryWrapper<AcSnapshotPublishRecordDO>()
                 .in(AcSnapshotPublishRecordDO::getStatus,

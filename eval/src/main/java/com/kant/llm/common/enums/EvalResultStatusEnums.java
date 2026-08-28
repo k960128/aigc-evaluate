@@ -35,7 +35,10 @@ public enum EvalResultStatusEnums {
     MODEL_CALLED(6, "模型调用完成"),
 
     /** 安全评测中：模型输出已经进入 L1/L2/L3 流水线判定。 */
-    SAFETY_EVALUATING(7, "安全评测中");
+    SAFETY_EVALUATING(7, "安全评测中"),
+
+    /** 评测完成 */
+    FINISHED(8, "评测完成");
 
     private final Integer code;
 

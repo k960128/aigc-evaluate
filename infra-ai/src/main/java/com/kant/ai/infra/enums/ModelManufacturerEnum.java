@@ -12,5 +12,6 @@ public enum ModelManufacturerEnum {
     GLM,
     KIMI,
     GPT,
-    MOCK
+    MOCK,
+    OLLAMA
 }
