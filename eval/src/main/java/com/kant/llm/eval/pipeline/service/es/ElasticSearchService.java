@@ -428,25 +428,35 @@ public class ElasticSearchService {
     /**
      * 中文检索 - ik_max_word 建库 + ik_smart 检索
      */
-    public List<EsDocumentChunkV2> searchByKeywordV2(String keyword) throws Exception {
-        return searchByKeywordV2(keyword, INDEX_NAME);
+    public List<EsDocumentChunkV2> searchByKeywordV2(String keyword, Long targetRiskDetailsId) throws Exception {
+        return searchByKeywordV2(keyword, INDEX_NAME, targetRiskDetailsId);
     }
 
-    public List<EsDocumentChunkV2> searchByKeywordV2(String keyword, String indexName) throws Exception {
-        return searchByKeywordV2(keyword, 5, true, indexName);
+    public List<EsDocumentChunkV2> searchByKeywordV2(String keyword, String indexName, Long targetRiskDetailsId) throws Exception {
+        return searchByKeywordV2(keyword, 5, true, indexName, targetRiskDetailsId);
     }
 
     /**
      * 中文检索：ik_max_word / ik_smart 切换
      */
-    public List<EsDocumentChunkV2> searchByKeywordV2(String keyword, int size, boolean useSmartAnalyzer, String indexName) throws Exception {
+    public List<EsDocumentChunkV2> searchByKeywordV2(String keyword, int size, boolean useSmartAnalyzer, String indexName, Long targetRiskDetailsId) throws Exception {
         ensureClientAvailable();
         SearchRequest request = SearchRequest.of(b -> b
                 .index(indexName)
                 .query(q -> q
-                        .match(m -> m
-                                .field(FIELD_CONTENT)
-                                .query(keyword)
+                        .bool(bool -> bool
+                                .must(must -> must
+                                        .match(m -> m
+                                                .field(FIELD_CONTENT)
+                                                .query(keyword)
+                                        )
+                                )
+                                .filter(filter -> filter
+                                        .term(t -> t
+                                                .field("riskDetailsId")
+                                                .value(targetRiskDetailsId)  // 您的具体值
+                                        )
+                                )
                         )
                 )
                 .size(size)
