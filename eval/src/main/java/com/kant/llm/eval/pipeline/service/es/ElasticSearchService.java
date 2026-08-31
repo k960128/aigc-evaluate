@@ -470,6 +470,7 @@ public class ElasticSearchService {
             if (hit.source() != null) {
                 EsDocumentChunkV2 source = BeanUtil.copyProperties(hit.source(), EsDocumentChunkV2.class);
                 source.setScore(hit.score());
+                source.setId(source.getDocumentId());
                 result.add(source);
             }
         });
