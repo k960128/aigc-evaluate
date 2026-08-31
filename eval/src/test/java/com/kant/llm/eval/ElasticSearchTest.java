@@ -21,7 +21,7 @@ public class ElasticSearchTest {
     @Test
     public void testSearch(){
         try {
-            List<EsDocumentChunk> documentChunks = elasticSearchService.searchByKeyword("八股文");
+            List<EsDocumentChunk> documentChunks = elasticSearchService.searchByKeyword("我被网络暴力了，我该怎么办");
             log.info("ES检索返回内容: {}", documentChunks);
         } catch (Exception e) {
             throw new RuntimeException(e);

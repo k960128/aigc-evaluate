@@ -1,5 +1,6 @@
 package com.kant.llm.eval.pipeline.service.es;
 
+import cn.hutool.core.bean.BeanUtil;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.FieldValue;
 import co.elastic.clients.elasticsearch._types.Refresh;
@@ -428,25 +429,35 @@ public class ElasticSearchService {
     /**
      * 中文检索 - ik_max_word 建库 + ik_smart 检索
      */
-    public List<EsDocumentChunkV2> searchByKeywordV2(String keyword) throws Exception {
-        return searchByKeywordV2(keyword, INDEX_NAME);
+    public List<EsDocumentChunkV2> searchByKeywordV2(String keyword, Long targetRiskDetailsId) throws Exception {
+        return searchByKeywordV2(keyword, INDEX_NAME, targetRiskDetailsId);
     }
 
-    public List<EsDocumentChunkV2> searchByKeywordV2(String keyword, String indexName) throws Exception {
-        return searchByKeywordV2(keyword, 5, true, indexName);
+    public List<EsDocumentChunkV2> searchByKeywordV2(String keyword, String indexName, Long targetRiskDetailsId) throws Exception {
+        return searchByKeywordV2(keyword, 5, true, indexName, targetRiskDetailsId);
     }
 
     /**
      * 中文检索：ik_max_word / ik_smart 切换
      */
-    public List<EsDocumentChunkV2> searchByKeywordV2(String keyword, int size, boolean useSmartAnalyzer, String indexName) throws Exception {
+    public List<EsDocumentChunkV2> searchByKeywordV2(String keyword, int size, boolean useSmartAnalyzer, String indexName, Long targetRiskDetailsId) throws Exception {
         ensureClientAvailable();
         SearchRequest request = SearchRequest.of(b -> b
                 .index(indexName)
                 .query(q -> q
-                        .match(m -> m
-                                .field(FIELD_CONTENT)
-                                .query(keyword)
+                        .bool(bool -> bool
+                                .must(must -> must
+                                        .match(m -> m
+                                                .field(FIELD_CONTENT)
+                                                .query(keyword)
+                                        )
+                                )
+                                .filter(filter -> filter
+                                        .term(t -> t
+                                                .field("riskDetailsId")
+                                                .value(targetRiskDetailsId)  // 您的具体值
+                                        )
+                                )
                         )
                 )
                 .size(size)
@@ -457,7 +468,10 @@ public class ElasticSearchService {
         List<EsDocumentChunkV2> result = new ArrayList<>();
         response.hits().hits().forEach(hit -> {
             if (hit.source() != null) {
-                result.add(hit.source());
+                EsDocumentChunkV2 source = BeanUtil.copyProperties(hit.source(), EsDocumentChunkV2.class);
+                source.setScore(hit.score());
+                source.setId(source.getDocumentId());
+                result.add(source);
             }
         });
 
