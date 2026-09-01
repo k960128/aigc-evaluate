@@ -1,15 +1,10 @@
-package com.kant.llm.eval;
+package com.kant.llm.eval.pipeline;
 
 import com.kant.llm.common.constant.EsDocumentChunkV2;
 import com.kant.llm.eval.pipeline.service.es.ElasticSearchService;
-import com.kant.llm.eval.pipeline.service.l2.L2EvaluationService;
 import com.kant.llm.eval.pipeline.service.l2.client.L2RecallClient;
 import com.kant.llm.eval.pipeline.service.l2.model.L2EvaluationRequest;
-import com.kant.llm.eval.pipeline.service.l2.model.L2RecallRequest;
-import com.kant.llm.eval.pipeline.service.l2.model.L2RecallResult;
-import com.kant.llm.eval.pipeline.service.l2.model.L2ThresholdProperties;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
@@ -19,9 +14,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.stream.Collectors;
 

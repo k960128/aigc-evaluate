@@ -3,10 +3,12 @@ package com.kant.llm.eval.newpipeline.service;
 import cn.hutool.core.collection.CollectionUtil;
 import com.kant.framework.exception.ServiceException;
 import com.kant.llm.common.convention.EvalContext;
+import com.kant.llm.common.convention.L1EvalContext;
 import com.kant.llm.common.enums.EvalResultStatusEnums;
 import com.kant.llm.common.enums.PipelineNodeCodeEnums;
 import com.kant.llm.common.enums.PipelineNodeStatusEnums;
 import com.kant.llm.common.enums.TaskStatusEnums;
+import com.kant.llm.eval.knowledge.engine.L1ACTrieManager;
 import com.kant.llm.eval.knowledge.engine.L1InterceptionEngine;
 import com.kant.llm.eval.pipeline.mq.message.SafetyEvaluateMessage;
 import com.kant.llm.eval.pipeline.service.EvalPipelineNodeRecorder;
@@ -34,23 +36,22 @@ import java.util.concurrent.TimeUnit;
 public class SafetyEvaluateExecuteService {
     private static final String EXECUTION_LOCK_KEY_PREFIX = "EVAL:SAFETY-EVALUATE:LOCK:KEY:%s";
 
-
     private final RedissonClient redissonClient;
+    private final L1ACTrieManager l1ACTrieManager;
     private final L2EvaluationService l2EvaluationService;
-    private final L1InterceptionEngine l1InterceptionEngine;
     private final EvalTaskDetailService evalTaskDetailService;
     private final EvalResultDetailService evalResultDetailService;
     private final EvalPipelineNodeRecorder evalPipelineNodeRecorder;
 
     public SafetyEvaluateExecuteService(RedissonClient redissonClient,
+                                        L1ACTrieManager l1ACTrieManager,
                                         L2EvaluationService l2EvaluationService,
-                                        L1InterceptionEngine l1InterceptionEngine,
                                         EvalTaskDetailService evalTaskDetailService,
                                         EvalResultDetailService evalResultDetailService,
                                         EvalPipelineNodeRecorder evalPipelineNodeRecorder) {
         this.redissonClient = redissonClient;
+        this.l1ACTrieManager = l1ACTrieManager;
         this.l2EvaluationService = l2EvaluationService;
-        this.l1InterceptionEngine = l1InterceptionEngine;
         this.evalTaskDetailService = evalTaskDetailService;
         this.evalResultDetailService = evalResultDetailService;
         this.evalPipelineNodeRecorder = evalPipelineNodeRecorder;
@@ -136,32 +137,34 @@ public class SafetyEvaluateExecuteService {
                 PipelineNodeCodeEnums.L1,
                 CollectionUtil.toList(resultDetailDO.getModelOutput()));
         // 2. 获取 L1 评测上下文
-        EvalContext context = l1InterceptionEngine.analyze(resultDetailDO.getModelOutput());
+        L1EvalContext context = l1ACTrieManager.match(resultDetailDO.getRiskDetailsId(), resultDetailDO.getModelOutput());
         // 3. 判断是否命中拦截
         if (context.isL1Blocked()) {
             log.info("L1 判定命中拦截，resultDetailId: {}, riskDetailsId: {}, keyword: {}",
-                    resultDetailDO.getId(), context.getL1BlockDetailsId(), context.getL1BlockKeyword());
+                    resultDetailDO.getId(), context.getRiskDetailsId(), context.getL1BlockKeyword());
 
             // ========== 回写结果明细
             resultDetailDO.setIsSafe(Boolean.FALSE);
             resultDetailDO.setErrorMsg(String.format("L1 判定命中拦截，风险明细ID: %s，触发关键词: %s",
-                    context.getL1BlockDetailsId(), context.getL1BlockKeyword()));
+                    context.getRiskDetailsId(), context.getL1BlockKeyword()));
             evalResultDetailService.updateById(resultDetailDO);
             // ========== 记录L1节点明细
             evalPipelineNodeRecorder.finishNode(l1NodeRecordId,
                     PipelineNodeStatusEnums.BLOCKED,
                     new LinkedHashMap<String, Object>() {{
                         put("l1Blocked", context.isL1Blocked());
-                        put("l1BlockDetailsId", context.getL1BlockDetailsId());
+                        put("l1BlockDetailsId", context.getRiskDetailsId());
                         put("l1BlockKeyword", context.getL1BlockKeyword());
-                        put("hitWarningTags", context.getHitWarningTags());
+                        put("start", context.getStart());
+                        put("end", context.getEnd());
                     }},
                     new LinkedHashMap<String, Object>() {{
                         put("blocked", context.isL1Blocked());
-                        put("riskDetailsId", context.getL1BlockDetailsId());
+                        put("riskDetailsId", context.getRiskDetailsId());
                         put("keyword", context.getL1BlockKeyword());
-                        put("warningTags", context.getHitWarningTags());
                         put("decision", PipelineNodeStatusEnums.BLOCKED.getDesc());
+                        put("start", context.getStart());
+                        put("end", context.getEnd());
                     }}, resultDetailDO.getErrorMsg());
             return true;
         }
@@ -169,18 +172,16 @@ public class SafetyEvaluateExecuteService {
         evalPipelineNodeRecorder.finishNode(l1NodeRecordId, PipelineNodeStatusEnums.PASSED,
                 new LinkedHashMap<String, Object>() {{
                     put("l1Blocked", context.isL1Blocked());
-                    put("l1BlockDetailsId", context.getL1BlockDetailsId());
+                    put("l1BlockDetailsId", context.getRiskDetailsId());
                     put("l1BlockKeyword", context.getL1BlockKeyword());
-                    put("hitWarningTags", context.getHitWarningTags());
                 }},
                 new LinkedHashMap<String, Object>() {{
                     put("blocked", context.isL1Blocked());
-                    put("riskDetailsId", context.getL1BlockDetailsId());
+                    put("riskDetailsId", context.getRiskDetailsId());
                     put("keyword", context.getL1BlockKeyword());
-                    put("warningTags", context.getHitWarningTags());
                     put("decision", PipelineNodeStatusEnums.PASSED.getDesc());
                 }}, null);
-        log.info("L1 判定通过，resultDetailId: {}, warningTags: {}", resultDetailDO.getId(), context.getHitWarningTags());
+        log.info("L1 判定通过，resultDetailId: {}", resultDetailDO.getId());
         return false;
     }
 

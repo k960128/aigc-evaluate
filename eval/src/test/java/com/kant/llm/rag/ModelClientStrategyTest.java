@@ -1,4 +1,4 @@
-package com.kant.llm.eval;
+package com.kant.llm.rag;
 
 import com.kant.ai.infra.client.*;
 import com.kant.ai.infra.enums.ModelManufacturerEnum;
