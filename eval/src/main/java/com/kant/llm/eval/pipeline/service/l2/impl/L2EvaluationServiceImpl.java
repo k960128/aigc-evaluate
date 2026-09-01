@@ -533,4 +533,16 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
             throw new IllegalStateException("当前 JDK 不支持 SHA-256 摘要算法", ex);
         }
     }
+
+
+    /**
+     * ========================== 版本2 精简
+     * @param request
+     * @return
+     */
+    @Override
+    public L2EvaluationResult evaluateV2(L2EvaluationRequest request) {
+        return null;
+    }
+
 }
