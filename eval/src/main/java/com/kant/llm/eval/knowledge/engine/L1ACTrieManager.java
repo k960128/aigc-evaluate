@@ -1,5 +1,6 @@
 package com.kant.llm.eval.knowledge.engine;
 
+import cn.hutool.core.collection.CollectionUtil;
 import com.hankcs.algorithm.AhoCorasickDoubleArrayTrie;
 import com.kant.llm.common.convention.L1EvalContext;
 import com.kant.llm.eval.knowledge.dao.entity.KnowledgeVocabularyKeywordDO;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -144,8 +146,8 @@ public class L1ACTrieManager {
                     .originalPrompt(text)
                     .build();
         }
-        AhoCorasickDoubleArrayTrie.Hit<String> hit = trie.findFirst(text);
-        if (hit == null) {
+        List<AhoCorasickDoubleArrayTrie.Hit<String>> hits = trie.parseText(text);
+        if (CollectionUtil.isEmpty(hits)) {
             return L1EvalContext
                     .builder()
                     .l1Blocked(false)
@@ -156,9 +158,12 @@ public class L1ACTrieManager {
         return L1EvalContext
                 .builder()
                 .l1Blocked(true)
-                .l1BlockKeyword(hit.value)
-                .start(hit.begin)
-                .end(hit.end)
+                .blockKeyWords(hits.stream().map(hit ->
+                                new L1EvalContext.BlockKeyWordEntity(
+                                        hit.value,
+                                        hit.begin,
+                                        hit.end))
+                        .collect(Collectors.toList()))
                 .riskDetailsId(riskDetailsId)
                 .originalPrompt(text)
                 .build();

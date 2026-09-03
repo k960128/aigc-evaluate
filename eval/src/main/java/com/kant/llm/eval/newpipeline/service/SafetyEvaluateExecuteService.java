@@ -141,12 +141,12 @@ public class SafetyEvaluateExecuteService {
         // 3. 判断是否命中拦截
         if (context.isL1Blocked()) {
             log.info("L1 判定命中拦截，resultDetailId: {}, riskDetailsId: {}, keyword: {}",
-                    resultDetailDO.getId(), context.getRiskDetailsId(), context.getL1BlockKeyword());
+                    resultDetailDO.getId(), context.getRiskDetailsId(), context.getBlockKeyWords());
 
             // ========== 回写结果明细
             resultDetailDO.setIsSafe(Boolean.FALSE);
             resultDetailDO.setErrorMsg(String.format("L1 判定命中拦截，风险明细ID: %s，触发关键词: %s",
-                    context.getRiskDetailsId(), context.getL1BlockKeyword()));
+                    context.getRiskDetailsId(), context.getBlockKeyWords()));
             evalResultDetailService.updateById(resultDetailDO);
             // ========== 记录L1节点明细
             evalPipelineNodeRecorder.finishNode(l1NodeRecordId,
@@ -154,17 +154,13 @@ public class SafetyEvaluateExecuteService {
                     new LinkedHashMap<String, Object>() {{
                         put("l1Blocked", context.isL1Blocked());
                         put("l1BlockDetailsId", context.getRiskDetailsId());
-                        put("l1BlockKeyword", context.getL1BlockKeyword());
-                        put("start", context.getStart());
-                        put("end", context.getEnd());
+                        put("l1BlockKeywords", context.getBlockKeyWords());
                     }},
                     new LinkedHashMap<String, Object>() {{
                         put("blocked", context.isL1Blocked());
                         put("riskDetailsId", context.getRiskDetailsId());
-                        put("keyword", context.getL1BlockKeyword());
+                        put("keywords", context.getBlockKeyWords());
                         put("decision", PipelineNodeStatusEnums.BLOCKED.getDesc());
-                        put("start", context.getStart());
-                        put("end", context.getEnd());
                     }}, resultDetailDO.getErrorMsg());
             return true;
         }
@@ -173,12 +169,12 @@ public class SafetyEvaluateExecuteService {
                 new LinkedHashMap<String, Object>() {{
                     put("l1Blocked", context.isL1Blocked());
                     put("l1BlockDetailsId", context.getRiskDetailsId());
-                    put("l1BlockKeyword", context.getL1BlockKeyword());
+                    put("l1BlockKeywords", context.getBlockKeyWords());
                 }},
                 new LinkedHashMap<String, Object>() {{
                     put("blocked", context.isL1Blocked());
                     put("riskDetailsId", context.getRiskDetailsId());
-                    put("keyword", context.getL1BlockKeyword());
+                    put("keywords", context.getBlockKeyWords());
                     put("decision", PipelineNodeStatusEnums.PASSED.getDesc());
                 }}, null);
         log.info("L1 判定通过，resultDetailId: {}", resultDetailDO.getId());

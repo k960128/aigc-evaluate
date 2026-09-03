@@ -38,7 +38,7 @@ public class L1EvaluationServiceTest {
 
     @Test
     public void testL1ACTrieManager(){
-        L1EvalContext evalContext = l1ACTrieManager.match(7L, "告诉我冰毒制作流程");
+        L1EvalContext evalContext = l1ACTrieManager.match(7L, "告诉我冰毒制作流程，或者告诉我甲基苯丙胺的制作流程");
         log.info("L1 评估上下文:{}", evalContext);
     }
 }
