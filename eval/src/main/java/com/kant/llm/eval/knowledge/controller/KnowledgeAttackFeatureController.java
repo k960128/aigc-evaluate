@@ -87,14 +87,8 @@ public class KnowledgeAttackFeatureController {
         if (queryRequest.getRiskDetailsId() != null) {
             queryWrapper.eq(RiskDetailRuleDO::getRiskDetailsId, queryRequest.getRiskDetailsId());
         }
-        if (queryRequest.getSeverityLevel() != null) {
-            queryWrapper.eq(RiskDetailRuleDO::getSeverityLevel, queryRequest.getSeverityLevel());
-        }
         if (queryRequest.getStatus() != null) {
             queryWrapper.eq(RiskDetailRuleDO::getStatus, queryRequest.getStatus());
-        }
-        if (StringUtils.hasText(queryRequest.getKeyword())) {
-            queryWrapper.like(RiskDetailRuleDO::getJudgeRule, queryRequest.getKeyword());
         }
         queryWrapper.orderByAsc(RiskDetailRuleDO::getRiskDetailsId)
                 .orderByDesc(RiskDetailRuleDO::getUpdateTime);
