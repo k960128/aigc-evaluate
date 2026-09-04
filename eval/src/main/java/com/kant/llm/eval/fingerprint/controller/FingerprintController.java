@@ -45,6 +45,23 @@ public class FingerprintController {
     }
 
     /**
+     * 发布正向指纹
+     */
+    @PostMapping("/positive/publish")
+    public Result<Boolean> publishPositiveFingerprint() {
+        return Results.success(knowledgePositiveFingerprintService.publishPositiveFingerprint());
+    }
+
+    /**
+     * 刷新正向指纹的SimHash值
+     * @return result
+     */
+    @PostMapping("/positive/refresh-sim-hash")
+    public Result<Boolean> refreshPositiveFingerprintSimHash(){
+        return Results.success(knowledgePositiveFingerprintService.refreshPositiveFingerprintSimHash());
+    }
+
+    /**
      * 新增负向指纹
      */
     @PostMapping("/negative/save")
@@ -58,5 +75,14 @@ public class FingerprintController {
     @PostMapping("/negative/page")
     public Result<Page<KnowledgeNegativeFingerprintVO>> pageNegativeFingerprint(@RequestBody KnowledgeNegativeFingerprintPageRequest request) {
         return Results.success(knowledgeNegativeFingerprintService.pageNegativeFingerprint(request));
+    }
+
+    /**
+     * 发布负向指纹
+     * @return result
+     */
+    @PostMapping("/negative/publish")
+    public Result<Boolean> publishNegativeFingerprint() {
+        return Results.success(knowledgeNegativeFingerprintService.publishNegativeFingerprint());
     }
 }

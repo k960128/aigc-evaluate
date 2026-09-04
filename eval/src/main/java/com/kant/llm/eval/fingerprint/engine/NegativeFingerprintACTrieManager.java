@@ -1,10 +1,10 @@
-package com.kant.llm.eval.knowledge.engine;
+package com.kant.llm.eval.fingerprint.engine;
 
 import cn.hutool.core.collection.CollectionUtil;
 import com.hankcs.algorithm.AhoCorasickDoubleArrayTrie;
 import com.kant.llm.common.convention.L1EvalContext;
-import com.kant.llm.eval.knowledge.dao.entity.KnowledgeVocabularyKeywordDO;
-import com.kant.llm.eval.knowledge.service.KnowledgeVocabularyKeywordService;
+import com.kant.llm.eval.fingerprint.dao.entity.KnowledgeNegativeFingerprintDO;
+import com.kant.llm.eval.fingerprint.service.KnowledgeNegativeFingerprintService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,12 +14,15 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+/**
+ * 构建负向指纹的AC自动机Trie树
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class L1ACTrieManager {
+public class NegativeFingerprintACTrieManager {
 
-    private final KnowledgeVocabularyKeywordService knowledgeVocabularyKeywordService;
+    private final KnowledgeNegativeFingerprintService knowledgeNegativeFingerprintService;
 
     /**
      * 存储每个 risk_details_id 对应的AC自动机
@@ -50,7 +53,7 @@ public class L1ACTrieManager {
 
         try {
             // 1. 查询所有有效关键词
-            List<KnowledgeVocabularyKeywordDO> keywordList = knowledgeVocabularyKeywordService.list();
+            List<KnowledgeNegativeFingerprintDO> keywordList = knowledgeNegativeFingerprintService.list();
 
             if (keywordList == null || keywordList.isEmpty()) {
                 log.warn("未查询到任何关键词数据");
@@ -62,7 +65,7 @@ public class L1ACTrieManager {
             // 2. 按 risk_details_id 分组
             Map<Long, TreeMap<String, String>> groupMap = new HashMap<>();
 
-            for (KnowledgeVocabularyKeywordDO keyword : keywordList) {
+            for (KnowledgeNegativeFingerprintDO keyword : keywordList) {
                 Long riskDetailsId = keyword.getRiskDetailsId();
                 String keywordStr = keyword.getKeyword();
 

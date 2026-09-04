@@ -21,4 +21,10 @@ public interface KnowledgeNegativeFingerprintService extends IService<KnowledgeN
      * @return pageResult
      */
     Page<KnowledgeNegativeFingerprintVO> pageNegativeFingerprint(KnowledgeNegativeFingerprintPageRequest request);
+
+    /**
+     * 发布负向指纹
+     * @return result
+     */
+    Boolean publishNegativeFingerprint();
 }

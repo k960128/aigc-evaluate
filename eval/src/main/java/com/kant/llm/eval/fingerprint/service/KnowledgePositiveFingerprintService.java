@@ -21,4 +21,24 @@ public interface KnowledgePositiveFingerprintService extends IService<KnowledgeP
      * @return pageResult
      */
     Page<KnowledgePositiveFingerprintVO> pagePositiveFingerprint(KnowledgePositiveFingerprintPageRequest request);
+
+    /**
+     * 发布正向指纹
+     * @return result
+     */
+    Boolean publishPositiveFingerprint();
+
+    /**
+     * 刷新正向指纹的SimHash值
+     * @return result
+     */
+    Boolean refreshPositiveFingerprintSimHash();
+
+    /**
+     * 核心校验方法：判断是否为标准拒答
+     * @param riskDetailsId 风险分类标识
+     * @param checkText 检测文本
+     * @return result
+     */
+    Boolean validateStandardRefusal(Long riskDetailsId, String checkText);
 }

@@ -2,14 +2,12 @@ package com.kant.llm.eval.newpipeline.service;
 
 import cn.hutool.core.collection.CollectionUtil;
 import com.kant.framework.exception.ServiceException;
-import com.kant.llm.common.convention.EvalContext;
 import com.kant.llm.common.convention.L1EvalContext;
 import com.kant.llm.common.enums.EvalResultStatusEnums;
 import com.kant.llm.common.enums.PipelineNodeCodeEnums;
 import com.kant.llm.common.enums.PipelineNodeStatusEnums;
 import com.kant.llm.common.enums.TaskStatusEnums;
-import com.kant.llm.eval.knowledge.engine.L1ACTrieManager;
-import com.kant.llm.eval.knowledge.engine.L1InterceptionEngine;
+import com.kant.llm.eval.fingerprint.engine.NegativeFingerprintACTrieManager;
 import com.kant.llm.eval.pipeline.mq.message.SafetyEvaluateMessage;
 import com.kant.llm.eval.pipeline.service.EvalPipelineNodeRecorder;
 import com.kant.llm.eval.pipeline.service.l2.L2EvaluationService;
@@ -37,20 +35,20 @@ public class SafetyEvaluateExecuteService {
     private static final String EXECUTION_LOCK_KEY_PREFIX = "EVAL:SAFETY-EVALUATE:LOCK:KEY:%s";
 
     private final RedissonClient redissonClient;
-    private final L1ACTrieManager l1ACTrieManager;
+    private final NegativeFingerprintACTrieManager negativeFingerprintAcTrieManager;
     private final L2EvaluationService l2EvaluationService;
     private final EvalTaskDetailService evalTaskDetailService;
     private final EvalResultDetailService evalResultDetailService;
     private final EvalPipelineNodeRecorder evalPipelineNodeRecorder;
 
     public SafetyEvaluateExecuteService(RedissonClient redissonClient,
-                                        L1ACTrieManager l1ACTrieManager,
+                                        NegativeFingerprintACTrieManager negativeFingerprintAcTrieManager,
                                         L2EvaluationService l2EvaluationService,
                                         EvalTaskDetailService evalTaskDetailService,
                                         EvalResultDetailService evalResultDetailService,
                                         EvalPipelineNodeRecorder evalPipelineNodeRecorder) {
         this.redissonClient = redissonClient;
-        this.l1ACTrieManager = l1ACTrieManager;
+        this.negativeFingerprintAcTrieManager = negativeFingerprintAcTrieManager;
         this.l2EvaluationService = l2EvaluationService;
         this.evalTaskDetailService = evalTaskDetailService;
         this.evalResultDetailService = evalResultDetailService;
@@ -137,7 +135,7 @@ public class SafetyEvaluateExecuteService {
                 PipelineNodeCodeEnums.L1,
                 CollectionUtil.toList(resultDetailDO.getModelOutput()));
         // 2. 获取 L1 评测上下文
-        L1EvalContext context = l1ACTrieManager.match(resultDetailDO.getRiskDetailsId(), resultDetailDO.getModelOutput());
+        L1EvalContext context = negativeFingerprintAcTrieManager.match(resultDetailDO.getRiskDetailsId(), resultDetailDO.getModelOutput());
         // 3. 判断是否命中拦截
         if (context.isL1Blocked()) {
             log.info("L1 判定命中拦截，resultDetailId: {}, riskDetailsId: {}, keyword: {}",

@@ -70,6 +70,11 @@ public class KnowledgeNegativeFingerprintServiceImpl
         return voPage;
     }
 
+    @Override
+    public Boolean publishNegativeFingerprint() {
+        return true;
+    }
+
     /**
      * 获取分页页码，未传时默认第 1 页。
      */
