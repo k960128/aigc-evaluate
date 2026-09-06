@@ -21,6 +21,9 @@ public enum PipelineNodeStatusEnums {
     /** 拦截：节点命中风险或短路规则，样本不再进入后续安全判定节点。 */
     BLOCKED("BLOCKED", "拦截"),
 
+    /** 安全通过：节点处理完成，一但符合安全要求，则直接通过。 */
+    SAFE_TO_PASS("SAFE_TO_PASS", "安全拒答"),
+
     /** 失败：节点执行过程中发生异常。 */
     FAILED("FAILED", "失败"),
 

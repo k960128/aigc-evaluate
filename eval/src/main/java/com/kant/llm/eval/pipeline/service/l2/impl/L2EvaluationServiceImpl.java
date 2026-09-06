@@ -15,8 +15,10 @@ import com.kant.llm.eval.pipeline.service.l2.model.L2RerankRequest;
 import com.kant.llm.eval.pipeline.service.l2.model.L2RerankResult;
 import com.kant.llm.eval.pipeline.service.l2.model.L2RiskDetailHit;
 import com.kant.llm.eval.pipeline.service.l2.model.L2ThresholdProperties;
+import com.kant.llm.eval.risk.service.RiskDetailRuleService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -65,9 +67,14 @@ public class L2EvaluationServiceImpl implements L2EvaluationService {
 
     private final L2RerankerClient l2RerankerClient;
 
-    public L2EvaluationServiceImpl(L2RecallClient l2RecallClient, L2RerankerClient l2RerankerClient) {
+    private final RiskDetailRuleService riskDetailRuleService;
+
+    public L2EvaluationServiceImpl(@Qualifier("esPgL2RecallClient") L2RecallClient l2RecallClient,
+                                   L2RerankerClient l2RerankerClient,
+                                   RiskDetailRuleService riskDetailRuleService) {
         this.l2RecallClient = l2RecallClient;
         this.l2RerankerClient = l2RerankerClient;
+        this.riskDetailRuleService = riskDetailRuleService;
     }
 
     @Override

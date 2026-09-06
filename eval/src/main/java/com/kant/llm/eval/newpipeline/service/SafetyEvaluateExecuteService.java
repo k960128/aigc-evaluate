@@ -8,11 +8,13 @@ import com.kant.llm.common.enums.PipelineNodeCodeEnums;
 import com.kant.llm.common.enums.PipelineNodeStatusEnums;
 import com.kant.llm.common.enums.TaskStatusEnums;
 import com.kant.llm.eval.fingerprint.engine.NegativeFingerprintACTrieManager;
+import com.kant.llm.eval.fingerprint.service.KnowledgePositiveFingerprintService;
 import com.kant.llm.eval.pipeline.mq.message.SafetyEvaluateMessage;
 import com.kant.llm.eval.pipeline.service.EvalPipelineNodeRecorder;
 import com.kant.llm.eval.pipeline.service.l2.L2EvaluationService;
 import com.kant.llm.eval.pipeline.service.l2.model.L2EvaluationRequest;
 import com.kant.llm.eval.pipeline.service.l2.model.L2EvaluationResult;
+import com.kant.llm.eval.risk.service.RiskDetailRuleService;
 import com.kant.llm.eval.task.dao.entity.EvalResultDetailDO;
 import com.kant.llm.eval.task.dao.entity.EvalTaskDetailDO;
 import com.kant.llm.eval.task.service.EvalResultDetailService;
@@ -35,24 +37,27 @@ public class SafetyEvaluateExecuteService {
     private static final String EXECUTION_LOCK_KEY_PREFIX = "EVAL:SAFETY-EVALUATE:LOCK:KEY:%s";
 
     private final RedissonClient redissonClient;
-    private final NegativeFingerprintACTrieManager negativeFingerprintAcTrieManager;
     private final L2EvaluationService l2EvaluationService;
     private final EvalTaskDetailService evalTaskDetailService;
     private final EvalResultDetailService evalResultDetailService;
     private final EvalPipelineNodeRecorder evalPipelineNodeRecorder;
+    private final NegativeFingerprintACTrieManager negativeFingerprintAcTrieManager;
+    private final KnowledgePositiveFingerprintService knowledgePositiveFingerprintService;
 
     public SafetyEvaluateExecuteService(RedissonClient redissonClient,
-                                        NegativeFingerprintACTrieManager negativeFingerprintAcTrieManager,
                                         L2EvaluationService l2EvaluationService,
                                         EvalTaskDetailService evalTaskDetailService,
                                         EvalResultDetailService evalResultDetailService,
-                                        EvalPipelineNodeRecorder evalPipelineNodeRecorder) {
+                                        EvalPipelineNodeRecorder evalPipelineNodeRecorder,
+                                        NegativeFingerprintACTrieManager negativeFingerprintAcTrieManager,
+                                        KnowledgePositiveFingerprintService knowledgePositiveFingerprintService) {
         this.redissonClient = redissonClient;
         this.negativeFingerprintAcTrieManager = negativeFingerprintAcTrieManager;
         this.l2EvaluationService = l2EvaluationService;
         this.evalTaskDetailService = evalTaskDetailService;
         this.evalResultDetailService = evalResultDetailService;
         this.evalPipelineNodeRecorder = evalPipelineNodeRecorder;
+        this.knowledgePositiveFingerprintService = knowledgePositiveFingerprintService;
     }
 
     /**
@@ -127,23 +132,88 @@ public class SafetyEvaluateExecuteService {
      * @return 是否命中
      */
     private Boolean safetyEvaluateL1(EvalResultDetailDO resultDetailDO) {
+        // 1. 正向指纹快速判定
+        if (L1PositiveFingerprint(resultDetailDO)) {
+            return true;
+        }
+        // 2. 负向指纹快速判定
+        if (L1NegativeFingerprint(resultDetailDO)) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 执行 L1 正向指纹快速判定
+     * @param resultDetailDO 评测结果明细
+     * @return 是否命中
+     */
+    private Boolean L1PositiveFingerprint(EvalResultDetailDO resultDetailDO) {
         // 1. 记录节点日志
         Long l1NodeRecordId = evalPipelineNodeRecorder.startNode(
                 resultDetailDO.getTaskId(),
                 resultDetailDO.getTaskDetailId(),
                 resultDetailDO,
-                PipelineNodeCodeEnums.L1,
+                PipelineNodeCodeEnums.L1_POSITIVE_FINGERPRINT,
+                CollectionUtil.toList(resultDetailDO.getModelOutput()));
+        // 2. 获取 L1 评测上下文
+        Boolean aBoolean = knowledgePositiveFingerprintService.validateStandardRefusal(resultDetailDO.getRiskDetailsId(), resultDetailDO.getModelOutput());
+        // 3. 判断是否命中拦截,如果命中拦截,则返回true,表示当前为大模型安全拒答，不再进入后续的流水线处理
+        if (aBoolean) {
+            log.info("L1 正向指纹 判断命中拦截，resultDetailId: {}, riskDetailsId: {}, keyword: {}",
+                    resultDetailDO.getId(), resultDetailDO.getRiskDetailsId(), resultDetailDO.getModelOutput());
+            // ========== 记录L1正向指纹节点明细，当前为安全拒答，不进入后续的流水线处理
+            evalPipelineNodeRecorder.finishNode(l1NodeRecordId,
+                    PipelineNodeStatusEnums.SAFE_TO_PASS,
+                    new LinkedHashMap<String, Object>() {{
+                        put("是否命中正向指纹", Boolean.TRUE);
+                        put("风险小类", resultDetailDO.getRiskDetailsId());
+                    }},
+                    new LinkedHashMap<String, Object>() {{
+                        put("是否命中正向指纹", Boolean.TRUE);
+                        put("风险小类", resultDetailDO.getRiskDetailsId());
+                        put("描述", PipelineNodeStatusEnums.SAFE_TO_PASS.getDesc());
+                    }}, resultDetailDO.getErrorMsg());
+            return true;
+        }
+        // ========== 记录L1节点明细
+        evalPipelineNodeRecorder.finishNode(l1NodeRecordId,
+                PipelineNodeStatusEnums.PASSED,
+                new LinkedHashMap<String, Object>() {{
+                    put("是否命中正向指纹", Boolean.FALSE);
+                    put("风险小类", resultDetailDO.getRiskDetailsId());
+                }},
+                new LinkedHashMap<String, Object>() {{
+                    put("是否命中正向指纹", Boolean.FALSE);
+                    put("风险小类", resultDetailDO.getRiskDetailsId());
+                    put("描述", PipelineNodeStatusEnums.PASSED.getDesc());
+                }}, resultDetailDO.getErrorMsg());
+        return false;
+    }
+
+    /**
+     * 执行 L1 负向指纹快速判定
+     * @param resultDetailDO 评测结果明细
+     * @return 是否命中
+     */
+    private Boolean  L1NegativeFingerprint(EvalResultDetailDO resultDetailDO) {
+        // 1. 记录节点日志
+        Long l1NodeRecordId = evalPipelineNodeRecorder.startNode(
+                resultDetailDO.getTaskId(),
+                resultDetailDO.getTaskDetailId(),
+                resultDetailDO,
+                PipelineNodeCodeEnums.L1_NEGATIVE_FINGERPRINT,
                 CollectionUtil.toList(resultDetailDO.getModelOutput()));
         // 2. 获取 L1 评测上下文
         L1EvalContext context = negativeFingerprintAcTrieManager.match(resultDetailDO.getRiskDetailsId(), resultDetailDO.getModelOutput());
         // 3. 判断是否命中拦截
         if (context.isL1Blocked()) {
-            log.info("L1 判定命中拦截，resultDetailId: {}, riskDetailsId: {}, keyword: {}",
+            log.info("L1 负向指纹 判断命中拦截，resultDetailId: {}, riskDetailsId: {}, keyword: {}",
                     resultDetailDO.getId(), context.getRiskDetailsId(), context.getBlockKeyWords());
 
             // ========== 回写结果明细
             resultDetailDO.setIsSafe(Boolean.FALSE);
-            resultDetailDO.setErrorMsg(String.format("L1 判定命中拦截，风险明细ID: %s，触发关键词: %s",
+            resultDetailDO.setErrorMsg(String.format("L1 负向指纹 判断命中拦截，风险明细ID: %s，触发关键词: %s",
                     context.getRiskDetailsId(), context.getBlockKeyWords()));
             evalResultDetailService.updateById(resultDetailDO);
             // ========== 记录L1节点明细
@@ -175,9 +245,11 @@ public class SafetyEvaluateExecuteService {
                     put("keywords", context.getBlockKeyWords());
                     put("decision", PipelineNodeStatusEnums.PASSED.getDesc());
                 }}, null);
-        log.info("L1 判定通过，resultDetailId: {}", resultDetailDO.getId());
+        log.info("L1 负向指纹 判断通过，resultDetailId: {}", resultDetailDO.getId());
         return false;
     }
+
+
 
     /**
      * 执行 L2 评测
