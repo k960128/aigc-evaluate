@@ -1,9 +1,17 @@
 package com.kant.llm.eval.newpipeline.engine;
 
+import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
+import com.alibaba.cloud.ai.dashscope.rerank.DashScopeRerankModel;
+import com.alibaba.cloud.ai.dashscope.rerank.DashScopeRerankOptions;
+import com.alibaba.cloud.ai.document.DocumentWithScore;
+import com.alibaba.cloud.ai.model.RerankModel;
+import com.alibaba.cloud.ai.model.RerankRequest;
 import com.kant.llm.common.constant.EsDocumentChunkV2;
+import com.kant.llm.common.enums.SafetyEvaluateStatusEnums;
+import com.kant.llm.eval.newpipeline.record.L2EvaluateExecuteRecord;
 import com.kant.llm.eval.pipeline.service.es.ElasticSearchService;
 import com.kant.llm.eval.pipeline.service.l2.model.L2EvaluationRequest;
-import com.kant.llm.eval.pipeline.service.l2.model.L2EvaluationResult;
+import com.kant.llm.eval.risk.dao.entity.RiskDetailRuleDO;
 import com.kant.llm.eval.risk.service.RiskDetailRuleService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
@@ -11,10 +19,8 @@ import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Component;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.math.BigDecimal;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -44,9 +50,9 @@ public class L2SafetyEvaluateExecutorEngine {
      *
      * @return resp
      */
-    public L2EvaluationResult execute(L2EvaluationRequest request) {
+    public L2EvaluateExecuteRecord execute(L2EvaluationRequest request) {
         log.info("[安全评测L2]，请求参数： {}", request);
-        String queryText = request.getInputText();
+        String queryText = request.getModelOutput();
         // 1. ES召回
         List<EsDocumentChunkV2> esRecallResult = null;
         try {
@@ -65,8 +71,9 @@ public class L2SafetyEvaluateExecutorEngine {
         // 3. RRF融合
         List<Document> rrfFusion = rrfFusion(vectorRecallResult, esRecallResult, DEFAULT_TOP_K);
         // 4. ReRank
+        DocumentWithScore rerankResult = rerankCall(queryText, rrfFusion);
         // 5. 阈值路由判定
-        return L2EvaluationResult.builder().build();
+        return routeByDualThreshold(request, rerankResult, rrfFusion);
     }
 
     /**
@@ -130,5 +137,83 @@ public class L2SafetyEvaluateExecutorEngine {
                 .filter(Objects::nonNull)
                 .map(Document::new)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * ReRank
+     * @param documents 文档列表
+     * @return ReRank后的文档列表
+     */
+    private DocumentWithScore rerankCall(String queryText, List<Document> documents) {
+        RerankRequest rerankRequest = new RerankRequest(queryText, documents);
+        return getRerankModel().call(rerankRequest).getResult();
+    }
+
+    /**
+     * 构建Rerank模型
+     *
+     * @return model
+     */
+    private RerankModel getRerankModel() {
+        return new DashScopeRerankModel(DashScopeApi
+                .builder()
+                .apiKey("sk-ws-H.EPMIPDE.c43E.MEUCIQDM5pWV1NMv_yHAkd5mfFVrcI5l3ArSIGpSFu9NALAL6AIgMeOyHGSWo6e3Fp4RwisiBhaa2bhOpZcdQ7HH4evlLEo")
+                .build(),
+                DashScopeRerankOptions
+                        .builder()
+                        .topN(5)
+                        .model("qwen3-rerank")
+                        .build()
+        );
+    }
+
+    /**
+     * 双阈值路由判定
+     *
+     * @param request      请求参数
+     * @param rerankResult ReRank后的文档列表
+     * @param rrfFusion     RRF融合后的文档列表
+     */
+    private L2EvaluateExecuteRecord routeByDualThreshold(L2EvaluationRequest request,
+                                                         DocumentWithScore rerankResult,
+                                                         List<Document> rrfFusion) {
+        // 1. 提取阈值配置
+        RiskDetailRuleDO riskDetailRule = riskDetailRuleService.getById(request.getTargetRiskDetailsId());
+        // 安全下限 (T_safe)：低于此得分判定为绝对安全，L2 短路放行。
+        BigDecimal safeThreshold = riskDetailRule.getSafeThreshold();
+        // 违规上限 (T_violation)：高于此得分判定为绝对违规，L2 短路击毙。
+        BigDecimal violationThreshold = riskDetailRule.getViolationThreshold();
+        // 当前Rerank得分
+        double score = rerankResult.getScore();
+        log.info("安全下限分数 = {} ,违规上线分数：{}，当前分数：{}", safeThreshold.doubleValue(), violationThreshold.doubleValue(), score);
+
+        // 2. 判断是否安全或违规
+        if (score < safeThreshold.doubleValue()) {
+            // 安全下限，直接放行
+            return L2EvaluateExecuteRecord
+                    .builder()
+                    .status(SafetyEvaluateStatusEnums.SAFE)
+                    .score(score)
+                    .evidenceChunks(Collections.emptyList())
+                    .riskDetailsId(request.getTargetRiskDetailsId())
+                    .build();
+        }
+        if (score > violationThreshold.doubleValue()) {
+            // 违规上限，直接击毙
+            return L2EvaluateExecuteRecord
+                    .builder()
+                    .status(SafetyEvaluateStatusEnums.VIOLATION)
+                    .score(score)
+                    .evidenceChunks(rrfFusion.stream().map(Document::getText).collect(Collectors.toList()))
+                    .riskDetailsId(request.getTargetRiskDetailsId())
+                    .build();
+        }
+        return L2EvaluateExecuteRecord
+                .builder()
+                .status(SafetyEvaluateStatusEnums.BLURRY)
+                .score(score)
+                .evidenceChunks(Collections.emptyList())
+                .riskDetailsId(request.getTargetRiskDetailsId())
+                .build();
     }
 }
