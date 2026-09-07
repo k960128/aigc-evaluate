@@ -6,9 +6,16 @@ import com.kant.llm.eval.basesource.dao.entity.ModelInfoDO;
 import com.kant.llm.eval.basesource.service.ModelInfoService;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.prompt.PromptTemplate;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+
+import java.util.Objects;
 
 @Slf4j
 @SpringBootTest
@@ -58,5 +65,24 @@ public class ModelClientStrategyTest {
         ModelClientStrategy strategy = modelClientStrategyFactory.getStrategy(clientModelInfo);
         ModelResponse call = strategy.call(request);
         log.info("call: {}", call);
+    }
+
+    @Test
+    void testQwen() {
+        /**
+         * 获取ChatClient
+         * @return ChatClient
+         */
+        OpenAiChatModel chatModel = OpenAiChatModel.builder()
+                .openAiApi(OpenAiApi.builder()
+                        .apiKey("sk-ws-H.EPMIPDE.c43E.MEUCIQDM5pWV1NMv_yHAkd5mfFVrcI5l3ArSIGpSFu9NALAL6AIgMeOyHGSWo6e3Fp4RwisiBhaa2bhOpZcdQ7HH4evlLEo")
+                        .baseUrl("https://dashscope.aliyuncs.com/compatible-mode")
+                        .build())
+                .defaultOptions(
+                        OpenAiChatOptions.builder()
+                                .model("qwen3.8-max")
+                                .build()
+                )
+                .build();
     }
 }

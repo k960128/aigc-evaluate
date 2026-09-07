@@ -13,6 +13,7 @@ import com.kant.llm.eval.newpipeline.engine.L2SafetyEvaluateExecutorEngine;
 import com.kant.llm.eval.newpipeline.engine.L3SafetyEvaluateExecutorEngine;
 import com.kant.llm.eval.newpipeline.record.L2EvaluateExecuteRecord;
 import com.kant.llm.eval.newpipeline.record.L2PipelineRecord;
+import com.kant.llm.eval.newpipeline.record.L3JudgeResult;
 import com.kant.llm.eval.pipeline.mq.message.SafetyEvaluateMessage;
 import com.kant.llm.eval.pipeline.service.EvalPipelineNodeRecorder;
 import com.kant.llm.eval.pipeline.service.l2.model.L2EvaluationRequest;
@@ -66,6 +67,7 @@ public class SafetyEvaluateExecuteService {
 
     /**
      * 提交安全评测执行任务
+     *
      * @param message msg
      */
     public void submitExecute(SafetyEvaluateMessage message) {
@@ -107,6 +109,7 @@ public class SafetyEvaluateExecuteService {
 
     /**
      * 执行安全评测业务逻辑
+     *
      * @param message msg
      */
     private void execute(SafetyEvaluateMessage message) {
@@ -121,7 +124,7 @@ public class SafetyEvaluateExecuteService {
         // ================= L2 混合检索
         L2PipelineRecord l2PipelineRecord = safetyEvaluateL2(resultDetailDO);
         // L2 短路点，混合检索命中规则直接返回
-        if (l2PipelineRecord.releaseStatus()) {
+        if (!l2PipelineRecord.releaseStatus()) {
             return;
         }
         // ================= L3 投递到LLM-AS-JUDGE
@@ -130,6 +133,7 @@ public class SafetyEvaluateExecuteService {
 
     /**
      * 执行 L1 评测
+     *
      * @param resultDetailDO 评测结果明细
      * @return 是否命中
      */
@@ -147,6 +151,7 @@ public class SafetyEvaluateExecuteService {
 
     /**
      * 执行 L1 正向指纹快速判定
+     *
      * @param resultDetailDO 评测结果明细
      * @return 是否命中
      */
@@ -195,6 +200,7 @@ public class SafetyEvaluateExecuteService {
 
     /**
      * 执行 L1 负向指纹快速判定
+     *
      * @param resultDetailDO 评测结果明细
      * @return 是否命中
      */
@@ -254,6 +260,7 @@ public class SafetyEvaluateExecuteService {
 
     /**
      * 执行 L2 评测
+     *
      * @param resultDetailDO 评测结果明细
      */
     private L2PipelineRecord safetyEvaluateL2(EvalResultDetailDO resultDetailDO) {
@@ -284,7 +291,7 @@ public class SafetyEvaluateExecuteService {
         // 判定结果
         switch (evaluateExecuteRecord.status()) {
             case SAFE:
-                // 安全放心，记录放行节点日志，不再进行后续评测
+                // 安全放行，记录放行节点日志，不再进行后续评测
                 resultDetailDO.setIsSafe(Boolean.TRUE);
                 resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
                 evalResultDetailService.updateById(resultDetailDO);
@@ -374,12 +381,71 @@ public class SafetyEvaluateExecuteService {
     private void safetyEvaluateL3(EvalResultDetailDO resultDetailDO,
                                   L2PipelineRecord l2PipelineRecord) {
         log.info("L3 评测，resultDetailDO: {} , l2PipelineRecord: {}", resultDetailDO, l2PipelineRecord);
-        l3SafetyEvaluateExecutorEngine.execute(resultDetailDO,l2PipelineRecord);
-//        return true;
+        // 1. 记录L2 节点起始日志
+        Long l3NodeRecordId = evalPipelineNodeRecorder.startNode(
+                resultDetailDO.getTaskId(),
+                resultDetailDO.getTaskDetailId(),
+                resultDetailDO,
+                PipelineNodeCodeEnums.L3,
+                new LinkedHashMap<String, Object>() {{
+                    put("inputText", resultDetailDO.getInputText());
+                    put("targetRiskDetailsId", resultDetailDO.getRiskDetailsId());
+                    put("modelOutput", resultDetailDO.getModelOutput());
+                }}
+        );
+        try {
+            L3JudgeResult judgeResult = l3SafetyEvaluateExecutorEngine.execute(resultDetailDO, l2PipelineRecord);
+            switch (judgeResult.status()) {
+                case SAFE:
+                    resultDetailDO.setIsSafe(Boolean.TRUE);
+                    resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
+                    evalResultDetailService.updateById(resultDetailDO);
+
+                    evalPipelineNodeRecorder.finishNode(l3NodeRecordId,
+                            PipelineNodeStatusEnums.PASSED,
+                            new LinkedHashMap<String, Object>() {{
+                                put("安全状态", judgeResult.status().getDesc());
+                                put("判定逻辑", judgeResult.reasoning());
+                            }},
+                            new LinkedHashMap<String, Object>() {{
+                                put("安全状态", judgeResult.status().getDesc());
+                                put("判定逻辑", judgeResult.reasoning());
+                            }},
+                            null);
+                    break;
+                case VIOLATION:
+                    resultDetailDO.setIsSafe(Boolean.FALSE);
+                    resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
+                    evalResultDetailService.updateById(resultDetailDO);
+
+                    evalPipelineNodeRecorder.finishNode(l3NodeRecordId,
+                            PipelineNodeStatusEnums.BLOCKED,
+                            new LinkedHashMap<String, Object>() {{
+                                put("安全状态", judgeResult.status().getDesc());
+                                put("判定逻辑", judgeResult.reasoning());
+                                put("违规样本", judgeResult.violationSample());
+                            }},
+                            new LinkedHashMap<String, Object>() {{
+                                put("安全状态", judgeResult.status().getDesc());
+                                put("判定逻辑", judgeResult.reasoning());
+                                put("违规样本", judgeResult.violationSample());
+                            }},
+                            null);
+                    break;
+                case BLURRY:
+                case UNKNOWN:
+                default:
+                    log.error("投递到人工复审");
+                    break;
+            }
+        } catch (Exception e) {
+            log.error("L3异常", e);
+        }
     }
 
     /**
      * 构建分布式锁的Key
+     *
      * @param resultDetailId 回写结果ID
      * @return Key
      */
@@ -390,6 +456,7 @@ public class SafetyEvaluateExecuteService {
 
     /**
      * 评测完成回写结果
+     *
      * @param resultDetailDO do
      */
     private void writeBackToDB(EvalResultDetailDO resultDetailDO) {
