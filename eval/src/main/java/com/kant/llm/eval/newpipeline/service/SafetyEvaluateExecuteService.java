@@ -10,6 +10,7 @@ import com.kant.llm.common.enums.TaskStatusEnums;
 import com.kant.llm.eval.fingerprint.engine.NegativeFingerprintACTrieManager;
 import com.kant.llm.eval.fingerprint.service.KnowledgePositiveFingerprintService;
 import com.kant.llm.eval.newpipeline.engine.L2SafetyEvaluateExecutorEngine;
+import com.kant.llm.eval.newpipeline.engine.L3SafetyEvaluateExecutorEngine;
 import com.kant.llm.eval.newpipeline.record.L2EvaluateExecuteRecord;
 import com.kant.llm.eval.newpipeline.record.L2PipelineRecord;
 import com.kant.llm.eval.pipeline.mq.message.SafetyEvaluateMessage;
@@ -41,6 +42,7 @@ public class SafetyEvaluateExecuteService {
     private final EvalResultDetailService evalResultDetailService;
     private final EvalPipelineNodeRecorder evalPipelineNodeRecorder;
     private final L2SafetyEvaluateExecutorEngine l2SafetyEvaluateExecutorEngine;
+    private final L3SafetyEvaluateExecutorEngine l3SafetyEvaluateExecutorEngine;
     private final NegativeFingerprintACTrieManager negativeFingerprintAcTrieManager;
     private final KnowledgePositiveFingerprintService knowledgePositiveFingerprintService;
 
@@ -49,9 +51,11 @@ public class SafetyEvaluateExecuteService {
                                         EvalResultDetailService evalResultDetailService,
                                         EvalPipelineNodeRecorder evalPipelineNodeRecorder,
                                         L2SafetyEvaluateExecutorEngine l2SafetyEvaluateExecutorEngine,
+                                        L3SafetyEvaluateExecutorEngine l3SafetyEvaluateExecutorEngine,
                                         NegativeFingerprintACTrieManager negativeFingerprintAcTrieManager,
                                         KnowledgePositiveFingerprintService knowledgePositiveFingerprintService) {
         this.redissonClient = redissonClient;
+        this.l3SafetyEvaluateExecutorEngine = l3SafetyEvaluateExecutorEngine;
         this.negativeFingerprintAcTrieManager = negativeFingerprintAcTrieManager;
         this.evalTaskDetailService = evalTaskDetailService;
         this.evalResultDetailService = evalResultDetailService;
@@ -370,6 +374,7 @@ public class SafetyEvaluateExecuteService {
     private void safetyEvaluateL3(EvalResultDetailDO resultDetailDO,
                                   L2PipelineRecord l2PipelineRecord) {
         log.info("L3 评测，resultDetailDO: {} , l2PipelineRecord: {}", resultDetailDO, l2PipelineRecord);
+        l3SafetyEvaluateExecutorEngine.execute(resultDetailDO,l2PipelineRecord);
 //        return true;
     }
 

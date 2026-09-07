@@ -1,7 +1,6 @@
 package com.kant.llm.eval.newpipeline.record;
 
 import lombok.Builder;
-import lombok.Data;
 
 @Builder
 public record L2PipelineRecord(
