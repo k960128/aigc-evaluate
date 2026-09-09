@@ -1,4 +1,4 @@
-package com.kant.llm.eval;
+package com.kant.llm.rag;
 
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;

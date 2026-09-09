@@ -2,17 +2,21 @@ package com.kant.llm.eval.newpipeline.service;
 
 import cn.hutool.core.collection.CollectionUtil;
 import com.kant.framework.exception.ServiceException;
-import com.kant.llm.common.convention.EvalContext;
+import com.kant.llm.common.convention.L1EvalContext;
 import com.kant.llm.common.enums.EvalResultStatusEnums;
 import com.kant.llm.common.enums.PipelineNodeCodeEnums;
 import com.kant.llm.common.enums.PipelineNodeStatusEnums;
 import com.kant.llm.common.enums.TaskStatusEnums;
-import com.kant.llm.eval.knowledge.engine.L1InterceptionEngine;
+import com.kant.llm.eval.fingerprint.engine.NegativeFingerprintACTrieManager;
+import com.kant.llm.eval.fingerprint.service.KnowledgePositiveFingerprintService;
+import com.kant.llm.eval.newpipeline.engine.L2SafetyEvaluateExecutorEngine;
+import com.kant.llm.eval.newpipeline.engine.L3SafetyEvaluateExecutorEngine;
+import com.kant.llm.eval.newpipeline.record.L2EvaluateExecuteRecord;
+import com.kant.llm.eval.newpipeline.record.L2PipelineRecord;
+import com.kant.llm.eval.newpipeline.record.L3JudgeResult;
 import com.kant.llm.eval.pipeline.mq.message.SafetyEvaluateMessage;
 import com.kant.llm.eval.pipeline.service.EvalPipelineNodeRecorder;
-import com.kant.llm.eval.pipeline.service.l2.L2EvaluationService;
 import com.kant.llm.eval.pipeline.service.l2.model.L2EvaluationRequest;
-import com.kant.llm.eval.pipeline.service.l2.model.L2EvaluationResult;
 import com.kant.llm.eval.task.dao.entity.EvalResultDetailDO;
 import com.kant.llm.eval.task.dao.entity.EvalTaskDetailDO;
 import com.kant.llm.eval.task.service.EvalResultDetailService;
@@ -34,30 +38,36 @@ import java.util.concurrent.TimeUnit;
 public class SafetyEvaluateExecuteService {
     private static final String EXECUTION_LOCK_KEY_PREFIX = "EVAL:SAFETY-EVALUATE:LOCK:KEY:%s";
 
-
     private final RedissonClient redissonClient;
-    private final L2EvaluationService l2EvaluationService;
-    private final L1InterceptionEngine l1InterceptionEngine;
     private final EvalTaskDetailService evalTaskDetailService;
     private final EvalResultDetailService evalResultDetailService;
     private final EvalPipelineNodeRecorder evalPipelineNodeRecorder;
+    private final L2SafetyEvaluateExecutorEngine l2SafetyEvaluateExecutorEngine;
+    private final L3SafetyEvaluateExecutorEngine l3SafetyEvaluateExecutorEngine;
+    private final NegativeFingerprintACTrieManager negativeFingerprintAcTrieManager;
+    private final KnowledgePositiveFingerprintService knowledgePositiveFingerprintService;
 
     public SafetyEvaluateExecuteService(RedissonClient redissonClient,
-                                        L2EvaluationService l2EvaluationService,
-                                        L1InterceptionEngine l1InterceptionEngine,
                                         EvalTaskDetailService evalTaskDetailService,
                                         EvalResultDetailService evalResultDetailService,
-                                        EvalPipelineNodeRecorder evalPipelineNodeRecorder) {
+                                        EvalPipelineNodeRecorder evalPipelineNodeRecorder,
+                                        L2SafetyEvaluateExecutorEngine l2SafetyEvaluateExecutorEngine,
+                                        L3SafetyEvaluateExecutorEngine l3SafetyEvaluateExecutorEngine,
+                                        NegativeFingerprintACTrieManager negativeFingerprintAcTrieManager,
+                                        KnowledgePositiveFingerprintService knowledgePositiveFingerprintService) {
         this.redissonClient = redissonClient;
-        this.l2EvaluationService = l2EvaluationService;
-        this.l1InterceptionEngine = l1InterceptionEngine;
+        this.l3SafetyEvaluateExecutorEngine = l3SafetyEvaluateExecutorEngine;
+        this.negativeFingerprintAcTrieManager = negativeFingerprintAcTrieManager;
         this.evalTaskDetailService = evalTaskDetailService;
         this.evalResultDetailService = evalResultDetailService;
         this.evalPipelineNodeRecorder = evalPipelineNodeRecorder;
+        this.l2SafetyEvaluateExecutorEngine = l2SafetyEvaluateExecutorEngine;
+        this.knowledgePositiveFingerprintService = knowledgePositiveFingerprintService;
     }
 
     /**
      * 提交安全评测执行任务
+     *
      * @param message msg
      */
     public void submitExecute(SafetyEvaluateMessage message) {
@@ -73,10 +83,8 @@ public class SafetyEvaluateExecuteService {
                 return;
             }
             try {
-                // 执行业务逻辑
+                // ====== start 执行业务逻辑
                 execute(message);
-
-
                 // ====== end 完整评测链路，回写结果
                 Long resultDetailId = message.getResultDetailId();
                 EvalResultDetailDO resultDetailDO = evalResultDetailService.getById(resultDetailId);
@@ -101,6 +109,7 @@ public class SafetyEvaluateExecuteService {
 
     /**
      * 执行安全评测业务逻辑
+     *
      * @param message msg
      */
     private void execute(SafetyEvaluateMessage message) {
@@ -113,54 +122,120 @@ public class SafetyEvaluateExecuteService {
             return;
         }
         // ================= L2 混合检索
-        Boolean l2Safetied = safetyEvaluateL2(resultDetailDO);
+        L2PipelineRecord l2PipelineRecord = safetyEvaluateL2(resultDetailDO);
         // L2 短路点，混合检索命中规则直接返回
-        if (l2Safetied) {
+        if (!l2PipelineRecord.releaseStatus()) {
             return;
         }
         // ================= L3 投递到LLM-AS-JUDGE
-        safetyEvaluateL3(resultDetailDO);
+        safetyEvaluateL3(resultDetailDO, l2PipelineRecord);
     }
 
     /**
      * 执行 L1 评测
+     *
      * @param resultDetailDO 评测结果明细
      * @return 是否命中
      */
     private Boolean safetyEvaluateL1(EvalResultDetailDO resultDetailDO) {
+        // 1. 正向指纹快速判定
+        if (L1PositiveFingerprint(resultDetailDO)) {
+            return true;
+        }
+        // 2. 负向指纹快速判定
+        if (L1NegativeFingerprint(resultDetailDO)) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 执行 L1 正向指纹快速判定
+     *
+     * @param resultDetailDO 评测结果明细
+     * @return 是否命中
+     */
+    private Boolean L1PositiveFingerprint(EvalResultDetailDO resultDetailDO) {
         // 1. 记录节点日志
         Long l1NodeRecordId = evalPipelineNodeRecorder.startNode(
                 resultDetailDO.getTaskId(),
                 resultDetailDO.getTaskDetailId(),
                 resultDetailDO,
-                PipelineNodeCodeEnums.L1,
+                PipelineNodeCodeEnums.L1_POSITIVE_FINGERPRINT,
                 CollectionUtil.toList(resultDetailDO.getModelOutput()));
         // 2. 获取 L1 评测上下文
-        EvalContext context = l1InterceptionEngine.analyze(resultDetailDO.getModelOutput());
+        Boolean aBoolean = knowledgePositiveFingerprintService.validateStandardRefusal(resultDetailDO.getRiskDetailsId(), resultDetailDO.getModelOutput());
+        // 3. 判断是否命中拦截,如果命中拦截,则返回true,表示当前为大模型安全拒答，不再进入后续的流水线处理
+        if (aBoolean) {
+            log.info("L1 正向指纹 判断命中拦截，resultDetailId: {}, riskDetailsId: {}, keyword: {}",
+                    resultDetailDO.getId(), resultDetailDO.getRiskDetailsId(), resultDetailDO.getModelOutput());
+            // ========== 记录L1正向指纹节点明细，当前为安全拒答，不进入后续的流水线处理
+            evalPipelineNodeRecorder.finishNode(l1NodeRecordId,
+                    PipelineNodeStatusEnums.SAFE_TO_PASS,
+                    new LinkedHashMap<String, Object>() {{
+                        put("是否命中正向指纹", Boolean.TRUE);
+                        put("风险小类", resultDetailDO.getRiskDetailsId());
+                    }},
+                    new LinkedHashMap<String, Object>() {{
+                        put("是否命中正向指纹", Boolean.TRUE);
+                        put("风险小类", resultDetailDO.getRiskDetailsId());
+                        put("描述", PipelineNodeStatusEnums.SAFE_TO_PASS.getDesc());
+                    }}, resultDetailDO.getErrorMsg());
+            return true;
+        }
+        // ========== 记录L1节点明细
+        evalPipelineNodeRecorder.finishNode(l1NodeRecordId,
+                PipelineNodeStatusEnums.PASSED,
+                new LinkedHashMap<String, Object>() {{
+                    put("是否命中正向指纹", Boolean.FALSE);
+                    put("风险小类", resultDetailDO.getRiskDetailsId());
+                }},
+                new LinkedHashMap<String, Object>() {{
+                    put("是否命中正向指纹", Boolean.FALSE);
+                    put("风险小类", resultDetailDO.getRiskDetailsId());
+                    put("描述", PipelineNodeStatusEnums.PASSED.getDesc());
+                }}, resultDetailDO.getErrorMsg());
+        return false;
+    }
+
+    /**
+     * 执行 L1 负向指纹快速判定
+     *
+     * @param resultDetailDO 评测结果明细
+     * @return 是否命中
+     */
+    private Boolean L1NegativeFingerprint(EvalResultDetailDO resultDetailDO) {
+        // 1. 记录节点日志
+        Long l1NodeRecordId = evalPipelineNodeRecorder.startNode(
+                resultDetailDO.getTaskId(),
+                resultDetailDO.getTaskDetailId(),
+                resultDetailDO,
+                PipelineNodeCodeEnums.L1_NEGATIVE_FINGERPRINT,
+                CollectionUtil.toList(resultDetailDO.getModelOutput()));
+        // 2. 获取 L1 评测上下文
+        L1EvalContext context = negativeFingerprintAcTrieManager.match(resultDetailDO.getRiskDetailsId(), resultDetailDO.getModelOutput());
         // 3. 判断是否命中拦截
         if (context.isL1Blocked()) {
-            log.info("L1 判定命中拦截，resultDetailId: {}, riskDetailsId: {}, keyword: {}",
-                    resultDetailDO.getId(), context.getL1BlockDetailsId(), context.getL1BlockKeyword());
+            log.info("L1 负向指纹 判断命中拦截，resultDetailId: {}, riskDetailsId: {}, keyword: {}",
+                    resultDetailDO.getId(), context.getRiskDetailsId(), context.getBlockKeyWords());
 
             // ========== 回写结果明细
             resultDetailDO.setIsSafe(Boolean.FALSE);
-            resultDetailDO.setErrorMsg(String.format("L1 判定命中拦截，风险明细ID: %s，触发关键词: %s",
-                    context.getL1BlockDetailsId(), context.getL1BlockKeyword()));
+            resultDetailDO.setErrorMsg(String.format("L1 负向指纹 判断命中拦截，风险明细ID: %s，触发关键词: %s",
+                    context.getRiskDetailsId(), context.getBlockKeyWords()));
             evalResultDetailService.updateById(resultDetailDO);
             // ========== 记录L1节点明细
             evalPipelineNodeRecorder.finishNode(l1NodeRecordId,
                     PipelineNodeStatusEnums.BLOCKED,
                     new LinkedHashMap<String, Object>() {{
                         put("l1Blocked", context.isL1Blocked());
-                        put("l1BlockDetailsId", context.getL1BlockDetailsId());
-                        put("l1BlockKeyword", context.getL1BlockKeyword());
-                        put("hitWarningTags", context.getHitWarningTags());
+                        put("l1BlockDetailsId", context.getRiskDetailsId());
+                        put("l1BlockKeywords", context.getBlockKeyWords());
                     }},
                     new LinkedHashMap<String, Object>() {{
                         put("blocked", context.isL1Blocked());
-                        put("riskDetailsId", context.getL1BlockDetailsId());
-                        put("keyword", context.getL1BlockKeyword());
-                        put("warningTags", context.getHitWarningTags());
+                        put("riskDetailsId", context.getRiskDetailsId());
+                        put("keywords", context.getBlockKeyWords());
                         put("decision", PipelineNodeStatusEnums.BLOCKED.getDesc());
                     }}, resultDetailDO.getErrorMsg());
             return true;
@@ -169,26 +244,26 @@ public class SafetyEvaluateExecuteService {
         evalPipelineNodeRecorder.finishNode(l1NodeRecordId, PipelineNodeStatusEnums.PASSED,
                 new LinkedHashMap<String, Object>() {{
                     put("l1Blocked", context.isL1Blocked());
-                    put("l1BlockDetailsId", context.getL1BlockDetailsId());
-                    put("l1BlockKeyword", context.getL1BlockKeyword());
-                    put("hitWarningTags", context.getHitWarningTags());
+                    put("l1BlockDetailsId", context.getRiskDetailsId());
+                    put("l1BlockKeywords", context.getBlockKeyWords());
                 }},
                 new LinkedHashMap<String, Object>() {{
                     put("blocked", context.isL1Blocked());
-                    put("riskDetailsId", context.getL1BlockDetailsId());
-                    put("keyword", context.getL1BlockKeyword());
-                    put("warningTags", context.getHitWarningTags());
+                    put("riskDetailsId", context.getRiskDetailsId());
+                    put("keywords", context.getBlockKeyWords());
                     put("decision", PipelineNodeStatusEnums.PASSED.getDesc());
                 }}, null);
-        log.info("L1 判定通过，resultDetailId: {}, warningTags: {}", resultDetailDO.getId(), context.getHitWarningTags());
+        log.info("L1 负向指纹 判断通过，resultDetailId: {}", resultDetailDO.getId());
         return false;
     }
 
+
     /**
      * 执行 L2 评测
+     *
      * @param resultDetailDO 评测结果明细
      */
-    private Boolean safetyEvaluateL2(EvalResultDetailDO resultDetailDO) {
+    private L2PipelineRecord safetyEvaluateL2(EvalResultDetailDO resultDetailDO) {
         // 1. 记录L2 节点起始日志
         Long l2NodeRecordId = evalPipelineNodeRecorder.startNode(
                 resultDetailDO.getTaskId(),
@@ -203,7 +278,7 @@ public class SafetyEvaluateExecuteService {
         );
 
         // 2. 执行 L2 评测 并获取评测结果
-        L2EvaluationResult evaluateL2Result = l2EvaluationService.evaluate(L2EvaluationRequest.builder()
+        L2EvaluateExecuteRecord evaluateExecuteRecord = l2SafetyEvaluateExecutorEngine.execute(L2EvaluationRequest.builder()
                 .taskId(resultDetailDO.getTaskId())
                 .taskDetailId(resultDetailDO.getTaskDetailId())
                 .resultDetailId(resultDetailDO.getId())
@@ -213,45 +288,164 @@ public class SafetyEvaluateExecuteService {
                 .modelOutput(resultDetailDO.getModelOutput())
                 .build());
 
-        // 判定是否违规
-        if (!evaluateL2Result.getSafe()) {
-            // ========== 回写结果明细状态
-            resultDetailDO.setIsSafe(Boolean.FALSE);
-            resultDetailDO.setErrorMsg(String.format("L2 安全判定：%s， riskDetailsId=%s， reason=%s",
-                    evaluateL2Result.getDecisionType().getDesc(),
-                    evaluateL2Result.getRiskDetailsId(),
-                    evaluateL2Result.getRouteReason()));
-            resultDetailDO.setStatus(EvalResultStatusEnums.AUTO_SCORED.getCode());
-            evalResultDetailService.updateById(resultDetailDO);
+        // 判定结果
+        switch (evaluateExecuteRecord.status()) {
+            case SAFE:
+                // 安全放行，记录放行节点日志，不再进行后续评测
+                resultDetailDO.setIsSafe(Boolean.TRUE);
+                resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
+                evalResultDetailService.updateById(resultDetailDO);
 
-            // ========== 记录 L2 节点违规日志
-            evalPipelineNodeRecorder.finishNode(l2NodeRecordId,
-                    PipelineNodeStatusEnums.BLOCKED,
-                    evaluateL2Result.getOutputSnapshot(),
-                    evaluateL2Result.getNodeResult(),
-                    resultDetailDO.getErrorMsg());
-            return true;
+                evalPipelineNodeRecorder.finishNode(l2NodeRecordId,
+                        PipelineNodeStatusEnums.BLOCKED,
+                        new LinkedHashMap<String, Object>() {{
+                            put("安全状态", evaluateExecuteRecord.status().getDesc());
+                            put("样本分数", evaluateExecuteRecord.score());
+                            put("检测样本", resultDetailDO.getModelOutput());
+                            put("召回样本", evaluateExecuteRecord.evidenceChunks());
+                        }},
+                        new LinkedHashMap<String, Object>() {{
+                            put("安全状态", evaluateExecuteRecord.status().getDesc());
+                            put("样本分数", evaluateExecuteRecord.score());
+                            put("检测样本", resultDetailDO.getModelOutput());
+                            put("召回样本", evaluateExecuteRecord.evidenceChunks());
+                        }},
+                        null);
+                return L2PipelineRecord.builder()
+                        .releaseStatus(Boolean.FALSE)
+                        .l2EvaluateExecuteRecord(evaluateExecuteRecord)
+                        .build();
+            case VIOLATION:
+                // 违规上限，直接击毙，记录违规节点日志，不再进行后续评测
+                // 安全放心，记录放行节点日志，不再进行后续评测
+                resultDetailDO.setIsSafe(Boolean.FALSE);
+                resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
+                evalResultDetailService.updateById(resultDetailDO);
+
+                evalPipelineNodeRecorder.finishNode(l2NodeRecordId,
+                        PipelineNodeStatusEnums.BLOCKED,
+                        new LinkedHashMap<String, Object>() {{
+                            put("安全状态", evaluateExecuteRecord.status().getDesc());
+                            put("样本分数", evaluateExecuteRecord.score());
+                            put("检测样本", resultDetailDO.getModelOutput());
+                            put("召回样本", evaluateExecuteRecord.evidenceChunks());
+                        }},
+                        new LinkedHashMap<String, Object>() {{
+                            put("安全状态", evaluateExecuteRecord.status().getDesc());
+                            put("样本分数", evaluateExecuteRecord.score());
+                            put("检测样本", resultDetailDO.getModelOutput());
+                            put("召回样本", evaluateExecuteRecord.evidenceChunks());
+                        }},
+                        null);
+                return L2PipelineRecord.builder()
+                        .releaseStatus(Boolean.FALSE)
+                        .l2EvaluateExecuteRecord(evaluateExecuteRecord)
+                        .build();
+            case BLURRY:
+                // 模糊，记录模糊节点日志，投递到L3进行评测
+                evalPipelineNodeRecorder.finishNode(l2NodeRecordId,
+                        PipelineNodeStatusEnums.PASSED,
+                        new LinkedHashMap<String, Object>() {{
+                            put("安全状态", evaluateExecuteRecord.status().getDesc());
+                            put("样本分数", evaluateExecuteRecord.score());
+                            put("检测样本", resultDetailDO.getModelOutput());
+                            put("召回样本", evaluateExecuteRecord.evidenceChunks());
+                        }},
+                        new LinkedHashMap<String, Object>() {{
+                            put("安全状态", evaluateExecuteRecord.status().getDesc());
+                            put("样本分数", evaluateExecuteRecord.score());
+                            put("检测样本", resultDetailDO.getModelOutput());
+                            put("召回样本", evaluateExecuteRecord.evidenceChunks());
+                        }},
+                        null);
+                return L2PipelineRecord.builder()
+                        .releaseStatus(Boolean.TRUE)
+                        .l2EvaluateExecuteRecord(evaluateExecuteRecord)
+                        .build();
+            default:
+                // 其他状态，记录放行节点日志
+                break;
         }
-        // L2 判定放行 记录放行节点日志
-        evalPipelineNodeRecorder.finishNode(l2NodeRecordId,
-                PipelineNodeStatusEnums.PASSED,
-                evaluateL2Result.getOutputSnapshot(),
-                evaluateL2Result.getNodeResult(),
-                null);
-        return false;
+        return L2PipelineRecord.builder()
+                .releaseStatus(Boolean.TRUE)
+                .l2EvaluateExecuteRecord(evaluateExecuteRecord)
+                .build();
     }
 
     /**
      * 执行 L3 评测
-     * @param resultDetailDO 评测结果明细
+     *
+     * @param resultDetailDO   评测结果明细
+     * @param l2PipelineRecord L2安全评估执行记录
      */
-    private void safetyEvaluateL3(EvalResultDetailDO resultDetailDO) {
-        log.info("L3 评测，resultDetailId: {}", resultDetailDO.getId());
-//        return true;
+    private void safetyEvaluateL3(EvalResultDetailDO resultDetailDO,
+                                  L2PipelineRecord l2PipelineRecord) {
+        log.info("L3 评测，resultDetailDO: {} , l2PipelineRecord: {}", resultDetailDO, l2PipelineRecord);
+        // 1. 记录L2 节点起始日志
+        Long l3NodeRecordId = evalPipelineNodeRecorder.startNode(
+                resultDetailDO.getTaskId(),
+                resultDetailDO.getTaskDetailId(),
+                resultDetailDO,
+                PipelineNodeCodeEnums.L3,
+                new LinkedHashMap<String, Object>() {{
+                    put("inputText", resultDetailDO.getInputText());
+                    put("targetRiskDetailsId", resultDetailDO.getRiskDetailsId());
+                    put("modelOutput", resultDetailDO.getModelOutput());
+                }}
+        );
+        try {
+            L3JudgeResult judgeResult = l3SafetyEvaluateExecutorEngine.execute(resultDetailDO, l2PipelineRecord);
+            switch (judgeResult.status()) {
+                case SAFE:
+                    resultDetailDO.setIsSafe(Boolean.TRUE);
+                    resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
+                    evalResultDetailService.updateById(resultDetailDO);
+
+                    evalPipelineNodeRecorder.finishNode(l3NodeRecordId,
+                            PipelineNodeStatusEnums.PASSED,
+                            new LinkedHashMap<String, Object>() {{
+                                put("安全状态", judgeResult.status().getDesc());
+                                put("判定逻辑", judgeResult.reasoning());
+                            }},
+                            new LinkedHashMap<String, Object>() {{
+                                put("安全状态", judgeResult.status().getDesc());
+                                put("判定逻辑", judgeResult.reasoning());
+                            }},
+                            null);
+                    break;
+                case VIOLATION:
+                    resultDetailDO.setIsSafe(Boolean.FALSE);
+                    resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
+                    evalResultDetailService.updateById(resultDetailDO);
+
+                    evalPipelineNodeRecorder.finishNode(l3NodeRecordId,
+                            PipelineNodeStatusEnums.BLOCKED,
+                            new LinkedHashMap<String, Object>() {{
+                                put("安全状态", judgeResult.status().getDesc());
+                                put("判定逻辑", judgeResult.reasoning());
+                                put("违规样本", judgeResult.violationSample());
+                            }},
+                            new LinkedHashMap<String, Object>() {{
+                                put("安全状态", judgeResult.status().getDesc());
+                                put("判定逻辑", judgeResult.reasoning());
+                                put("违规样本", judgeResult.violationSample());
+                            }},
+                            null);
+                    break;
+                case BLURRY:
+                case UNKNOWN:
+                default:
+                    log.error("投递到人工复审");
+                    break;
+            }
+        } catch (Exception e) {
+            log.error("L3异常", e);
+        }
     }
 
     /**
      * 构建分布式锁的Key
+     *
      * @param resultDetailId 回写结果ID
      * @return Key
      */
@@ -262,6 +456,7 @@ public class SafetyEvaluateExecuteService {
 
     /**
      * 评测完成回写结果
+     *
      * @param resultDetailDO do
      */
     private void writeBackToDB(EvalResultDetailDO resultDetailDO) {

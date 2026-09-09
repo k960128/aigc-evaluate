@@ -15,4 +15,13 @@ public interface L2EvaluationService {
      * @return L2 判定结果
      */
     L2EvaluationResult evaluate(L2EvaluationRequest request);
+
+
+    /**
+     * 执行 L2 ES/Milvus 双路召回、RRF 融合、Reranker 精排和阈值路由。
+     **
+     * @param request
+     * @return
+     */
+    L2EvaluationResult evaluateV2(L2EvaluationRequest request);
 }

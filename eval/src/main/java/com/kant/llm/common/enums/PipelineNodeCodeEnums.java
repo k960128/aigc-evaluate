@@ -15,8 +15,10 @@ public enum PipelineNodeCodeEnums {
     /** 被测模型调用节点，负责把样本 Prompt 发送给目标大模型并获取回复。 */
     MODEL_CALL("MODEL_CALL", "模型调用"),
 
-    /** L1 字面量拦截节点，负责使用 AC 自动机做风险词极速判定。 */
-    L1("L1", "L1字面量拦截"),
+    /** L1 字面量拦截节点，负责正向指纹快速判定。  */
+    L1_POSITIVE_FINGERPRINT("L1_POSITIVE_FINGERPRINT", "L1正向指纹拦截"),
+    /** L1 字面量拦截节点，负责使用 AC 自动机做负向指纹极速判定。 */
+    L1_NEGATIVE_FINGERPRINT("L1_NEGATIVE_FINGERPRINT", "L1负向指纹拦截"),
 
     /** L2 召回节点，预留给 ES + Milvus 双路召回。 */
     L2("L2", "L2双路召回"),

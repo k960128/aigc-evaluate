@@ -2,7 +2,6 @@ package com.kant.llm.eval.pipeline.service.l2.client;
 import com.kant.llm.common.condition.ConditionalOnL2RecallMode;
 import com.kant.llm.common.constant.EsDocumentChunk;
 import com.kant.llm.eval.risk.dao.entity.RiskCategoryDO;
-import com.kant.llm.eval.risk.dao.entity.RiskDetailRuleDO;
 import com.kant.llm.eval.risk.dao.entity.RiskDetailsDO;
 import com.kant.llm.eval.risk.dao.mapper.RiskCategoryMapper;
 import com.kant.llm.eval.risk.dao.mapper.RiskDetailRuleMapper;
@@ -258,19 +257,9 @@ public class EsPgL2RecallClient implements L2RecallClient {
                 : riskCategoryMapper.selectBatchIds(categoryIds).stream()
                 .collect(Collectors.toMap(RiskCategoryDO::getId, Function.identity(), (left, right) -> left, LinkedHashMap::new));
 
-        Map<Long, Integer> severityMap = detailIds.isEmpty()
-                ? Map.of()
-                : riskDetailRuleMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<RiskDetailRuleDO>()
-                        .in(RiskDetailRuleDO::getRiskDetailsId, detailIds)
-                        .eq(RiskDetailRuleDO::getStatus, 1))
-                .stream()
-                .collect(Collectors.toMap(RiskDetailRuleDO::getRiskDetailsId,
-                        RiskDetailRuleDO::getSeverityLevel,
-                        (left, right) -> left,
-                        LinkedHashMap::new));
-        log.debug("L2 真实召回上下文补齐完成，detailMapSize: {}, categoryMapSize: {}, severityMapSize: {}",
-                detailMap.size(), categoryMap.size(), severityMap.size());
-        return new LookupContext(detailMap, categoryMap, severityMap);
+        log.debug("L2 真实召回上下文补齐完成，detailMapSize: {}, categoryMapSize: {}",
+                detailMap.size(), categoryMap.size());
+        return new LookupContext(detailMap, categoryMap, null);
     }
 
     private String resolveEsFeatureText(EsDocumentChunk hit) {
