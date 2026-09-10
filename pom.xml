@@ -20,6 +20,7 @@
         <module>infra-ai</module>
         <module>framework</module>
         <module>agent-scope</module>
+        <module>eval-agent</module>
     </modules>
     <properties>
         <java.version>21</java.version>
