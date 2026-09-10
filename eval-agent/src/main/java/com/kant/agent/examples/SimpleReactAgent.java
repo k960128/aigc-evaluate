@@ -1,29 +1,46 @@
 package com.kant.agent.examples;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kant.agent.common.client.SparkChatClient;
+import com.kant.agent.examples.tools.SearchTool;
+import com.kant.agent.examples.tools.WeatherQueryTool;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ChatClientResponse;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+import org.springframework.ai.chat.messages.*;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.ai.support.ToolCallbacks;
 import org.springframework.ai.tool.ToolCallback;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
  * ReactAgent
  */
+@Slf4j
 public class SimpleReactAgent {
-    private static final ChatClient chatClient = SparkChatClient.sparkChatClient();
+    private static ChatClient chatClient;
     // 智能体名称
-    private String name;
-    private static final Integer maxRound = 5;
-    private ChatMemory chatMemory;
+    private static String name;
+    private static final Integer maxRounds = 5;
+    private static ChatMemory chatMemory;
     // 工具
-    private List<ToolCallback> tools;
+    private static ToolCallback[] tools;
     // 用户注入的系统提示词
-    private String systemPrompt;
-    // 功能增强
-    private List<Advisor> advisors;
+    private static String systemPrompt;
+
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     public static final String REACT_AGENT_SYSTEM_PROMPT = """
             ## 角色
@@ -63,13 +80,216 @@ public class SimpleReactAgent {
             """;
 
     static void main() {
-        String response = chatClient.prompt("你是什么大模型").call().chatResponse().getResult().getOutput().getText();
-        System.out.printf("response: %s", response);
+        build();
+
+        String question = """
+                请你根据北京今天的天气、未来七天的天气趋势、以及上海今天的天气，并搜索北京天气的预警情况，生成一份不少于 600 字的综合分析报告。
+                """;
+
+        String call = call(question);
+        log.info("call: {}", call);
     }
 
 
-    private void build(){
-        this.name = "SimpleReactAgent";
-        this.chatMemory = MessageWindowChatMemory.builder().maxMessages(20).build();
+    /**
+     * 非流式输出
+     *
+     * @param question
+     * @return
+     */
+    public static String call(String question) {
+        return callInternal(null, question);
+    }
+
+    // 带会话id
+    public static String call(String conversationId, String question) {
+        return callInternal(conversationId, question);
+    }
+
+    public static String callInternal(String conversationId, String question) {
+        List<Message> messages = Collections.synchronizedList(new ArrayList<>());
+        boolean useMemory = conversationId != null && chatMemory != null;
+
+        // ===== 加载历史记忆 =====
+        if (useMemory) {
+            List<Message> history = chatMemory.get(conversationId);
+            if (history != null && !history.isEmpty()) {
+                messages.addAll(history);
+            }
+        }
+
+        // ===== 加载 System Prompt（仅新会话，防止重复）=====
+        if (messages.isEmpty()) {
+            messages.add(new SystemMessage(REACT_AGENT_SYSTEM_PROMPT));
+            messages.add(new SystemMessage(systemPrompt));
+        }
+
+        messages.add(new UserMessage("<question>" + question + "</question>"));
+
+        // 添加记忆
+        if (useMemory) {
+            chatMemory.add(conversationId, new UserMessage(question));
+        }
+
+        int reflectionRound = 0;
+        int round = 0;
+
+        while (true) {
+            round++;
+            if (maxRounds > 0 && round > maxRounds) {
+                log.warn("=== 达到 maxRounds（{}），强制生成最终答案 ===", maxRounds);
+                ensureToolCallsClosed(messages);
+                messages.add(new UserMessage("""
+                        你已达到最大推理轮次限制。
+                        请基于当前已有的上下文信息，
+                        直接给出最终答案。
+                        禁止再调用任何工具。
+                        如果信息不完整，请合理总结和说明。
+                        """));
+
+                return chatClient.prompt().messages(messages).call().content();
+            }
+
+            ChatClientResponse chatResponse = chatClient
+                    .prompt()
+                    .messages(messages)
+                    .call()
+                    .chatClientResponse();
+
+            String aiText = chatResponse.chatResponse().getResult().getOutput().getText();
+
+            AssistantMessage.Builder builder = AssistantMessage.builder().content(aiText);
+
+            // ===== 没有工具调用，视为最终答案 =====
+            if (!chatResponse.chatResponse().hasToolCalls()) {
+                if (useMemory) {
+                    chatMemory.add(conversationId, new UserMessage(question));
+                }
+                return aiText;
+            }
+
+            // ===== 有工具调用：执行工具 =====
+            messages.add(builder.toolCalls(chatResponse.chatResponse().getResult().getOutput().getToolCalls()).build());
+
+            chatResponse.chatResponse()
+                    .getResult()
+                    .getOutput()
+                    .getToolCalls()
+                    .forEach(toolCall -> {
+                        String toolName = toolCall.name();
+                        String argsJson = toolCall.arguments();
+
+                        ToolCallback callback = findTool(toolName);
+                        if (callback == null) {
+                            addErrorToolResponse(messages, toolCall, "工具未找到：" + toolName);
+                            return;
+                        }
+
+                        Object result;
+                        try {
+                            if (argsJson.length() > 2000) {
+                                log.info("#################SimpleReactAgent call tool, toolName: {}, argsJson: 过长，超过2000字符###############", toolName);
+                                addErrorToolResponse(
+                                        messages,
+                                        toolCall,
+                                        "工具参数过长，拒绝执行！"
+                                );
+                                return;
+                            }
+                            log.info("#################SimpleReactAgent call tool, toolName: {}, argsJson: {}###############", toolName, argsJson);
+
+                            result = callback.call(argsJson);
+                            String safeJson;
+
+                            safeJson = objectMapper.writeValueAsString(result);
+                            ToolResponseMessage.ToolResponse tr = new ToolResponseMessage.ToolResponse(toolCall.id(), toolName, safeJson);
+
+                            messages.add(ToolResponseMessage.builder().responses(List.of(tr)).build());
+                        } catch (Exception ex) {
+                            addErrorToolResponse(messages, toolCall, "工具执行失败：" + ex.getMessage());
+                        }
+                    });
+        }
+    }
+
+    private static void build() {
+        name = "SimpleReactAgent";
+        chatMemory = MessageWindowChatMemory.builder().maxMessages(20).build();
+
+
+        tools = ToolCallbacks.from(new WeatherQueryTool(), new SearchTool());
+        ToolCallingChatOptions toolOptions = ToolCallingChatOptions.builder()
+                .toolCallbacks(tools)
+                .internalToolExecutionEnabled(false)
+                .build();
+
+        OpenAiChatModel chatModel = OpenAiChatModel.builder()
+                .openAiApi(OpenAiApi.builder()
+                        .apiKey("QflVuNNAlVBZPwYKUfar:YCkTXhZTNkPfyrQJBaVf")
+                        .baseUrl("https://spark-api-open.xf-yun.com/")
+                        .build())
+                .defaultOptions(
+                        OpenAiChatOptions.builder()
+                                .model("Pro")
+                                .build()
+                ).build();
+
+        systemPrompt = "你是专业的研究分析助手！";
+        chatClient = ChatClient
+                .builder(chatModel)
+                .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
+                .defaultAdvisors(new SimpleLoggerAdvisor())
+                .defaultOptions(toolOptions)
+                .defaultToolCallbacks(tools)
+                .defaultSystem(systemPrompt)
+                .build();
+    }
+
+    private static void ensureToolCallsClosed(List<Message> messages) {
+        if (messages.isEmpty()) {
+            return;
+        }
+
+        Message last = messages.get(messages.size() - 1);
+
+        if (!(last instanceof AssistantMessage assistantMsg)) {
+            return;
+        }
+
+        List<AssistantMessage.ToolCall> toolCalls = assistantMsg.getToolCalls();
+        if (toolCalls == null || toolCalls.isEmpty()) {
+            return;
+        }
+
+        List<ToolResponseMessage.ToolResponse> responses = new ArrayList<>();
+
+        for (AssistantMessage.ToolCall tc : toolCalls) {
+            responses.add(new ToolResponseMessage.ToolResponse(tc.id(), tc.name(), ""));
+        }
+
+        messages.add(
+                ToolResponseMessage.builder()
+                        .responses(responses)
+                        .build()
+        );
+    }
+
+    private static ToolCallback findTool(String name) {
+        return Arrays.stream(tools).toList().stream()
+                .filter(t -> t.getToolDefinition().name().equals(name))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private static void addErrorToolResponse(List<Message> messages, AssistantMessage.ToolCall toolCall, String errMsg) {
+        ToolResponseMessage.ToolResponse tr = new ToolResponseMessage.ToolResponse(
+                toolCall.id(),
+                toolCall.name(),
+                "{ \"error\": \"" + errMsg + "\" }"
+        );
+
+        messages.add(ToolResponseMessage.builder()
+                .responses(List.of(tr))
+                .build());
     }
 }

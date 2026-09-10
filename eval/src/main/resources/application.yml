@@ -90,4 +90,4 @@ mybatis-plus:
 
 logging:
   level:
-    org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor: DEBUG
+    org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor: INFO
