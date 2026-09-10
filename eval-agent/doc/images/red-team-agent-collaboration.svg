@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="700" viewBox="0 0 1280 700">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8fbff"/><stop offset="1" stop-color="#eef3f8"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#172b4d" flood-opacity=".12"/></filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#52657c"/></marker>
+    <style>.t{font:700 27px 'Microsoft YaHei',Arial;fill:#152238}.s{font:400 15px 'Microsoft YaHei',Arial;fill:#5d6b7e}.h{font:700 16px 'Microsoft YaHei',Arial;fill:#152238}.p{font:400 12px 'Microsoft YaHei',Arial;fill:#53657d}.b{fill:#fff;stroke:#d5e0ec;stroke-width:1.5}.a{stroke:#52657c;stroke-width:2;fill:none;marker-end:url(#arrow)}.dash{stroke:#9babc0;stroke-width:2;stroke-dasharray:7 6;fill:none}</style>
+  </defs>
+  <rect width="1280" height="700" fill="url(#bg)"/>
+  <text x="54" y="55" class="t">主智能体与子智能体协作关系</text><text x="54" y="82" class="s">子任务通过结构化协议交给编排器管理，智能体之间不共享完整上下文</text>
+  <g filter="url(#shadow)">
+    <rect x="450" y="125" width="380" height="92" rx="16" fill="#e8e1ff" stroke="#c4b5f2"/>
+    <text x="640" y="160" text-anchor="middle" class="h">RedTeamOrchestrator</text><text x="640" y="187" text-anchor="middle" class="p">任务状态 · 预算 · 并发 · 重试 · 事件</text>
+    <rect x="485" y="270" width="310" height="80" rx="14" fill="#dcecff" stroke="#a8c9ed"/>
+    <text x="640" y="304" text-anchor="middle" class="h">SupervisorAgent</text><text x="640" y="328" text-anchor="middle" class="p">计划 / 下一步动作 / 停止建议</text>
+  </g>
+  <path d="M640 217 L640 270" class="a"/>
+  <g filter="url(#shadow)">
+    <rect x="90" y="450" width="205" height="86" rx="12" class="b"/><text x="192" y="486" text-anchor="middle" class="h">Strategy Agent</text><text x="192" y="510" text-anchor="middle" class="p">风险策略与经验检索</text>
+    <rect x="345" y="450" width="205" height="86" rx="12" class="b"/><text x="447" y="486" text-anchor="middle" class="h">Sample Agent</text><text x="447" y="510" text-anchor="middle" class="p">生成、变异、格式自检</text>
+    <rect x="600" y="450" width="205" height="86" rx="12" class="b"/><text x="702" y="486" text-anchor="middle" class="h">Adaptive Agent</text><text x="702" y="510" text-anchor="middle" class="p">有限多轮攻击</text>
+    <rect x="855" y="450" width="205" height="86" rx="12" class="b"/><text x="957" y="486" text-anchor="middle" class="h">Judge Agent</text><text x="957" y="510" text-anchor="middle" class="p">风险判定与证据</text>
+    <rect x="1085" y="450" width="125" height="86" rx="12" class="b"/><text x="1147" y="486" text-anchor="middle" class="h">Verifier</text><text x="1147" y="510" text-anchor="middle" class="p">独立复核</text>
+  </g>
+  <path d="M640 350 C640 400 192 395 192 450" class="a"/><path d="M640 350 C640 410 447 410 447 450" class="a"/><path d="M640 350 L702 450" class="a"/><path d="M640 350 C640 410 957 410 957 450" class="a"/><path d="M640 350 C750 400 1147 395 1147 450" class="a"/>
+  <rect x="290" y="600" width="700" height="48" rx="12" fill="#fff8df" stroke="#e6c86e"/>
+  <text x="640" y="630" text-anchor="middle" class="p">结构化协议：AgentJob · StrategyCard · AttackSample · TargetResponse · JudgeVerdict · AgentEvent</text>
+  <path d="M192 536 L300 600 M447 536 L420 600 M702 536 L640 600 M957 536 L820 600 M1147 536 L980 600" class="dash"/>
+</svg>

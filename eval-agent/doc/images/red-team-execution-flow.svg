@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="820" viewBox="0 0 1280 820">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fbfcfe"/><stop offset="1" stop-color="#eef4f8"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#172b4d" flood-opacity=".12"/></filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#52657c"/></marker>
+    <style>.t{font:700 27px 'Microsoft YaHei',Arial;fill:#152238}.s{font:400 15px 'Microsoft YaHei',Arial;fill:#5d6b7e}.h{font:700 15px 'Microsoft YaHei',Arial;fill:#152238}.p{font:400 12px 'Microsoft YaHei',Arial;fill:#53657d}.box{fill:#fff;stroke:#d4dfeb;stroke-width:1.4}.a{stroke:#52657c;stroke-width:2;fill:none;marker-end:url(#arrow)}.d{fill:#fff8df;stroke:#e6c86e;stroke-width:1.5}</style>
+  </defs>
+  <rect width="1280" height="820" fill="url(#bg)"/>
+  <text x="54" y="55" class="t">红队评测任务执行流程</text><text x="54" y="82" class="s">任务从配置开始，经过计划、样本、调用、判定和复核，最终沉淀可审计结果与经验</text>
+  <g filter="url(#shadow)">
+    <rect x="80" y="130" width="190" height="66" rx="12" class="box"/><text x="175" y="158" text-anchor="middle" class="h">1. 创建任务</text><text x="175" y="180" text-anchor="middle" class="p">目标模型 / 风险 / 预算</text>
+    <rect x="335" y="130" width="190" height="66" rx="12" class="box"/><text x="430" y="158" text-anchor="middle" class="h">2. 生成计划</text><text x="430" y="180" text-anchor="middle" class="p">Supervisor 决策</text>
+    <rect x="590" y="130" width="190" height="66" rx="12" class="box"/><text x="685" y="158" text-anchor="middle" class="h">3. 生成样本</text><text x="685" y="180" text-anchor="middle" class="p">策略 / 变异 / 去重</text>
+    <rect x="845" y="130" width="190" height="66" rx="12" class="box"/><text x="940" y="158" text-anchor="middle" class="h">4. 调用目标模型</text><text x="940" y="180" text-anchor="middle" class="p">统一网关 / 限流 / 重试</text>
+    <rect x="1090" y="130" width="140" height="66" rx="12" class="box"/><text x="1160" y="158" text-anchor="middle" class="h">5. 分析</text><text x="1160" y="180" text-anchor="middle" class="p">Judge</text>
+  </g>
+  <path d="M270 163 L335 163" class="a"/><path d="M525 163 L590 163" class="a"/><path d="M780 163 L845 163" class="a"/><path d="M1035 163 L1090 163" class="a"/>
+
+  <g filter="url(#shadow)">
+    <rect x="90" y="300" width="240" height="80" rx="12" class="d"/><text x="210" y="332" text-anchor="middle" class="h">计划或样本校验通过？</text><text x="210" y="356" text-anchor="middle" class="p">失败：有限重试或记录失败</text>
+    <rect x="390" y="300" width="240" height="80" rx="12" class="d"/><text x="510" y="332" text-anchor="middle" class="h">目标模型调用成功？</text><text x="510" y="356" text-anchor="middle" class="p">失败：按策略重试或降级</text>
+    <rect x="690" y="300" width="240" height="80" rx="12" class="d"/><text x="810" y="332" text-anchor="middle" class="h">需要独立复核？</text><text x="810" y="356" text-anchor="middle" class="p">高风险 / 低置信度 / 冲突</text>
+    <rect x="990" y="300" width="200" height="80" rx="12" class="d"/><text x="1090" y="332" text-anchor="middle" class="h">达到停止条件？</text><text x="1090" y="356" text-anchor="middle" class="p">预算 / 覆盖 / 用户操作</text>
+  </g>
+  <path d="M1160 196 L1090 300" class="a"/><path d="M940 196 L510 300" class="a"/><path d="M685 196 L210 300" class="a"/>
+  <text x="1036" y="252" class="p">响应 + 规则</text>
+
+  <g filter="url(#shadow)">
+    <rect x="90" y="490" width="240" height="80" rx="12" class="box"/><text x="210" y="522" text-anchor="middle" class="h">保存样本级事实</text><text x="210" y="546" text-anchor="middle" class="p">样本 / 响应 / 判定 / 证据</text>
+    <rect x="390" y="490" width="240" height="80" rx="12" class="box"/><text x="510" y="522" text-anchor="middle" class="h">更新运行态</text><text x="510" y="546" text-anchor="middle" class="p">覆盖率 / 画像 / 预算</text>
+    <rect x="690" y="490" width="240" height="80" rx="12" class="box"/><text x="810" y="522" text-anchor="middle" class="h">Verifier 独立复核</text><text x="810" y="546" text-anchor="middle" class="p">保留原判定并生成新结论</text>
+    <rect x="990" y="490" width="200" height="80" rx="12" class="box"/><text x="1090" y="522" text-anchor="middle" class="h">生成报告</text><text x="1090" y="546" text-anchor="middle" class="p">完成 / 待人工复核</text>
+  </g>
+  <path d="M210 380 L210 490" class="a"/><path d="M510 380 L510 490" class="a"/><path d="M810 380 L810 490" class="a"/><path d="M1090 380 L1090 490" class="a"/>
+  <path d="M930 340 C950 420 900 438 810 490" class="a"/>
+  <path d="M990 340 C900 415 670 420 510 490" class="a"/>
+  <path d="M990 340 C850 410 420 416 210 490" class="a"/>
+  <text x="975" y="431" class="p">否：进入下一轮计划</text>
+  <path d="M1190 530 C1220 630 1110 690 930 690 L330 690 C180 690 120 630 210 570" class="a"/>
+  <text x="560" y="725" class="s">每个阶段都通过 taskId / roundId / traceId 关联，并发布可回放事件</text>
+</svg>
