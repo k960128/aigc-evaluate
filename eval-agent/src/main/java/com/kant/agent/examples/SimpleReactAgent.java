@@ -81,8 +81,9 @@ public class SimpleReactAgent {
         build();
 
         String question = """
-                请你根据北京今天的天气、未来七天的天气趋势、以及上海今天的天气，并搜索北京天气的预警情况，生成一份不少于 600 字的综合分析报告。
-                """;
+            请你根据北京今天的天气、未来七天的天气趋势、以及上海今天的天气，并搜索北京天气的预警情况，生成一份不少于 600 字的综合分析报告。
+            """;
+
 
         String call = call(question);
         log.info("call: {}", call);
@@ -217,16 +218,29 @@ public class SimpleReactAgent {
                 .internalToolExecutionEnabled(false)
                 .build();
 
+//        OpenAiChatModel chatModel = OpenAiChatModel.builder()
+//                .openAiApi(OpenAiApi.builder()
+//                        .apiKey("QflVuNNAlVBZPwYKUfar:YCkTXhZTNkPfyrQJBaVf")
+//                        .baseUrl("https://spark-api-open.xf-yun.com/")
+//                        .build())
+//                .defaultOptions(
+//                        OpenAiChatOptions.builder()
+//                                .model("Pro")
+//                                .build()
+//                ).build();
+        // 星火大模型的Pro模型，评测下来，再调用大模型的时候会返回一个城市数组，导致调用工具其实是不匹配的
+
         OpenAiChatModel chatModel = OpenAiChatModel.builder()
                 .openAiApi(OpenAiApi.builder()
-                        .apiKey("QflVuNNAlVBZPwYKUfar:YCkTXhZTNkPfyrQJBaVf")
-                        .baseUrl("https://spark-api-open.xf-yun.com/")
+                        .apiKey("sk-ws-H.EPMIPDE.c43E.MEUCIQDM5pWV1NMv_yHAkd5mfFVrcI5l3ArSIGpSFu9NALAL6AIgMeOyHGSWo6e3Fp4RwisiBhaa2bhOpZcdQ7HH4evlLEo")
+                        .baseUrl("https://dashscope.aliyuncs.com/compatible-mode")
                         .build())
                 .defaultOptions(
                         OpenAiChatOptions.builder()
-                                .model("Pro")
+                                .model("qwen3.8-max")
                                 .build()
-                ).build();
+                )
+                .build();
 
         systemPrompt = "你是专业的研究分析助手！";
         chatClient = ChatClient
