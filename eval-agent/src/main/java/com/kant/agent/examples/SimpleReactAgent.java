@@ -1,7 +1,6 @@
 package com.kant.agent.examples;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.kant.agent.common.client.SparkChatClient;
 import com.kant.agent.examples.tools.SearchTool;
 import com.kant.agent.examples.tools.WeatherQueryTool;
 import lombok.extern.slf4j.Slf4j;
@@ -9,7 +8,6 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
-import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.*;
@@ -44,7 +42,7 @@ public class SimpleReactAgent {
 
     public static final String REACT_AGENT_SYSTEM_PROMPT = """
             ## 角色
-            你是一个严格遵循 ReAct 模式的智能 AI 助手，会通过 Reasoning → Act(ToolCall) → Observation 的反复循环来逐步解决任务。
+            你是一个严格遵循 ReAct 模式的专业研究分析智能 AI 助手，会通过 Reasoning → Act(ToolCall) → Observation 的反复循环来逐步解决任务。
             
             ## 工具调用规则（极其重要）
             1. 如果需要调用工具：必须使用 OpenAI 官方 ToolCall 结构，并且 **只能通过工具调用字段输出**。
@@ -110,18 +108,14 @@ public class SimpleReactAgent {
         List<Message> messages = Collections.synchronizedList(new ArrayList<>());
         boolean useMemory = conversationId != null && chatMemory != null;
 
+        messages.add(new SystemMessage(REACT_AGENT_SYSTEM_PROMPT));
+
         // ===== 加载历史记忆 =====
         if (useMemory) {
             List<Message> history = chatMemory.get(conversationId);
             if (history != null && !history.isEmpty()) {
                 messages.addAll(history);
             }
-        }
-
-        // ===== 加载 System Prompt（仅新会话，防止重复）=====
-        if (messages.isEmpty()) {
-            messages.add(new SystemMessage(REACT_AGENT_SYSTEM_PROMPT));
-            messages.add(new SystemMessage(systemPrompt));
         }
 
         messages.add(new UserMessage("<question>" + question + "</question>"));
@@ -241,7 +235,6 @@ public class SimpleReactAgent {
                 .defaultAdvisors(new SimpleLoggerAdvisor())
                 .defaultOptions(toolOptions)
                 .defaultToolCallbacks(tools)
-                .defaultSystem(systemPrompt)
                 .build();
     }
 
