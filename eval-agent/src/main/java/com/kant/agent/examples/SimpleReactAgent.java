@@ -11,6 +11,7 @@ import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.*;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
@@ -28,17 +29,17 @@ import java.util.List;
  */
 @Slf4j
 public class SimpleReactAgent {
-    private static ChatClient chatClient;
+    private ChatClient chatClient;
     // 智能体名称
-    private static String name;
-    private static final Integer maxRounds = 5;
-    private static ChatMemory chatMemory;
+    private String name;
+    private Integer maxRounds;
+    private ChatMemory chatMemory;
     // 工具
-    private static ToolCallback[] tools;
+    private ToolCallback[] tools;
     // 用户注入的系统提示词
-    private static String systemPrompt;
+    private String systemPrompt;
 
-    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public static final String REACT_AGENT_SYSTEM_PROMPT = """
             ## 角色
@@ -77,18 +78,9 @@ public class SimpleReactAgent {
             3. 最终输出必须尽量满足用户需求，保证逻辑清晰、结论可靠、表达完整，即便未能完美覆盖所有反思反馈。
             """;
 
-    static void main() {
-        build();
+    public SimpleReactAgent() {
 
-        String question = """
-            请你根据北京今天的天气、未来七天的天气趋势、以及上海今天的天气，并搜索北京天气的预警情况，生成一份不少于 600 字的综合分析报告。
-            """;
-
-
-        String call = call(question);
-        log.info("call: {}", call);
     }
-
 
     /**
      * 非流式输出
@@ -96,16 +88,16 @@ public class SimpleReactAgent {
      * @param question
      * @return
      */
-    public static String call(String question) {
+    public String call(String question) {
         return callInternal(null, question);
     }
 
     // 带会话id
-    public static String call(String conversationId, String question) {
+    public String call(String conversationId, String question) {
         return callInternal(conversationId, question);
     }
 
-    public static String callInternal(String conversationId, String question) {
+    public String callInternal(String conversationId, String question) {
         List<Message> messages = Collections.synchronizedList(new ArrayList<>());
         boolean useMemory = conversationId != null && chatMemory != null;
 
@@ -207,43 +199,28 @@ public class SimpleReactAgent {
         }
     }
 
-    private static void build() {
-        name = "SimpleReactAgent";
-        chatMemory = MessageWindowChatMemory.builder().maxMessages(20).build();
-
-
-        tools = ToolCallbacks.from(new WeatherQueryTool(), new SearchTool());
+    /**
+     * 简单有参构造
+     * @param chatModel
+     * @param tools
+     * @param maxRounds
+     * @param systemPrompt
+     */
+    public SimpleReactAgent(
+            ChatModel chatModel,
+            List<ToolCallback> tools,
+            int maxRounds,
+            String systemPrompt
+    ) {
+        this.chatMemory = MessageWindowChatMemory.builder().maxMessages(20).build();
+        this.tools = ToolCallbacks.from(new WeatherQueryTool(), new SearchTool());
         ToolCallingChatOptions toolOptions = ToolCallingChatOptions.builder()
                 .toolCallbacks(tools)
                 .internalToolExecutionEnabled(false)
                 .build();
-
-//        OpenAiChatModel chatModel = OpenAiChatModel.builder()
-//                .openAiApi(OpenAiApi.builder()
-//                        .apiKey("QflVuNNAlVBZPwYKUfar:YCkTXhZTNkPfyrQJBaVf")
-//                        .baseUrl("https://spark-api-open.xf-yun.com/")
-//                        .build())
-//                .defaultOptions(
-//                        OpenAiChatOptions.builder()
-//                                .model("Pro")
-//                                .build()
-//                ).build();
-        // 星火大模型的Pro模型，评测下来，再调用大模型的时候会返回一个城市数组，导致调用工具其实是不匹配的
-
-        OpenAiChatModel chatModel = OpenAiChatModel.builder()
-                .openAiApi(OpenAiApi.builder()
-                        .apiKey("sk-ws-H.EPMIPDE.c43E.MEUCIQDM5pWV1NMv_yHAkd5mfFVrcI5l3ArSIGpSFu9NALAL6AIgMeOyHGSWo6e3Fp4RwisiBhaa2bhOpZcdQ7HH4evlLEo")
-                        .baseUrl("https://dashscope.aliyuncs.com/compatible-mode")
-                        .build())
-                .defaultOptions(
-                        OpenAiChatOptions.builder()
-                                .model("qwen3.8-max")
-                                .build()
-                )
-                .build();
-
-        systemPrompt = "你是专业的研究分析助手！";
-        chatClient = ChatClient
+        this.systemPrompt = systemPrompt;
+        this.maxRounds = maxRounds;
+        this.chatClient = ChatClient
                 .builder(chatModel)
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
                 .defaultAdvisors(new SimpleLoggerAdvisor())
@@ -252,7 +229,7 @@ public class SimpleReactAgent {
                 .build();
     }
 
-    private static void ensureToolCallsClosed(List<Message> messages) {
+    private void ensureToolCallsClosed(List<Message> messages) {
         if (messages.isEmpty()) {
             return;
         }
@@ -281,14 +258,14 @@ public class SimpleReactAgent {
         );
     }
 
-    private static ToolCallback findTool(String name) {
+    private ToolCallback findTool(String name) {
         return Arrays.stream(tools).toList().stream()
                 .filter(t -> t.getToolDefinition().name().equals(name))
                 .findFirst()
                 .orElse(null);
     }
 
-    private static void addErrorToolResponse(List<Message> messages, AssistantMessage.ToolCall toolCall, String errMsg) {
+    private void addErrorToolResponse(List<Message> messages, AssistantMessage.ToolCall toolCall, String errMsg) {
         ToolResponseMessage.ToolResponse tr = new ToolResponseMessage.ToolResponse(
                 toolCall.id(),
                 toolCall.name(),
