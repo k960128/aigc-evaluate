@@ -21,6 +21,7 @@
         <module>framework</module>
         <module>agent-scope</module>
         <module>eval-agent</module>
+        <module>spring-ai-agent</module>
     </modules>
     <properties>
         <java.version>21</java.version>
