@@ -1,4 +1,4 @@
-package com.kant.agent.examples.tools;
+package com.kant.springai.agent.tools;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;

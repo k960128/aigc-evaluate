@@ -1,8 +1,8 @@
-package com.kant.agent.examples;
+package com.kant.springai.agent.agent;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.kant.agent.examples.tools.SearchTool;
-import com.kant.agent.examples.tools.WeatherQueryTool;
+import com.kant.springai.agent.tools.SearchTool;
+import com.kant.springai.agent.tools.WeatherQueryTool;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientResponse;
@@ -13,9 +13,6 @@ import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.*;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
-import org.springframework.ai.openai.OpenAiChatModel;
-import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.ai.support.ToolCallbacks;
 import org.springframework.ai.tool.ToolCallback;
 
