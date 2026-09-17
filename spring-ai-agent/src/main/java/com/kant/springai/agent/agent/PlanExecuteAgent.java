@@ -1,4 +1,5 @@
 package com.kant.springai.agent.agent;
+
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -399,6 +400,7 @@ public class PlanExecuteAgent {
             attempt++;
             try {
                 SimpleReactAgent agent = new SimpleReactAgent(
+                        "PlanExecuteAgent",
                         chatModel, tools, 5, """
                         你是一个专业的工具执行助手。
                         你只能基于提供的依赖结果和当前任务指令执行任务，

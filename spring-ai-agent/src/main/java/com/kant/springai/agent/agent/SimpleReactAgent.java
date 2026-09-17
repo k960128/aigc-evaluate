@@ -8,6 +8,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
+import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.*;
@@ -37,6 +38,8 @@ public class SimpleReactAgent {
     private String systemPrompt;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    private Integer maxReflectionRounds;
 
     public static final String REACT_AGENT_SYSTEM_PROMPT = """
             ## 角色
@@ -74,10 +77,6 @@ public class SimpleReactAgent {
             2. 如果某些关键信息缺失，可在答案中用合理措辞提示用户，如“根据现有信息判断…”或“可进一步确认…”。
             3. 最终输出必须尽量满足用户需求，保证逻辑清晰、结论可靠、表达完整，即便未能完美覆盖所有反思反馈。
             """;
-
-    public SimpleReactAgent() {
-
-    }
 
     /**
      * 非流式输出
@@ -197,6 +196,44 @@ public class SimpleReactAgent {
     }
 
     /**
+     * Reflection 构造函数
+     * @param chatModel
+     * @param tools
+     * @param maxRounds
+     * @param systemPrompt
+     * @param maxReflectionRounds
+     */
+    public SimpleReactAgent(
+            String name,
+            ChatModel chatModel,
+            ChatMemory chatMemory,
+            List<ToolCallback> tools,
+            int maxRounds,
+            String systemPrompt,
+            Integer maxReflectionRounds,
+            List<Advisor> advisors
+    ) {
+        this.name = name;
+        this.chatMemory = chatMemory;
+        this.tools = tools.toArray(ToolCallback[]::new);
+        ToolCallingChatOptions toolOptions = ToolCallingChatOptions.builder()
+                .toolCallbacks(tools)
+                .internalToolExecutionEnabled(false)
+                .build();
+        this.systemPrompt = systemPrompt;
+        this.maxRounds = maxRounds;
+        this.chatClient = ChatClient
+                .builder(chatModel)
+                .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
+                .defaultAdvisors(new SimpleLoggerAdvisor())
+                .defaultAdvisors(advisors)
+                .defaultOptions(toolOptions)
+                .defaultToolCallbacks(tools)
+                .build();
+        this.maxReflectionRounds = maxReflectionRounds;
+    }
+
+    /**
      * 简单有参构造
      * @param chatModel
      * @param tools
@@ -204,11 +241,13 @@ public class SimpleReactAgent {
      * @param systemPrompt
      */
     public SimpleReactAgent(
+            String name,
             ChatModel chatModel,
             List<ToolCallback> tools,
             int maxRounds,
             String systemPrompt
     ) {
+        this.name = name;
         this.chatMemory = MessageWindowChatMemory.builder().maxMessages(20).build();
         this.tools = ToolCallbacks.from(new WeatherQueryTool(), new SearchTool());
         ToolCallingChatOptions toolOptions = ToolCallingChatOptions.builder()
