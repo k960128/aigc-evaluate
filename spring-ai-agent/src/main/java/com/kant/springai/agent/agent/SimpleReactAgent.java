@@ -145,6 +145,35 @@ public class SimpleReactAgent {
 
             // ===== 没有工具调用，视为最终答案 =====
             if (!chatResponse.chatResponse().hasToolCalls()) {
+
+                // ---------- Reflection ----------
+                // maxReflectionRounds = 0 表示未开启反思
+                if (maxReflectionRounds != 0 && Boolean.TRUE.equals(chatResponse.context().get("reflection.required"))) {
+                    reflectionRound++;
+                    log.info("===== 当前反思机制，第 {} 轮次 =====", reflectionRound);
+
+                    if (reflectionRound >= maxReflectionRounds) {
+                        log.warn("======= Reflection 最大轮次已达，直接输出结论 =======");
+                        if (useMemory) {
+                            chatMemory.add(conversationId, new UserMessage(question));
+                        }
+                        return aiText;
+                    }
+
+                    String feedback = (String) chatResponse.context().get("reflection.feedback");
+
+                    // 注入反思反馈，引导模型重新规划
+                    messages.add(new AssistantMessage("""
+                        【Reflection Feedback】
+                        %s
+
+                        请你根据以上反思意见重新规划任务，
+                        必要时可以重新调用工具，
+                        然后再给出最终答案。
+                        """.formatted(feedback)));
+
+                    continue;
+                }
                 if (useMemory) {
                     chatMemory.add(conversationId, new UserMessage(question));
                 }
