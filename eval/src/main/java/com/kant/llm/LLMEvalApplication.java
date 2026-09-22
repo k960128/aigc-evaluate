@@ -6,6 +6,8 @@ import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.BeansException;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -18,6 +20,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @MapperScan(basePackages = {
         "com.kant.*.*.*.dao.mapper"
 })
+@ConfigurationPropertiesScan("com.kant.agent.config")
+@EnableConfigurationProperties
 public class LLMEvalApplication implements ApplicationContextAware {
     public static void main(String[] args) {
         SpringApplication.run(LLMEvalApplication.class, args);
