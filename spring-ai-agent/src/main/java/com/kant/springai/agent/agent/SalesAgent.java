@@ -1,10 +1,25 @@
 package com.kant.springai.agent.agent;
 
+import com.kant.springai.agent.common.config.RedisChatMemoryRepository;
+import com.kant.springai.agent.tools.*;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.ai.rag.Query;
+import org.springframework.ai.support.ToolCallbacks;
+import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Component;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * 销售数据分析助手
@@ -13,29 +28,24 @@ import org.springframework.stereotype.Component;
 @Component
 public class SalesAgent {
 
-    OpenAiChatModel chatModel = OpenAiChatModel.builder()
-            .openAiApi(OpenAiApi.builder()
-                    .apiKey("sk-ws-H.EPMIPDE.c43E.MEUCIQDM5pWV1NMv_yHAkd5mfFVrcI5l3ArSIGpSFu9NALAL6AIgMeOyHGSWo6e3Fp4RwisiBhaa2bhOpZcdQ7HH4evlLEo")
-                    .baseUrl("https://dashscope.aliyuncs.com/compatible-mode")
-                    .build())
-            .defaultOptions(
-                    OpenAiChatOptions.builder()
-                            .model("qwen3.8-max")
-                            .build()
-            )
-            .build();
+    private final AnomalyDetectionTool anomalyDetectionTool;
+    private final ChartGeneratorTool chartGeneratorTool;
+    private final SalesQueryTool salesQueryTool;
+    private final SalesTrendTool salesTrendTool;
+    private final SalesSummaryTool salesSummaryTool;
+    private final RedisChatMemoryRepository redisChatMemoryRepository;
 
-    private final String systemPrompt = """
+    private final PromptTemplate SYSTEM_PROMPT_TEMPLATE = PromptTemplate.builder().template("""
             你是一个专业的销售数据分析助手，服务于销售团队。
             
-            【当前时间】今天是 {{today}}。
+            【当前时间】今天是 {today}。
             请严格基于此日期理解所有时间相关词语：
-            - "今天/当前" = {{today}}
-            - "本月" = {{today}} 所在的自然月（1日至月末）
-            - "上个月" = {{today}} 所在月的上一个自然月
-            - "本季度" = {{today}} 所在季度（Q1:1-3月, Q2:4-6月, Q3:7-9月, Q4:10-12月）
-            - "今年" = {{today}} 所在年份的 1月1日 至 12月31日
-            - "近N个月" = 从 {{today}} 往前推 N 个自然月
+            - "今天/当前" = {today}
+            - "本月" = {today} 所在的自然月（1日至月末）
+            - "上个月" = {today} 所在月的上一个自然月
+            - "本季度" = {today} 所在季度（Q1:1-3月, Q2:4-6月, Q3:7-9月, Q4:10-12月）
+            - "今年" = {today} 所在年份的 1月1日 至 12月31日
+            - "近N个月" = 从 {today} 往前推 N 个自然月
             
             你的能力：
             - 查询销售订单数据
@@ -61,7 +71,69 @@ public class SalesAgent {
             1. 先写一句简短的文字描述，例如：已为您生成近6个月销售趋势折线图：
             2. 紧接着在下一行原样输出工具返回的完整字符串（包含 CHART_JSON: 前缀和后面的 JSON），不得修改、截断、改写或省略。
             3. 不要用代码块（```）包裹，直接输出原始字符串。
-            """;
+            """).build();
+
+    public SalesAgent(AnomalyDetectionTool anomalyDetectionTool,
+                      ChartGeneratorTool chartGeneratorTool,
+                      SalesQueryTool salesQueryTool,
+                      SalesTrendTool salesTrendTool,
+                      SalesSummaryTool salesSummaryTool,
+                      RedisChatMemoryRepository redisChatMemoryRepository) {
+        this.anomalyDetectionTool = anomalyDetectionTool;
+        this.chartGeneratorTool = chartGeneratorTool;
+        this.salesQueryTool = salesQueryTool;
+        this.salesTrendTool = salesTrendTool;
+        this.salesSummaryTool = salesSummaryTool;
+        this.redisChatMemoryRepository = redisChatMemoryRepository;
+    }
+
+    /**
+     * 与销售数据分析助手进行对话
+     *
+     * @param sessionId   会话ID
+     * @param userMessage 用户消息
+     * @param today       日期
+     * @return 助手回复
+     */
+    public String chat(String sessionId, String userMessage, String today) {
+        ChatClient chatClient = buildChatClient();
+        return chatClient.prompt()
+                .system(createSystemPrompt(today).getContents())
+                .user(userMessage)
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
+                .call().chatResponse().getResult().getOutput().getText();
+    }
 
 
+    private ChatClient buildChatClient() {
+        OpenAiChatModel chatModel = OpenAiChatModel.builder()
+                .openAiApi(OpenAiApi.builder()
+                        .apiKey("sk-ws-H.EPMIPDE.c43E.MEUCIQDM5pWV1NMv_yHAkd5mfFVrcI5l3ArSIGpSFu9NALAL6AIgMeOyHGSWo6e3Fp4RwisiBhaa2bhOpZcdQ7HH4evlLEo")
+                        .baseUrl("https://dashscope.aliyuncs.com/compatible-mode")
+                        .build())
+                .defaultOptions(
+                        OpenAiChatOptions.builder()
+                                .model("qwen3.8-max")
+                                .build()
+                )
+                .build();
+        MessageWindowChatMemory chatMemory = MessageWindowChatMemory.builder().maxMessages(10)
+                .chatMemoryRepository(redisChatMemoryRepository).build();
+
+        return ChatClient
+                .builder(chatModel)
+                .defaultToolCallbacks(ToolCallbacks.from(anomalyDetectionTool,
+                        chartGeneratorTool,
+                        salesQueryTool,
+                        salesTrendTool,
+                        salesSummaryTool))
+                .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
+                .build();
+    }
+
+    private Prompt createSystemPrompt(String today) {
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("today", today);
+        return SYSTEM_PROMPT_TEMPLATE.create(variables);
+    }
 }

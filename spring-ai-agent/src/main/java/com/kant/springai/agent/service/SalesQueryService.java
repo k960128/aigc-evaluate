@@ -151,11 +151,11 @@ public class SalesQueryService {
         LocalDate end = LocalDate.now();
         LocalDate start = end.minusMonths(months).withDayOfMonth(1);
 
-        List<Object[]> raw = salesOrderMapper.findMonthlyTrend(regionId, start, end);
+        List<Map<String, Object>> raw = salesOrderMapper.findMonthlyTrend(regionId, start, end);
         return raw.stream().map(row -> new MonthlyTrendDTO(
-                row[0].toString(),
-                new BigDecimal(row[1].toString()),
-                ((Number) row[2]).intValue()
+                row.get("month").toString(),
+                new BigDecimal(row.get("total").toString()),
+                ((Number) row.get("order_count")).intValue()
         )).collect(Collectors.toList());
     }
 

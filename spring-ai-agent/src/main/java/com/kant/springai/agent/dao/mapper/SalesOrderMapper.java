@@ -10,6 +10,7 @@ import org.apache.ibatis.annotations.Select;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 @Mapper
 public interface SalesOrderMapper extends BaseMapper<SalesOrderDO> {
@@ -68,12 +69,12 @@ public interface SalesOrderMapper extends BaseMapper<SalesOrderDO> {
     @Select("SELECT DATE_FORMAT(order_date, '%Y-%m') AS month, " +
             "SUM(amount) AS total, COUNT(*) AS order_count " +
             "FROM sa_sales_order WHERE status = 'COMPLETED' " +
-            "AND (#{regionId} IS NULL OR region_id = #{regionId}) " +
-            "AND order_date BETWEEN #{start} AND #{end} " +
+            "AND (#{regionId, jdbcType=BIGINT} IS NULL OR region_id = #{regionId, jdbcType=BIGINT}) " +
+            "AND order_date >= #{start} AND order_date < #{end} " +
             "GROUP BY month ORDER BY month")
-    List<Object[]> findMonthlyTrend(@Param("regionId") Long regionId,
-                                     @Param("start") LocalDate start,
-                                     @Param("end") LocalDate end);
+    List<Map<String, Object>> findMonthlyTrend(@Param("regionId") Long regionId,
+                                               @Param("start") LocalDate start,
+                                               @Param("end") LocalDate end);
 
     @Select("SELECT MAX(order_date) FROM sa_sales_order " +
             "WHERE product_id = #{productId} AND status = 'COMPLETED'")
