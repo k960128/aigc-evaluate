@@ -20,10 +20,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @MapperScan(basePackages = {
         "com.kant.*.*.*.dao.mapper"
 })
-@ConfigurationPropertiesScan("com.kant.agent.config")
 @EnableConfigurationProperties
 public class LLMEvalApplication implements ApplicationContextAware {
-    public static void main(String[] args) {
+    static void main(String[] args) {
         SpringApplication.run(LLMEvalApplication.class, args);
     }
 
