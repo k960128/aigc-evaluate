@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Component
@@ -165,11 +166,11 @@ public class AnomalyDetectionTool {
         LocalDate end = LocalDate.now();
         LocalDate start = end.minusDays(30);
 
-        List<Object[]> refundData = salesQueryService.queryRefundRates(start, end);
-        for (Object[] row : refundData) {
-            Long repId = ((Number) row[0]).longValue();
-            long refunded = ((Number) row[1]).longValue();
-            long total = ((Number) row[2]).longValue();
+        List<Map<String, Object>> refundData = salesQueryService.queryRefundRates(start, end);
+        for (Map<String, Object> row : refundData) {
+            Long repId = ((Number) row.get("rep_id")).longValue();
+            long refunded = ((Number) row.get("refunded")).longValue();
+            long total = ((Number) row.get("total")).longValue();
 
             if (total < 3) continue; // 样本量太小
 

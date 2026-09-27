@@ -50,20 +50,20 @@ public interface SalesOrderMapper extends BaseMapper<SalesOrderDO> {
     @Select("SELECT rep_id, SUM(amount) AS total FROM sa_sales_order " +
             "WHERE status = 'COMPLETED' AND order_date BETWEEN #{start} AND #{end} " +
             "GROUP BY rep_id ORDER BY total DESC")
-    List<Object[]> findRepRanking(@Param("start") LocalDate start,
+    List<Map<String, Object>> findRepRanking(@Param("start") LocalDate start,
                                    @Param("end") LocalDate end);
 
     @Select("SELECT region_id, SUM(amount) AS total FROM sa_sales_order " +
             "WHERE status = 'COMPLETED' AND order_date BETWEEN #{start} AND #{end} " +
             "GROUP BY region_id ORDER BY total DESC")
-    List<Object[]> findRegionRanking(@Param("start") LocalDate start,
+    List<Map<String, Object>> findRegionRanking(@Param("start") LocalDate start,
                                       @Param("end") LocalDate end);
 
     @Select("SELECT product_id, SUM(amount) AS total, SUM(quantity) AS qty " +
             "FROM sa_sales_order WHERE status = 'COMPLETED' " +
             "AND order_date BETWEEN #{start} AND #{end} " +
             "GROUP BY product_id ORDER BY total DESC")
-    List<Object[]> findProductRanking(@Param("start") LocalDate start,
+    List<Map<String, Object>> findProductRanking(@Param("start") LocalDate start,
                                        @Param("end") LocalDate end);
 
     @Select("SELECT DATE_FORMAT(order_date, '%Y-%m') AS month, " +
@@ -85,7 +85,7 @@ public interface SalesOrderMapper extends BaseMapper<SalesOrderDO> {
             "COUNT(*) AS total " +
             "FROM sa_sales_order WHERE order_date BETWEEN #{start} AND #{end} " +
             "GROUP BY rep_id")
-    List<Object[]> findRefundRateByRep(@Param("start") LocalDate start,
+    List<Map<String, Object>> findRefundRateByRep(@Param("start") LocalDate start,
                                         @Param("end") LocalDate end);
 
     @Select("SELECT COUNT(*) FROM sa_sales_order " +

@@ -79,7 +79,7 @@ public class SalesQueryService {
      * 销售员业绩排名（带姓名、大区信息）
      */
     public List<SalesRepDTO> queryRepRanking(LocalDate start, LocalDate end, int topN) {
-        List<Object[]> raw = salesOrderMapper.findRepRanking(start, end);
+        List<Map<String, Object>> raw = salesOrderMapper.findRepRanking(start, end);
 
         Map<Long, SalesRepDO> repMap = salesRepMapper.selectList(null).stream()
                 .collect(Collectors.toMap(SalesRepDO::getId, r -> r));
@@ -87,9 +87,9 @@ public class SalesQueryService {
                 .collect(Collectors.toMap(SalesRegionDO::getId, SalesRegionDO::getName));
 
         List<SalesRepDTO> result = new ArrayList<>();
-        for (Object[] row : raw) {
-            Long repId = ((Number) row[0]).longValue();
-            BigDecimal total = new BigDecimal(row[1].toString());
+        for (Map<String, Object> row : raw) {
+            Long repId = ((Number) row.get("rep_id")).longValue();
+            BigDecimal total = new BigDecimal(row.get("total").toString());
             SalesRepDO rep = repMap.get(repId);
             if (rep == null) continue;
 
@@ -106,13 +106,13 @@ public class SalesQueryService {
      * 大区业绩排名
      */
     public List<SalesRegionDTO> queryRegionRanking(LocalDate start, LocalDate end) {
-        List<Object[]> raw = salesOrderMapper.findRegionRanking(start, end);
+        List<Map<String, Object>> raw = salesOrderMapper.findRegionRanking(start, end);
         Map<Long, String> regionNameMap = salesRegionMapper.selectList(null).stream()
                 .collect(Collectors.toMap(SalesRegionDO::getId, SalesRegionDO::getName));
 
         return raw.stream().map(row -> {
-            Long regionId = ((Number) row[0]).longValue();
-            BigDecimal total = new BigDecimal(row[1].toString());
+            Long regionId = ((Number) row.get("region_id")).longValue();
+            BigDecimal total = new BigDecimal(row.get("total").toString());
             String regionName = regionNameMap.getOrDefault(regionId, "未知");
             return new SalesRegionDTO(regionId, regionName, total, 0, BigDecimal.ZERO);
         }).collect(Collectors.toList());
@@ -122,15 +122,15 @@ public class SalesQueryService {
      * 产品销售排名
      */
     public List<SaProductDTO> queryProductRanking(LocalDate start, LocalDate end, int topN) {
-        List<Object[]> raw = salesOrderMapper.findProductRanking(start, end);
+        List<Map<String, Object>> raw = salesOrderMapper.findProductRanking(start, end);
         Map<Long, SaProductDO> productMap = saProductMapper.selectList(null).stream()
                 .collect(Collectors.toMap(SaProductDO::getId, p -> p));
 
         List<SaProductDTO> result = new ArrayList<>();
-        for (Object[] row : raw) {
-            Long productId = ((Number) row[0]).longValue();
-            BigDecimal total = new BigDecimal(row[1].toString());
-            Integer qty = ((Number) row[2]).intValue();
+        for (Map<String, Object> row : raw) {
+            Long productId = ((Number) row.get("product_id")).longValue();
+            BigDecimal total = new BigDecimal(row.get("total").toString());
+            Integer qty = ((Number) row.get("qty")).intValue();
             SaProductDO p = productMap.get(productId);
             if (p == null) continue;
             result.add(new SaProductDTO(productId, p.getSkuCode(), p.getName(),
@@ -193,7 +193,7 @@ public class SalesQueryService {
     /**
      * 查询所有销售员退单率
      */
-    public List<Object[]> queryRefundRates(LocalDate start, LocalDate end) {
+    public List<Map<String, Object>> queryRefundRates(LocalDate start, LocalDate end) {
         return salesOrderMapper.findRefundRateByRep(start, end);
     }
 
