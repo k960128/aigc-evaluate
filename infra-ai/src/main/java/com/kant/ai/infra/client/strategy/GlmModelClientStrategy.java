@@ -6,15 +6,23 @@ import com.kant.ai.infra.client.ModelConnectionResponse;
 import com.kant.ai.infra.client.ModelRequest;
 import com.kant.ai.infra.client.ModelResponse;
 import com.kant.ai.infra.enums.ModelManufacturerEnum;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.zhipuai.ZhiPuAiChatModel;
 import org.springframework.ai.zhipuai.ZhiPuAiChatOptions;
 import org.springframework.ai.zhipuai.api.ZhiPuAiApi;
+import org.springframework.ai.retry.RetryUtils;
 
 @Slf4j
 public class GlmModelClientStrategy implements ModelClientStrategy {
+    private final ObservationRegistry observationRegistry;
+
+    public GlmModelClientStrategy(ObservationRegistry observationRegistry) {
+        this.observationRegistry = observationRegistry;
+    }
+
 
     @Override
     public ModelResponse call(ModelRequest modelRequest) {
@@ -24,8 +32,8 @@ public class GlmModelClientStrategy implements ModelClientStrategy {
                 .build(),
                 ZhiPuAiChatOptions.builder()
                         .model(modelRequest.getClientModelInfo().getModel())
-                        .build());
-        ChatClient client = ChatClient.builder(chatModel).build();
+                        .build(), RetryUtils.DEFAULT_RETRY_TEMPLATE, observationRegistry);
+        ChatClient client = ChatClient.create(chatModel, observationRegistry);
         ChatClient.ChatClientRequestSpec requestSpec = client.prompt(modelRequest.getInputText());
         log.info("GlmModelClientStrategy requestSpec: {}", requestSpec);
         ChatClient.CallResponseSpec call = requestSpec.call();
@@ -53,9 +61,9 @@ public class GlmModelClientStrategy implements ModelClientStrategy {
                 .build(),
                 ZhiPuAiChatOptions.builder()
                         .model(modelRequest.getClientModelInfo().getModel())
-                        .build());
+                        .build(), RetryUtils.DEFAULT_RETRY_TEMPLATE, observationRegistry);
 
-        ChatClient client = ChatClient.builder(chatModel).build();
+        ChatClient client = ChatClient.create(chatModel, observationRegistry);
         ChatClient.ChatClientRequestSpec requestSpec = client.prompt("只返回1,不要返回其他任何内容!");
         log.info("GlmModelClientStrategy requestSpec: {}", requestSpec);
         ChatClient.CallResponseSpec call = requestSpec.call();

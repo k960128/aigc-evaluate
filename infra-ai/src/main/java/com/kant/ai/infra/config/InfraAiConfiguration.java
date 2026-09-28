@@ -13,6 +13,7 @@ import com.kant.ai.infra.judge.JudgeModelClient;
 import com.kant.ai.infra.judge.JudgeModelStrategy;
 import com.kant.ai.infra.judge.JudgeModelStrategyFactory;
 import com.kant.ai.infra.judge.strategy.QwenJudgeModelStrategy;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
@@ -22,13 +23,13 @@ import java.util.List;
 @AutoConfiguration
 public class InfraAiConfiguration {
     @Bean
-    public ModelClientStrategyFactory buildModelClientStrategyFactory() {
-        return new ModelClientStrategyFactory();
+    public ModelClientStrategyFactory buildModelClientStrategyFactory(ObservationRegistry observationRegistry) {
+        return new ModelClientStrategyFactory(observationRegistry);
     }
 
     @Bean
-    public QwenJudgeModelStrategy qwenJudgeModelStrategy() {
-        return new QwenJudgeModelStrategy();
+    public QwenJudgeModelStrategy qwenJudgeModelStrategy(ObservationRegistry observationRegistry) {
+        return new QwenJudgeModelStrategy(observationRegistry);
     }
 
     @Bean

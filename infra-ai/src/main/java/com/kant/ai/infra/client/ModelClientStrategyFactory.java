@@ -3,6 +3,7 @@ package com.kant.ai.infra.client;
 import com.kant.ai.infra.client.strategy.*;
 import com.kant.framework.exception.ServiceException;
 import jakarta.annotation.PostConstruct;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -16,6 +17,11 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ModelClientStrategyFactory {
 
     private final Map<Long, ModelClientStrategy> strategyMap = new ConcurrentHashMap<>();
+    private final ObservationRegistry observationRegistry;
+
+    public ModelClientStrategyFactory(ObservationRegistry observationRegistry) {
+        this.observationRegistry = observationRegistry;
+    }
 
     /**
      * 根据大模型厂商标识获取模型客户端策略
@@ -27,14 +33,14 @@ public class ModelClientStrategyFactory {
 
     private ModelClientStrategy createStrategy(ClientModelInfo modelInfo) {
         return switch (modelInfo.getManufacturerType()) {
-            case OPENAI -> new OpenAiModelClientStrategy();
-            case DEEPSEEK -> new DeepSeekModelClientStrategy();
-            case QWEN -> new QwenModelClientStrategy();
+            case OPENAI -> new OpenAiModelClientStrategy(observationRegistry);
+            case DEEPSEEK -> new DeepSeekModelClientStrategy(observationRegistry);
+            case QWEN -> new QwenModelClientStrategy(observationRegistry);
             case SPARK -> new SparkModelClientStrategy();
-            case GLM -> new GlmModelClientStrategy();
-            case GPT -> new GptModelClientStrategy();
+            case GLM -> new GlmModelClientStrategy(observationRegistry);
+            case GPT -> new GptModelClientStrategy(observationRegistry);
             case MOCK -> new MockModelClientStrategy();
-            case OLLAMA -> new OllamaModelClientStrategy();
+            case OLLAMA -> new OllamaModelClientStrategy(observationRegistry);
             default -> throw new ServiceException("不支持的大模型厂商标识：" + modelInfo.getManufacturerType());
         };
     }

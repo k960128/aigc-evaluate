@@ -2,6 +2,7 @@ package com.kant.springai.agent.agent;
 
 import com.kant.springai.agent.common.config.RedisChatMemoryRepository;
 import com.kant.springai.agent.tools.*;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
@@ -33,6 +34,7 @@ public class SalesAgent {
     private final SalesTrendTool salesTrendTool;
     private final SalesSummaryTool salesSummaryTool;
     private final RedisChatMemoryRepository redisChatMemoryRepository;
+    private final ObservationRegistry observationRegistry;
 
     private final PromptTemplate SYSTEM_PROMPT_TEMPLATE = PromptTemplate.builder().template("""
             你是一个专业的销售数据分析助手，服务于销售团队。
@@ -77,13 +79,15 @@ public class SalesAgent {
                       SalesQueryTool salesQueryTool,
                       SalesTrendTool salesTrendTool,
                       SalesSummaryTool salesSummaryTool,
-                      RedisChatMemoryRepository redisChatMemoryRepository) {
+                      RedisChatMemoryRepository redisChatMemoryRepository,
+                      ObservationRegistry observationRegistry) {
         this.anomalyDetectionTool = anomalyDetectionTool;
         this.chartGeneratorTool = chartGeneratorTool;
         this.salesQueryTool = salesQueryTool;
         this.salesTrendTool = salesTrendTool;
         this.salesSummaryTool = salesSummaryTool;
         this.redisChatMemoryRepository = redisChatMemoryRepository;
+        this.observationRegistry = observationRegistry;
     }
 
     /**
@@ -135,12 +139,13 @@ public class SalesAgent {
                                 .model("qwen3.8-max")
                                 .build()
                 )
+                .observationRegistry(observationRegistry)
                 .build();
         MessageWindowChatMemory chatMemory = MessageWindowChatMemory.builder().maxMessages(10)
                 .chatMemoryRepository(redisChatMemoryRepository).build();
 
         return ChatClient
-                .builder(chatModel)
+                .builder(chatModel, observationRegistry, null, null)
                 .defaultToolCallbacks(ToolCallbacks.from(anomalyDetectionTool,
                         chartGeneratorTool,
                         salesQueryTool,

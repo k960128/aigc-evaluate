@@ -8,6 +8,7 @@ import com.kant.ai.infra.judge.JudgeModelRequest;
 import com.kant.ai.infra.judge.JudgeModelResponse;
 import com.kant.ai.infra.judge.JudgeModelStrategy;
 import lombok.extern.slf4j.Slf4j;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
@@ -21,6 +22,12 @@ import org.springframework.ai.openai.api.OpenAiApi;
  */
 @Slf4j
 public class QwenJudgeModelStrategy implements JudgeModelStrategy {
+
+    private final ObservationRegistry observationRegistry;
+
+    public QwenJudgeModelStrategy(ObservationRegistry observationRegistry) {
+        this.observationRegistry = observationRegistry;
+    }
 
     @Override
     public JudgeModelResponse judge(JudgeModelRequest request) {
@@ -68,7 +75,8 @@ public class QwenJudgeModelStrategy implements JudgeModelStrategy {
                 .defaultOptions(OpenAiChatOptions.builder()
                         .model(modelInfo.getModel())
                         .build())
+                .observationRegistry(observationRegistry)
                 .build();
-        return ChatClient.builder(chatModel).build();
+        return ChatClient.create(chatModel, observationRegistry);
     }
 }

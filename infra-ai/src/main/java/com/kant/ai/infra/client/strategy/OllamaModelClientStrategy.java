@@ -6,6 +6,7 @@ import com.kant.ai.infra.client.ModelConnectionResponse;
 import com.kant.ai.infra.client.ModelRequest;
 import com.kant.ai.infra.client.ModelResponse;
 import com.kant.ai.infra.enums.ModelManufacturerEnum;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.ollama.OllamaChatModel;
@@ -16,6 +17,11 @@ import org.springframework.ai.ollama.api.OllamaChatOptions;
 public class OllamaModelClientStrategy implements ModelClientStrategy {
 
     private static final String CONNECTION_TEST_PROMPT = "只返回1，不要返回其他任何内容！";
+    private final ObservationRegistry observationRegistry;
+
+    public OllamaModelClientStrategy(ObservationRegistry observationRegistry) {
+        this.observationRegistry = observationRegistry;
+    }
 
     @Override
     public ModelResponse call(ModelRequest modelRequest) {
@@ -64,8 +70,9 @@ public class OllamaModelClientStrategy implements ModelClientStrategy {
                         .model(modelRequest.getClientModelInfo().getModel())
                         .disableThinking()
                         .build())
+                .observationRegistry(observationRegistry)
                 .build();
-        return ChatClient.builder(chatModel).build();
+        return ChatClient.create(chatModel, observationRegistry);
     }
 
     /**

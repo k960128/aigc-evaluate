@@ -6,6 +6,7 @@ import com.kant.ai.infra.client.ModelConnectionResponse;
 import com.kant.ai.infra.client.ModelRequest;
 import com.kant.ai.infra.client.ModelResponse;
 import com.kant.ai.infra.enums.ModelManufacturerEnum;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
@@ -15,6 +16,12 @@ import org.springframework.ai.openai.api.OpenAiApi;
 
 @Slf4j
 public class GptModelClientStrategy implements ModelClientStrategy {
+    private final ObservationRegistry observationRegistry;
+
+    public GptModelClientStrategy(ObservationRegistry observationRegistry) {
+        this.observationRegistry = observationRegistry;
+    }
+
     @Override
     public ModelResponse call(ModelRequest modelRequest) {
         long startTime = System.currentTimeMillis();
@@ -26,8 +33,9 @@ public class GptModelClientStrategy implements ModelClientStrategy {
                 .defaultOptions(OpenAiChatOptions.builder()
                         .model(modelRequest.getClientModelInfo().getModel())
                         .build())
+                .observationRegistry(observationRegistry)
                 .build();
-        ChatClient client = ChatClient.builder(chatModel).build();
+        ChatClient client = ChatClient.create(chatModel, observationRegistry);
         ChatClient.ChatClientRequestSpec requestSpec = client.prompt(modelRequest.getInputText());
         log.error("GptModelClientStrategy requestSpec: {}", requestSpec);
         ChatClient.CallResponseSpec call = requestSpec.call();
@@ -57,8 +65,9 @@ public class GptModelClientStrategy implements ModelClientStrategy {
                 .defaultOptions(OpenAiChatOptions.builder()
                         .model(modelRequest.getClientModelInfo().getModel())
                         .build())
+                .observationRegistry(observationRegistry)
                 .build();
-        ChatClient client = ChatClient.builder(chatModel).build();
+        ChatClient client = ChatClient.create(chatModel, observationRegistry);
         ChatClient.ChatClientRequestSpec requestSpec = client.prompt("只返回1,不要返回其他任何内容!");
         log.error("GptModelClientStrategy requestSpec: {}", requestSpec);
         ChatClient.CallResponseSpec call = requestSpec.call();
