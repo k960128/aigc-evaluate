@@ -5,18 +5,17 @@ import com.kant.springai.agent.tools.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
-import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
-import org.springframework.ai.rag.Query;
 import org.springframework.ai.support.ToolCallbacks;
-import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -104,6 +103,26 @@ public class SalesAgent {
                 .call().chatResponse().getResult().getOutput().getText();
     }
 
+    /**
+     * 与销售数据分析助手进行对话，返回流式回复
+     * @param sessionId   会话ID
+     * @param userMessage 用户消息
+     * @param today       日期
+     * @return
+     */
+    public Flux<String> chatStream(String sessionId,
+                                   String userMessage,
+                                   String today) {
+
+        ChatClient chatClient = buildChatClient();
+        return chatClient.prompt()
+                .system(createSystemPrompt(today).getContents())
+                .user(userMessage)
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
+                .stream().content();
+    }
+
+
 
     private ChatClient buildChatClient() {
         OpenAiChatModel chatModel = OpenAiChatModel.builder()
@@ -128,12 +147,16 @@ public class SalesAgent {
                         salesTrendTool,
                         salesSummaryTool))
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
+                .defaultAdvisors(new SimpleLoggerAdvisor())
                 .build();
     }
+
 
     private Prompt createSystemPrompt(String today) {
         Map<String, Object> variables = new HashMap<>();
         variables.put("today", today);
         return SYSTEM_PROMPT_TEMPLATE.create(variables);
     }
+
+
 }
