@@ -27,8 +27,15 @@ public class ModelClientStrategyFactory {
      * 根据大模型厂商标识获取模型客户端策略
      */
     public ModelClientStrategy getStrategy(ClientModelInfo modelInfo) {
-        return strategyMap.computeIfAbsent(modelInfo.getModelId(),
-                (strategy) -> createStrategy(modelInfo));
+        return strategyMap.compute(modelInfo.getModelId(), (modelId, currentStrategy) -> {
+            // 模型配置允许修改厂商。缓存中的策略与当前快照不一致时必须重建，
+            // 避免使用旧厂商客户端执行已经固定为新版本的评测目标。
+            if (currentStrategy == null
+                    || currentStrategy.getManufacturer() != modelInfo.getManufacturerType()) {
+                return createStrategy(modelInfo);
+            }
+            return currentStrategy;
+        });
     }
 
     private ModelClientStrategy createStrategy(ClientModelInfo modelInfo) {

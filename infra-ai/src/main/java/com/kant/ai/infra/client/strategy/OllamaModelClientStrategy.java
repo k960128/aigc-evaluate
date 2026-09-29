@@ -31,7 +31,6 @@ public class OllamaModelClientStrategy implements ModelClientStrategy {
                 .call();
         String content = response.content();
         long endTime = System.currentTimeMillis();
-        log.info("OllamaModelClientStrategy response: {}", content);
         return ModelResponse.builder()
                 .modelId(modelRequest.getClientModelInfo().getModelId())
                 .respContent(content)
@@ -52,7 +51,6 @@ public class OllamaModelClientStrategy implements ModelClientStrategy {
                 .call()
                 .content();
         long endTime = System.currentTimeMillis();
-        log.info("OllamaModelClientStrategy connection response: {}", content);
         return ModelConnectionResponse.builder()
                 .result(format(content))
                 .respContent(content)

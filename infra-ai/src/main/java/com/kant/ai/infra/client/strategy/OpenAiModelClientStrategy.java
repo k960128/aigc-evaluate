@@ -37,9 +37,7 @@ public class OpenAiModelClientStrategy implements ModelClientStrategy {
                 .build();
         ChatClient client = ChatClient.create(chatModel, observationRegistry);
         ChatClient.ChatClientRequestSpec requestSpec = client.prompt(modelRequest.getInputText());
-        log.error("OpenAiModelClientStrategy requestSpec: {}", requestSpec);
         ChatClient.CallResponseSpec call = requestSpec.call();
-        log.error("OpenAiModelClientStrategy call: {}", call);
         long endTime = System.currentTimeMillis();
         return ModelResponse.builder()
                 .modelId(modelRequest.getClientModelInfo().getModelId())
@@ -69,9 +67,7 @@ public class OpenAiModelClientStrategy implements ModelClientStrategy {
                 .build();
         ChatClient client = ChatClient.create(chatModel, observationRegistry);
         ChatClient.ChatClientRequestSpec requestSpec = client.prompt("只返回1,不要返回其他任何内容!");
-        log.error("OpenAiModelClientStrategy requestSpec: {}", requestSpec);
         ChatClient.CallResponseSpec call = requestSpec.call();
-        log.error("OpenAiModelClientStrategy call: {}", call);
         long endTime = System.currentTimeMillis();
         return ModelConnectionResponse.builder()
                 .result(ObjectUtil.equal(call.content(), "1"))
