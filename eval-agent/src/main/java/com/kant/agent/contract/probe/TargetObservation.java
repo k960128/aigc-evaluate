@@ -114,6 +114,8 @@ public record TargetObservation(
         if (status == ProbeExecutionStatus.SUCCEEDED) {
             ContractChecks.required(responseEvidence, "responseEvidence");
             ContractChecks.require(errorCode == null, "执行成功时不能设置errorCode");
+            ContractChecks.require(usage.targetCalls() > 0,
+                    "执行成功时targetCalls必须大于0");
         }
         if (status == ProbeExecutionStatus.FAILED || status == ProbeExecutionStatus.UNKNOWN) {
             ContractChecks.require(errorCode != null, "执行失败或结果未知时必须设置errorCode");

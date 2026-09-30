@@ -43,6 +43,24 @@ public final class ContractChecks {
     }
 
     /**
+     * 校验字符串不能为空白，但保留原始字符内容。
+     *
+     * <p>攻击输入、种子、目标响应等安全评测载荷不能因为参数校验而被
+     * 去除首尾空格或换行。调用方如果只需要判断是否为空白，应使用该方法；
+     * 需要业务标识规范化时，继续使用 {@link #notBlank(String, String)}。</p>
+     *
+     * @param value     待校验字符串
+     * @param fieldName 字段名称
+     * @return 未改写的原始字符串
+     */
+    public static String notBlankPreserving(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + "不能为空");
+        }
+        return value;
+    }
+
+    /**
      * 校验字符串最大长度。
      *
      * @param value     待校验字符串
@@ -65,6 +83,20 @@ public final class ContractChecks {
      */
     public static String nullableText(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    /**
+     * 保留可空载荷的原始内容，不把空白正文转换为 {@code null}。
+     *
+     * <p>与 {@link #nullableText(String)} 不同，该方法专门用于输入、响应和
+     * 证据正文等内容字段，保证首尾空格、换行和边界字符可以被准确重放；
+     * 只有传入 {@code null} 时才保持为 {@code null}。</p>
+     *
+     * @param value 原始载荷
+     * @return 未改写的原始载荷
+     */
+    public static String nullableRawText(String value) {
+        return value;
     }
 
     /**

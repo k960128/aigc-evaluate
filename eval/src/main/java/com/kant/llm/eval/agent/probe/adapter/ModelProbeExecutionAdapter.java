@@ -8,12 +8,15 @@ import com.kant.agent.contract.probe.ProbeCommand;
 import com.kant.agent.contract.probe.ProbeLookup;
 import com.kant.agent.contract.probe.ProbeSubmission;
 import com.kant.agent.contract.probe.TargetObservation;
+import com.kant.agent.contract.probe.UsageMeasurement;
+import com.kant.agent.contract.probe.UsageRecord;
 import com.kant.agent.contract.target.TargetCapability;
 import com.kant.agent.contract.target.TargetSnapshot;
 import com.kant.agent.contract.target.TargetStatus;
 import com.kant.agent.contract.target.TargetType;
 import com.kant.agent.port.probe.ProbeExecutionPort;
 import com.kant.agent.port.target.TargetCapabilityPort;
+import com.kant.agent.service.budget.TokenEstimator;
 import com.kant.ai.infra.client.ClientModelInfo;
 import com.kant.ai.infra.client.ModelClientStrategy;
 import com.kant.ai.infra.client.ModelClientStrategyFactory;
@@ -209,6 +212,7 @@ public class ModelProbeExecutionAdapter implements ProbeExecutionPort {
                         identifierGenerator.responseEvidenceRef(),
                         response.getRespContent(),
                         latencyMs,
+                        estimatedSuccessUsage(command.input(), response.getRespContent()),
                         Instant.now());
                 log.info("动态探测目标调用完成，executionId: {}, traceId: {}, targetId: {}, status: SUCCEEDED",
                         executionId, command.context().traceId(), command.target().targetId());
@@ -229,6 +233,9 @@ public class ModelProbeExecutionAdapter implements ProbeExecutionPort {
                     safeMessage,
                     targetCallStarted,
                     elapsedMillis(executionStartedAt),
+                    targetCallStarted
+                            ? estimatedUnknownUsage(command.input())
+                            : unavailableUsage(),
                     Instant.now());
             // 只记录业务标识和异常类型，避免把输入、响应或第三方凭据写入普通日志。
             log.warn("动态探测执行未成功，executionId: {}, traceId: {}, targetId: {}, "
@@ -255,7 +262,44 @@ public class ModelProbeExecutionAdapter implements ProbeExecutionPort {
                 message,
                 false,
                 elapsedMillis(executionStartedAt),
+                unavailableUsage(),
                 Instant.now());
+    }
+
+    /** 成功返回时使用输入和响应正文生成统一的估算计量。 */
+    private UsageRecord estimatedSuccessUsage(String input, String response) {
+        return new UsageRecord(
+                1,
+                0,
+                TokenEstimator.estimate(input),
+                TokenEstimator.estimate(response),
+                null,
+                null,
+                UsageMeasurement.ESTIMATED);
+    }
+
+    /** 已进入目标调用但没有拿到响应时，只能确认输入侧估算。 */
+    private UsageRecord estimatedUnknownUsage(String input) {
+        return new UsageRecord(
+                1,
+                0,
+                TokenEstimator.estimate(input),
+                null,
+                null,
+                null,
+                UsageMeasurement.ESTIMATED);
+    }
+
+    /** 目标调用未开始时不产生可结算的模型用量。 */
+    private UsageRecord unavailableUsage() {
+        return new UsageRecord(
+                0,
+                0,
+                null,
+                null,
+                null,
+                null,
+                UsageMeasurement.UNAVAILABLE);
     }
 
     private ProbeSubmission resolveExisting(AgentProbeExecutionDO existing, String requestFingerprint) {
@@ -283,6 +327,10 @@ public class ModelProbeExecutionAdapter implements ProbeExecutionPort {
             throw new ClientException("D01仅支持MODEL类型目标",
                     AgentProbeErrorCode.TARGET_CAPABILITY_UNSUPPORTED);
         }
+        if (snapshot == null || !command.target().equals(snapshot.target())) {
+            throw new ClientException("目标能力快照与请求目标不一致",
+                    AgentProbeErrorCode.TARGET_SNAPSHOT_CHANGED);
+        }
         if (command.executionMode() != ExecutionMode.STATIC_SINGLE_TURN) {
             throw new ClientException("D01仅支持STATIC_SINGLE_TURN静态单轮探测",
                     AgentProbeErrorCode.TARGET_CAPABILITY_UNSUPPORTED);
@@ -290,6 +338,11 @@ public class ModelProbeExecutionAdapter implements ProbeExecutionPort {
         if (snapshot.status() != TargetStatus.AVAILABLE) {
             throw new ClientException("模型目标未启用，targetId=" + command.target().targetId(),
                     AgentProbeErrorCode.TARGET_UNAVAILABLE);
+        }
+        if (command.expectedTargetSnapshotRef() != null
+                && !command.expectedTargetSnapshotRef().equals(snapshot.snapshotRef())) {
+            throw new ClientException("目标快照已变化，请重新创建评测任务",
+                    AgentProbeErrorCode.TARGET_SNAPSHOT_CHANGED);
         }
         Set<TargetCapability> required = EnumSet.of(TargetCapability.SINGLE_TURN);
         required.addAll(command.requiredCapabilities());
@@ -313,7 +366,9 @@ public class ModelProbeExecutionAdapter implements ProbeExecutionPort {
                     AgentProbeErrorCode.INVALID_PROBE_REQUEST);
         }
         ModelInfoDO modelInfo = modelInfoService.getById(modelId);
-        if (modelInfo == null || !Boolean.TRUE.equals(modelInfo.getStatus())) {
+        if (modelInfo == null
+                || Boolean.TRUE.equals(modelInfo.getDeleted())
+                || !Boolean.TRUE.equals(modelInfo.getStatus())) {
             throw new ClientException("模型配置不存在或未启用，modelId=" + modelId,
                     AgentProbeErrorCode.TARGET_UNAVAILABLE);
         }

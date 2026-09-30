@@ -7,14 +7,15 @@ import java.math.BigDecimal;
 /**
  * 一次评测运行的不可变预算上限。
  *
- * <p>D01 先锁定字段语义；原子预留、结算和跨角色统一账本在 D02 完整实现。</p>
+ * <p>D01 锁定字段语义；D02 对目标调用次数、攻击调用次数、尝试次数和估算
+ * Token 执行单运行账本。费用字段仍需目标适配器提供统一定价和计量后才能强制。</p>
  *
  * @param maxTargetCalls          被测目标最大调用次数
  * @param maxAgentCalls           规划、攻击、判定等 Agent 模型最大调用次数
  * @param maxAttempts             最大攻击尝试数
  * @param maxTurnsPerSession      单个目标会话最大输入轮数
  * @param maxTokens               全部受管模型调用的最大 Token 数
- * @param maxCost                 最大费用；无法可靠计费时可为空
+ * @param maxCost                 最大费用；无法可靠计费时必须为空
  * @param currency                费用币种；设置费用时必填
  * @param maxDurationSeconds      最大运行秒数
  * @param maxConcurrentSessions   最大并发目标会话数

@@ -40,7 +40,7 @@ public class ModelTargetSnapshotFactory {
         List<String> limitations = new ArrayList<>();
         limitations.add("D01模型适配器仅支持无状态单轮文本调用");
         limitations.add("当前模型客户端不提供物理请求状态查询");
-        limitations.add("当前模型响应不提供可靠Token与费用数据");
+        limitations.add("当前模型响应不提供供应商真实Token与费用数据，平台仅能提供Token估算");
         if ("UNSPECIFIED".equals(environment)) {
             limitations.add("模型配置未声明测试环境");
         }

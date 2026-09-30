@@ -38,6 +38,7 @@ public class ProbeDigestService {
         append(canonical, command.probeId());
         append(canonical, command.target().targetType().name());
         append(canonical, command.target().targetId());
+        append(canonical, command.expectedTargetSnapshotRef());
         append(canonical, command.riskId());
         append(canonical, command.ruleSetVersion());
         append(canonical, command.executionMode().name());

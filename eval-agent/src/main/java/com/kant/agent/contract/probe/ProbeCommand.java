@@ -17,6 +17,7 @@ import java.util.Set;
  * @param context             执行业务上下文
  * @param probeId             逻辑探测标识
  * @param target              被测目标引用
+ * @param expectedTargetSnapshotRef 调用方要求使用的目标快照；为空时由执行层在受理时采集
  * @param riskId              本次探测对应的风险编码
  * @param ruleSetVersion      本次后续判定应使用的规则集版本
  * @param executionMode       目标交互模式
@@ -30,6 +31,7 @@ public record ProbeCommand(
         ExecutionContext context,
         String probeId,
         TargetReference target,
+        String expectedTargetSnapshotRef,
         String riskId,
         String ruleSetVersion,
         ExecutionMode executionMode,
@@ -48,6 +50,9 @@ public record ProbeCommand(
         probeId = ContractChecks.maxLength(
                 ContractChecks.notBlank(probeId, "probeId"), 64, "probeId");
         target = ContractChecks.required(target, "target");
+        expectedTargetSnapshotRef = ContractChecks.maxLength(
+                ContractChecks.nullableText(expectedTargetSnapshotRef), 160,
+                "expectedTargetSnapshotRef");
         riskId = ContractChecks.maxLength(
                 ContractChecks.notBlank(riskId, "riskId"), 128, "riskId");
         ruleSetVersion = ContractChecks.maxLength(
@@ -56,7 +61,7 @@ public record ProbeCommand(
         sessionRef = ContractChecks.maxLength(
                 ContractChecks.nullableText(sessionRef), 96, "sessionRef");
         // 只校验输入，不能去除首尾空白；空白本身可能是安全攻击样本的一部分。
-        ContractChecks.notBlank(input, "input");
+        ContractChecks.notBlankPreserving(input, "input");
         input = ContractChecks.maxLength(input, 100_000, "input");
         if (requiredCapabilities == null || requiredCapabilities.isEmpty()) {
             requiredCapabilities = Collections.emptySet();

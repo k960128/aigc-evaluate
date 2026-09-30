@@ -3,6 +3,7 @@ package com.kant.llm.eval.agent.probe.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.kant.agent.contract.common.ExecutionContext;
+import com.kant.agent.contract.common.ContractChecks;
 import com.kant.agent.contract.evidence.EvidenceDataClass;
 import com.kant.agent.contract.evidence.EvidenceReference;
 import com.kant.agent.contract.evidence.EvidenceType;
@@ -201,6 +202,8 @@ public class AgentProbeRecordService {
 
     /**
      * 保存目标响应证据并将执行推进为 SUCCEEDED。
+     *
+     * @param usage 本次目标调用的真实或估算消耗；不能省略
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void completeSuccess(String tenantId,
@@ -209,7 +212,9 @@ public class AgentProbeRecordService {
                                 String responseEvidenceRef,
                                 String responseContent,
                                 long latencyMs,
+                                UsageRecord usage,
                                 Instant finishedAt) {
+        usage = ContractChecks.required(usage, "usage");
         LocalDateTime time = toLocalDateTime(finishedAt);
         insertEvidence(
                 responseEvidenceRef,
@@ -233,8 +238,13 @@ public class AgentProbeRecordService {
                         .set(AgentProbeExecutionDO::getResponseEvidenceRef, responseEvidenceRef)
                         .set(AgentProbeExecutionDO::getEvidenceCompleteness, EvidenceCompleteness.COMPLETE.name())
                         .set(AgentProbeExecutionDO::getLatencyMs, Math.max(0L, latencyMs))
-                        .set(AgentProbeExecutionDO::getTargetCalls, 1L)
-                        .set(AgentProbeExecutionDO::getUsageMeasurement, UsageMeasurement.UNAVAILABLE.name())
+                        .set(AgentProbeExecutionDO::getTargetCalls, usage.targetCalls())
+                        .set(AgentProbeExecutionDO::getAgentCalls, usage.agentCalls())
+                        .set(AgentProbeExecutionDO::getInputTokens, usage.inputTokens())
+                        .set(AgentProbeExecutionDO::getOutputTokens, usage.outputTokens())
+                        .set(AgentProbeExecutionDO::getCost, usage.cost())
+                        .set(AgentProbeExecutionDO::getCurrency, usage.currency())
+                        .set(AgentProbeExecutionDO::getUsageMeasurement, usage.measurement().name())
                         .set(AgentProbeExecutionDO::getFinishedAt, time)
                         .set(AgentProbeExecutionDO::getUpdateTime, time)
                         .setSql("version = version + 1"));
@@ -245,6 +255,7 @@ public class AgentProbeRecordService {
      * 保存受控错误证据并将执行推进为 FAILED 或 UNKNOWN。
      *
      * @param targetCallStarted 是否已经进入目标客户端调用；为真时只能保存 UNKNOWN
+     * @param usage             本次目标调用的真实或估算消耗；不能省略
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void completeFailure(String tenantId,
@@ -255,7 +266,9 @@ public class AgentProbeRecordService {
                                 String safeErrorMessage,
                                 boolean targetCallStarted,
                                 long latencyMs,
+                                UsageRecord usage,
                                 Instant finishedAt) {
+        usage = ContractChecks.required(usage, "usage");
         LocalDateTime time = toLocalDateTime(finishedAt);
         ProbeExecutionStatus finalStatus = targetCallStarted
                 ? ProbeExecutionStatus.UNKNOWN
@@ -287,8 +300,13 @@ public class AgentProbeRecordService {
                         .set(AgentProbeExecutionDO::getErrorMessage, safeErrorMessage)
                         .set(AgentProbeExecutionDO::getEvidenceCompleteness, EvidenceCompleteness.PARTIAL.name())
                         .set(AgentProbeExecutionDO::getLatencyMs, Math.max(0L, latencyMs))
-                        .set(AgentProbeExecutionDO::getTargetCalls, targetCallStarted ? 1L : 0L)
-                        .set(AgentProbeExecutionDO::getUsageMeasurement, UsageMeasurement.UNAVAILABLE.name())
+                        .set(AgentProbeExecutionDO::getTargetCalls, usage.targetCalls())
+                        .set(AgentProbeExecutionDO::getAgentCalls, usage.agentCalls())
+                        .set(AgentProbeExecutionDO::getInputTokens, usage.inputTokens())
+                        .set(AgentProbeExecutionDO::getOutputTokens, usage.outputTokens())
+                        .set(AgentProbeExecutionDO::getCost, usage.cost())
+                        .set(AgentProbeExecutionDO::getCurrency, usage.currency())
+                        .set(AgentProbeExecutionDO::getUsageMeasurement, usage.measurement().name())
                         .set(AgentProbeExecutionDO::getFinishedAt, time)
                         .set(AgentProbeExecutionDO::getUpdateTime, time)
                         .setSql("version = version + 1"));

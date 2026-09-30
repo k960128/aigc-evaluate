@@ -64,6 +64,7 @@ public class ProbeApplicationService {
                 context,
                 request.getProbeId(),
                 new TargetReference(TargetType.MODEL, String.valueOf(request.getTargetModelId())),
+                request.getExpectedTargetSnapshotRef(),
                 request.getRiskId(),
                 request.getRuleSetVersion(),
                 request.getExecutionMode(),

@@ -65,6 +65,13 @@ public class SubmitProbeRequest {
     @Positive(message = "targetModelId必须大于0")
     private Long targetModelId;
 
+    /**
+     * 可选的目标快照前置条件。自动红队任务会传入创建任务时固定的快照；
+     * 普通 D01 调用为空时，执行层在受理时采集当前快照。
+     */
+    @Size(max = 160, message = "expectedTargetSnapshotRef长度不能超过160")
+    private String expectedTargetSnapshotRef;
+
     /** 本次探测希望覆盖的风险编码。 */
     @NotBlank(message = "riskId不能为空")
     @Size(max = 128, message = "riskId长度不能超过128")
