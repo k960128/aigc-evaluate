@@ -78,6 +78,12 @@ public class AgentRedTeamRunDO {
     /** 乐观版本号。 */
     private Long version;
 
+    /** 当前持有运行租约的 Worker 标识。 */
+    private String workerId;
+
+    /** Worker 租约失效时间；为空表示当前没有租约。 */
+    private LocalDateTime workerLeaseUntil;
+
     /** 逻辑删除标识。 */
     @TableLogic
     private Boolean deleted;

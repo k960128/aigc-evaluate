@@ -23,6 +23,7 @@ import java.util.List;
  * @param actions        动作轨迹
  * @param suspectedFindings 疑似发现列表
  * @param attempts       攻击尝试摘要列表；D02 当前通常只有一项
+ * @param session        D03 当前目标会话摘要；D02 单轮运行为空
  */
 public record RedTeamRunResponse(
         String runId,
@@ -39,13 +40,23 @@ public record RedTeamRunResponse(
         Instant finishedAt,
         List<RedTeamActionResponse> actions,
         List<SuspectedFindingResponse> suspectedFindings,
-        List<RedTeamAttemptResponse> attempts) {
+        List<RedTeamAttemptResponse> attempts,
+        RedTeamSessionResponse session) {
 
     /** 将运行摘要和明细转换为 API 响应。 */
     public static RedTeamRunResponse from(RedTeamRun run,
                                           List<RedTeamActionRecord> actions,
                                           List<SuspectedFinding> findings,
                                           List<RedTeamAttempt> attempts) {
+        return from(run, actions, findings, attempts, null);
+    }
+
+    /** 将运行及其可选的 D03 会话摘要转换为 API 响应。 */
+    public static RedTeamRunResponse from(RedTeamRun run,
+                                          List<RedTeamActionRecord> actions,
+                                          List<SuspectedFinding> findings,
+                                          List<RedTeamAttempt> attempts,
+                                          com.kant.agent.contract.redteam.AttackSession session) {
         return new RedTeamRunResponse(
                 run.runId(),
                 run.taskId(),
@@ -61,6 +72,7 @@ public record RedTeamRunResponse(
                 run.finishedAt(),
                 actions == null ? List.of() : actions.stream().map(RedTeamActionResponse::from).toList(),
                 findings == null ? List.of() : findings.stream().map(SuspectedFindingResponse::from).toList(),
-                attempts == null ? List.of() : attempts.stream().map(RedTeamAttemptResponse::from).toList());
+                attempts == null ? List.of() : attempts.stream().map(RedTeamAttemptResponse::from).toList(),
+                RedTeamSessionResponse.from(session));
     }
 }

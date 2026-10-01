@@ -5,6 +5,7 @@ import com.kant.ai.infra.client.ModelClientStrategy;
 import com.kant.ai.infra.client.ModelConnectionResponse;
 import com.kant.ai.infra.client.ModelRequest;
 import com.kant.ai.infra.client.ModelResponse;
+import com.kant.ai.infra.client.ChatClientRequestSupport;
 import com.kant.ai.infra.enums.ModelManufacturerEnum;
 import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
@@ -26,8 +27,8 @@ public class OllamaModelClientStrategy implements ModelClientStrategy {
     @Override
     public ModelResponse call(ModelRequest modelRequest) {
         long startTime = System.currentTimeMillis();
-        ChatClient.CallResponseSpec response = createChatClient(modelRequest)
-                .prompt(modelRequest.getInputText())
+        ChatClient.CallResponseSpec response = ChatClientRequestSupport
+                .prompt(createChatClient(modelRequest), modelRequest)
                 .call();
         String content = response.content();
         long endTime = System.currentTimeMillis();

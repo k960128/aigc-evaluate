@@ -32,6 +32,9 @@ public interface ProbeExecutionPort {
      */
     Optional<TargetObservation> find(ProbeLookup lookup);
 
+    /** 按身份和原幂等键查询已受理操作，恢复时不重新发出物理调用。 */
+    Optional<TargetObservation> findByIdempotencyKey(String tenantId, String actorId, String key);
+
     /**
      * 记录取消意图。
      *

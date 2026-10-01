@@ -11,6 +11,9 @@ public enum RedTeamTaskStatus {
     /** 至少有一个运行正在处理。 */
     RUNNING,
 
+    /** 最近一次多轮运行已经暂停，可以恢复。 */
+    PAUSED,
+
     /** 最近一次运行正常结束。 */
     COMPLETED,
 

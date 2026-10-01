@@ -8,6 +8,8 @@ import com.kant.framework.exception.ClientException;
 import com.kant.llm.eval.agent.probe.error.AgentProbeErrorCode;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+
 /**
  * D01 模型目标的会话端口实现。
  *
@@ -34,6 +36,18 @@ public class UnsupportedModelTargetSessionAdapter implements TargetSessionPort {
 
     @Override
     public void close(ExecutionContext context, TargetSessionReference session) {
+        throw unsupported();
+    }
+
+    @Override
+    public List<com.kant.agent.contract.target.TargetSessionMessage> history(
+            ExecutionContext context,
+            TargetSessionReference session) {
+        throw unsupported();
+    }
+
+    @Override
+    public TargetSessionReference find(ExecutionContext context, String sessionRef) {
         throw unsupported();
     }
 

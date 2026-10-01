@@ -21,6 +21,8 @@ import com.kant.agent.contract.target.TargetReference;
 import com.kant.agent.contract.target.TargetSnapshot;
 import com.kant.agent.contract.target.TargetCapability;
 import com.kant.agent.contract.target.TargetType;
+import com.kant.agent.contract.target.TargetSessionMessage;
+import com.kant.agent.contract.target.TargetSessionMessageRole;
 import com.kant.framework.exception.ServiceException;
 import com.kant.llm.eval.agent.probe.dao.entity.AgentEvidenceDO;
 import com.kant.llm.eval.agent.probe.dao.entity.AgentProbeExecutionDO;
@@ -56,13 +58,16 @@ public class AgentProbeRecordService {
     private final AgentProbeExecutionMapper executionMapper;
     private final AgentEvidenceMapper evidenceMapper;
     private final ProbeDigestService digestService;
+    private final com.kant.llm.eval.agent.redteam.service.AgentRedTeamRecordService redTeamRecords;
 
     public AgentProbeRecordService(AgentProbeExecutionMapper executionMapper,
                                    AgentEvidenceMapper evidenceMapper,
-                                   ProbeDigestService digestService) {
+                                   ProbeDigestService digestService,
+                                   com.kant.llm.eval.agent.redteam.service.AgentRedTeamRecordService redTeamRecords) {
         this.executionMapper = executionMapper;
         this.evidenceMapper = evidenceMapper;
         this.digestService = digestService;
+        this.redTeamRecords = redTeamRecords;
     }
 
     /**
@@ -104,6 +109,16 @@ public class AgentProbeRecordService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void accept(NewProbeAcceptance acceptance) {
+        if (acceptance.command().executionMode() == ExecutionMode.ADAPTIVE_MULTI_TURN) {
+            // 与执行意图插入处于同一短事务，旧Worker失去租约后不能再次首次受理。
+            redTeamRecords.requireWorkerForProbe(acceptance.command());
+            long inFlight = executionMapper.selectCount(new LambdaQueryWrapper<AgentProbeExecutionDO>()
+                    .eq(AgentProbeExecutionDO::getSessionRef, acceptance.command().sessionRef())
+                    .in(AgentProbeExecutionDO::getStatus, ProbeExecutionStatus.ACCEPTED.name(),
+                            ProbeExecutionStatus.RUNNING.name(), ProbeExecutionStatus.UNKNOWN.name(),
+                            ProbeExecutionStatus.CANCELLATION_REQUESTED.name()));
+            if (inFlight != 0) throw new IllegalStateException("同一会话存在未确认操作");
+        }
         LocalDateTime acceptedAt = toLocalDateTime(acceptance.acceptedAt());
         insertEvidence(
                 acceptance.inputEvidenceRef(),
@@ -433,6 +448,74 @@ public class AgentProbeRecordService {
     }
 
     /**
+     * 根据已经完成的 D01 探测事实重建一条线性目标会话的消息历史。
+     *
+     * <p>只读取同一租户、操作者和 sessionRef 下的成功执行；UNKNOWN、FAILED
+     * 或尚未终态的执行不能进入下一轮上下文。正文仍然来自受限证据表，
+     * 不从运行内存读取。</p>
+     */
+    public List<TargetSessionMessage> listSessionMessages(
+            String tenantId,
+            String actorId,
+            String sessionRef) {
+        if (sessionRef == null || sessionRef.isBlank()) {
+            return List.of();
+        }
+        List<AgentProbeExecutionDO> executions = executionMapper.selectList(
+                new LambdaQueryWrapper<AgentProbeExecutionDO>()
+                        .eq(AgentProbeExecutionDO::getTenantId, tenantId)
+                        .eq(AgentProbeExecutionDO::getActorId, actorId)
+                        .eq(AgentProbeExecutionDO::getSessionRef, sessionRef)
+                        .eq(AgentProbeExecutionDO::getStatus,
+                                ProbeExecutionStatus.SUCCEEDED.name())
+                        // 同一会话受理串行，数据库递增主键消除毫秒时间戳并列歧义。
+                        .orderByAsc(AgentProbeExecutionDO::getId));
+        List<TargetSessionMessage> messages = new java.util.ArrayList<>();
+        int sequence = 1;
+        for (AgentProbeExecutionDO execution : executions) {
+            AgentEvidenceDO input = findEvidence(
+                    tenantId, actorId, execution.getExecutionId(), execution.getInputEvidenceRef());
+            AgentEvidenceDO response = findEvidence(
+                    tenantId, actorId, execution.getExecutionId(), execution.getResponseEvidenceRef());
+            if (input == null || response == null) {
+                // 会话历史必须保持完整的 user/assistant 对。静默跳过会让后续
+                // 请求在缺失上下文的情况下继续，形成不可解释的“伪多轮”。
+                throw new IllegalStateException(
+                        "多轮会话存在缺失输入或响应证据，executionId=" + execution.getExecutionId());
+            }
+            if (!EvidenceType.PROBE_INPUT.name().equals(input.getEvidenceType())
+                    || !EvidenceType.TARGET_RESPONSE.name().equals(response.getEvidenceType())
+                    || !digestService.contentHash(input.getContent()).equals(input.getContentHash())
+                    || !digestService.contentHash(response.getContent()).equals(response.getContentHash())) {
+                throw new IllegalStateException("多轮证据类型或正文摘要不一致");
+            }
+            messages.add(new TargetSessionMessage(
+                    sequence++, TargetSessionMessageRole.USER, input.getContent()));
+            messages.add(new TargetSessionMessage(
+                    sequence++, TargetSessionMessageRole.ASSISTANT, response.getContent()));
+        }
+        return List.copyOf(messages);
+    }
+
+    /** 按执行归属读取证据正文，避免仅凭 evidenceRef 跨执行读取。 */
+    private AgentEvidenceDO findEvidence(
+            String tenantId,
+            String actorId,
+            String executionId,
+            String evidenceRef) {
+        if (evidenceRef == null || evidenceRef.isBlank()) {
+            return null;
+        }
+        return evidenceMapper.selectOne(new LambdaQueryWrapper<AgentEvidenceDO>()
+                .eq(AgentEvidenceDO::getTenantId, tenantId)
+                .eq(AgentEvidenceDO::getActorId, actorId)
+                .eq(AgentEvidenceDO::getOwnerType, PROBE_EXECUTION_OWNER)
+                .eq(AgentEvidenceDO::getOwnerRef, executionId)
+                .eq(AgentEvidenceDO::getEvidenceRef, evidenceRef)
+                .last("LIMIT 1"));
+    }
+
+    /**
      * 将证据实体转换为不含正文的索引。
      */
     public EvidenceReference toEvidenceReference(AgentEvidenceDO evidence) {
@@ -470,6 +553,12 @@ public class AgentProbeRecordService {
         evidence.setCreateTime(createTime);
         evidence.setDeleted(false);
         evidenceMapper.insert(evidence);
+    }
+
+    /** 调用前的短事务控制检查；返回后才进入外部模型客户端。 */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void checkMultiTurnCallBoundary(ProbeCommand command) {
+        redTeamRecords.requireWorkerForProbe(command);
     }
 
     private ProbeCancellation toCancellation(AgentProbeExecutionDO execution) {

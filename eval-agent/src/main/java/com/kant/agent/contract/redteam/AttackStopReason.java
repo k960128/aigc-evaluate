@@ -38,6 +38,12 @@ public enum AttackStopReason {
     /** 用户请求停止运行。 */
     USER_STOPPED,
 
+    /** 用户请求暂停运行。 */
+    USER_PAUSED,
+
+    /** 目标会话已经过期，不能继续追加消息。 */
+    SESSION_EXPIRED,
+
     /** 运行超过了任务允许的最长时间。 */
     TIME_LIMIT_REACHED
 }

@@ -11,8 +11,8 @@ import java.util.List;
 /**
  * 创建 D02 自动红队任务的固定配置命令。
  *
- * <p>D02 只允许一个风险、一个固定策略和自适应单轮模式。复杂规划和多风险
- * 任务在后续阶段增加，避免第一条攻击闭环同时承担过多职责。</p>
+ * <p>D02 使用自适应单轮模式；D03 在同一任务契约上增加线性自适应多轮模式。
+ * 两个模式仍然只允许一个风险、一个固定策略和一个串行尝试。</p>
  */
 public record RedTeamTaskCommand(
         String idempotencyKey,
@@ -50,8 +50,10 @@ public record RedTeamTaskCommand(
         riskId = ContractChecks.maxLength(ContractChecks.notBlank(riskId, "riskId"), 128, "riskId");
         ruleSetVersion = ContractChecks.maxLength(
                 ContractChecks.notBlank(ruleSetVersion, "ruleSetVersion"), 128, "ruleSetVersion");
-        ContractChecks.require(executionMode == ExecutionMode.ADAPTIVE_SINGLE_TURN,
-                "D02只支持ADAPTIVE_SINGLE_TURN");
+        ContractChecks.require(
+                executionMode == ExecutionMode.ADAPTIVE_SINGLE_TURN
+                        || executionMode == ExecutionMode.ADAPTIVE_MULTI_TURN,
+                "当前只支持ADAPTIVE_SINGLE_TURN或ADAPTIVE_MULTI_TURN");
         strategyVersion = ContractChecks.maxLength(
                 ContractChecks.notBlank(strategyVersion, "strategyVersion"), 128, "strategyVersion");
         seedInput = ContractChecks.maxLength(

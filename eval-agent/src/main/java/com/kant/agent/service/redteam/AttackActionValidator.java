@@ -35,6 +35,8 @@ public final class AttackActionValidator {
                     AttackStopReason.TARGET_RESULT_UNKNOWN,
                     AttackStopReason.TARGET_EXECUTION_FAILED,
                     AttackStopReason.USER_STOPPED,
+                    AttackStopReason.USER_PAUSED,
+                    AttackStopReason.SESSION_EXPIRED,
                     AttackStopReason.TIME_LIMIT_REACHED);
 
     /**

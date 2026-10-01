@@ -11,6 +11,7 @@ import com.kant.agent.port.redteam.RedTeamRunRecorder;
 import com.kant.agent.port.redteam.RedTeamTaskRepository;
 import com.kant.agent.service.redteam.RedTeamRunStateConflictException;
 import com.kant.agent.service.redteam.EvaluationOrchestrator;
+import com.kant.agent.service.redteam.MultiTurnEvaluationOrchestrator;
 import com.kant.framework.exception.ClientException;
 import com.kant.llm.eval.agent.probe.application.ProbePrincipal;
 import com.kant.llm.eval.agent.probe.application.ProbePrincipalProvider;
@@ -40,17 +41,20 @@ public class RedTeamApplicationService {
     private final RedTeamTaskRepository taskRepository;
     private final RedTeamRunRecorder runRecorder;
     private final EvaluationOrchestrator orchestrator;
+    private final MultiTurnEvaluationOrchestrator multiTurnOrchestrator;
 
     public RedTeamApplicationService(ProbePrincipalProvider principalProvider,
                                     com.kant.agent.port.target.TargetCapabilityPort targetCapabilityPort,
                                     RedTeamTaskRepository taskRepository,
                                     RedTeamRunRecorder runRecorder,
-                                    EvaluationOrchestrator orchestrator) {
+                                    EvaluationOrchestrator orchestrator,
+                                    MultiTurnEvaluationOrchestrator multiTurnOrchestrator) {
         this.principalProvider = principalProvider;
         this.targetCapabilityPort = targetCapabilityPort;
         this.taskRepository = taskRepository;
         this.runRecorder = runRecorder;
         this.orchestrator = orchestrator;
+        this.multiTurnOrchestrator = multiTurnOrchestrator;
     }
 
     /** 创建或幂等返回一份 D02 任务配置。 */
@@ -117,10 +121,13 @@ public class RedTeamApplicationService {
                     "目标能力适配器返回的快照与请求目标不一致",
                     AgentRedTeamErrorCode.TARGET_SNAPSHOT_INVALID);
         }
+        TargetCapability requiredCapability = request.getExecutionMode()
+                == com.kant.agent.contract.probe.ExecutionMode.ADAPTIVE_MULTI_TURN
+                ? TargetCapability.MULTI_TURN : TargetCapability.SINGLE_TURN;
         if (snapshot.status() != TargetStatus.AVAILABLE
-                 || !snapshot.capabilities().supports(TargetCapability.SINGLE_TURN)) {
+                 || !snapshot.capabilities().supports(requiredCapability)) {
             throw new ClientException(
-                    "目标当前不支持D02所需的MODEL静态单轮能力",
+                    "目标当前不支持任务所需的MODEL交互能力：" + requiredCapability.name(),
                     AgentRedTeamErrorCode.TARGET_CAPABILITY_UNSUPPORTED);
         }
 
@@ -190,13 +197,17 @@ public class RedTeamApplicationService {
         }
         String runId = newRunId();
         try {
-            var run = orchestrator.start(
-                    principal.tenantId(), principal.actorId(), taskId, runId);
+            var run = task.executionMode() == com.kant.agent.contract.probe.ExecutionMode.ADAPTIVE_MULTI_TURN
+                    ? multiTurnOrchestrator.submit(
+                    principal.tenantId(), principal.actorId(), taskId, runId)
+                    : orchestrator.start(principal.tenantId(), principal.actorId(), taskId, runId);
             return RedTeamRunResponse.from(
                     run,
                     runRecorder.listActions(principal.tenantId(), principal.actorId(), runId),
                     runRecorder.listFindings(principal.tenantId(), principal.actorId(), runId),
-                    runRecorder.listAttempts(principal.tenantId(), principal.actorId(), runId));
+                    runRecorder.listAttempts(principal.tenantId(), principal.actorId(), runId),
+                    runRecorder.findSessionByRun(principal.tenantId(), principal.actorId(), runId)
+                            .orElse(null));
         } catch (RedTeamRunStateConflictException ex) {
             throw new ClientException(ex.getMessage(), AgentRedTeamErrorCode.RUN_STATE_CONFLICT);
         } catch (ClientException ex) {
@@ -216,6 +227,51 @@ public class RedTeamApplicationService {
         }
     }
 
+    /** 请求暂停一条 D03 多轮运行，实际暂停在当前动作边界落检查点。 */
+    public RedTeamRunResponse requestPause(String runId) {
+        ProbePrincipal principal = principalProvider.currentPrincipal();
+        var run = runRecorder.findRun(principal.tenantId(), principal.actorId(), runId)
+                .orElseThrow(() -> new ClientException(
+                        "自动红队运行不存在，runId=" + runId,
+                        AgentRedTeamErrorCode.RUN_NOT_FOUND));
+        var task = loadTask(principal.tenantId(), principal.actorId(), run.taskId());
+        if (task.executionMode() != com.kant.agent.contract.probe.ExecutionMode.ADAPTIVE_MULTI_TURN) {
+            throw new ClientException(
+                    "只有D03多轮运行支持暂停和检查点恢复",
+                    AgentRedTeamErrorCode.RUN_STATE_CONFLICT);
+        }
+        if (run.status() != com.kant.agent.contract.redteam.RedTeamRunStatus.QUEUED
+                && run.status() != com.kant.agent.contract.redteam.RedTeamRunStatus.RUNNING
+                && run.status() != com.kant.agent.contract.redteam.RedTeamRunStatus.PAUSING) {
+            throw new ClientException(
+                    "当前运行状态不能请求暂停：" + run.status(),
+                    AgentRedTeamErrorCode.RUN_STATE_CONFLICT);
+        }
+        runRecorder.requestPause(principal.tenantId(), principal.actorId(), runId);
+        return getRun(runId);
+    }
+
+    /** 恢复一条已保存检查点的 D03 多轮运行。 */
+    public RedTeamRunResponse resumeRun(String runId) {
+        ProbePrincipal principal = principalProvider.currentPrincipal();
+        var run = runRecorder.findRun(principal.tenantId(), principal.actorId(), runId)
+                .orElseThrow(() -> new ClientException(
+                        "自动红队运行不存在，runId=" + runId,
+                        AgentRedTeamErrorCode.RUN_NOT_FOUND));
+        var task = loadTask(principal.tenantId(), principal.actorId(), run.taskId());
+        if (task.executionMode() != com.kant.agent.contract.probe.ExecutionMode.ADAPTIVE_MULTI_TURN) {
+            throw new ClientException(
+                    "只有D03多轮运行支持恢复",
+                    AgentRedTeamErrorCode.RUN_STATE_CONFLICT);
+        }
+        try {
+            multiTurnOrchestrator.resume(principal.tenantId(), principal.actorId(), runId);
+            return getRun(runId);
+        } catch (RedTeamRunStateConflictException ex) {
+            throw new ClientException(ex.getMessage(), AgentRedTeamErrorCode.RUN_STATE_CONFLICT);
+        }
+    }
+
     /** 查询运行状态、动作轨迹和疑似发现。 */
     public RedTeamRunResponse getRun(String runId) {
         ProbePrincipal principal = principalProvider.currentPrincipal();
@@ -228,7 +284,9 @@ public class RedTeamApplicationService {
                     run,
                     runRecorder.listActions(principal.tenantId(), principal.actorId(), runId),
                     runRecorder.listFindings(principal.tenantId(), principal.actorId(), runId),
-                    runRecorder.listAttempts(principal.tenantId(), principal.actorId(), runId));
+                    runRecorder.listAttempts(principal.tenantId(), principal.actorId(), runId),
+                    runRecorder.findSessionByRun(principal.tenantId(), principal.actorId(), runId)
+                            .orElse(null));
         } catch (ClientException ex) {
             throw ex;
         } catch (RuntimeException ex) {

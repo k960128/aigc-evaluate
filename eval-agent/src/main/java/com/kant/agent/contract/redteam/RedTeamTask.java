@@ -55,8 +55,10 @@ public record RedTeamTask(
         ruleSetVersion = ContractChecks.maxLength(
                 ContractChecks.notBlank(ruleSetVersion, "ruleSetVersion"), 128, "ruleSetVersion");
         executionMode = ContractChecks.required(executionMode, "executionMode");
-        ContractChecks.require(executionMode == ExecutionMode.ADAPTIVE_SINGLE_TURN,
-                "D02只支持ADAPTIVE_SINGLE_TURN");
+        ContractChecks.require(
+                executionMode == ExecutionMode.ADAPTIVE_SINGLE_TURN
+                        || executionMode == ExecutionMode.ADAPTIVE_MULTI_TURN,
+                "当前只支持ADAPTIVE_SINGLE_TURN或ADAPTIVE_MULTI_TURN");
         strategyVersion = ContractChecks.maxLength(
                 ContractChecks.notBlank(strategyVersion, "strategyVersion"), 128, "strategyVersion");
         seedInput = ContractChecks.maxLength(

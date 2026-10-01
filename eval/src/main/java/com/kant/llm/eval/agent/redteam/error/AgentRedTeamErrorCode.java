@@ -28,6 +28,9 @@ public enum AgentRedTeamErrorCode implements IErrorCode {
     /** 运行状态不允许当前命令。 */
     RUN_STATE_CONFLICT("A051007", "自动红队运行状态冲突"),
 
+    /** 客户端资源快照过时，需要重新获取状态。 */
+    VERSION_CONFLICT("A051009", "自动红队资源版本冲突"),
+
     /** 当前目标适配器没有统一定价和费用计量，不能接受费用硬上限。 */
     BUDGET_METER_UNSUPPORTED("A051008", "当前目标适配器不支持费用预算强制"),
 

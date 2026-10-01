@@ -37,7 +37,7 @@ public class DeepSeekModelClientStrategy implements ModelClientStrategy {
                 .observationRegistry(observationRegistry)
                 .build();
         ChatClient client = ChatClient.create(chatModel, observationRegistry);
-        ChatClient.ChatClientRequestSpec requestSpec = client.prompt(modelRequest.getInputText());
+        ChatClient.ChatClientRequestSpec requestSpec = ChatClientRequestSupport.prompt(client, modelRequest);
         ChatClient.CallResponseSpec call = requestSpec.call();
         long endTime = System.currentTimeMillis();
         return ModelResponse.builder()

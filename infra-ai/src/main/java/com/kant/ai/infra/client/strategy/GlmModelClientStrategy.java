@@ -5,6 +5,7 @@ import com.kant.ai.infra.client.ModelClientStrategy;
 import com.kant.ai.infra.client.ModelConnectionResponse;
 import com.kant.ai.infra.client.ModelRequest;
 import com.kant.ai.infra.client.ModelResponse;
+import com.kant.ai.infra.client.ChatClientRequestSupport;
 import com.kant.ai.infra.enums.ModelManufacturerEnum;
 import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
@@ -34,7 +35,7 @@ public class GlmModelClientStrategy implements ModelClientStrategy {
                         .model(modelRequest.getClientModelInfo().getModel())
                         .build(), RetryUtils.DEFAULT_RETRY_TEMPLATE, observationRegistry);
         ChatClient client = ChatClient.create(chatModel, observationRegistry);
-        ChatClient.ChatClientRequestSpec requestSpec = client.prompt(modelRequest.getInputText());
+        ChatClient.ChatClientRequestSpec requestSpec = ChatClientRequestSupport.prompt(client, modelRequest);
         ChatClient.CallResponseSpec call = requestSpec.call();
         long endTime = System.currentTimeMillis();
         return ModelResponse.builder()

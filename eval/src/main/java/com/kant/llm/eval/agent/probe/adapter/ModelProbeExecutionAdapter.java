@@ -12,10 +12,14 @@ import com.kant.agent.contract.probe.UsageMeasurement;
 import com.kant.agent.contract.probe.UsageRecord;
 import com.kant.agent.contract.target.TargetCapability;
 import com.kant.agent.contract.target.TargetSnapshot;
+import com.kant.agent.contract.target.TargetSessionMessage;
+import com.kant.agent.contract.target.TargetSessionMessageRole;
+import com.kant.agent.contract.target.TargetSessionReference;
 import com.kant.agent.contract.target.TargetStatus;
 import com.kant.agent.contract.target.TargetType;
 import com.kant.agent.port.probe.ProbeExecutionPort;
 import com.kant.agent.port.target.TargetCapabilityPort;
+import com.kant.agent.port.target.TargetSessionPort;
 import com.kant.agent.service.budget.TokenEstimator;
 import com.kant.ai.infra.client.ClientModelInfo;
 import com.kant.ai.infra.client.ModelClientStrategy;
@@ -40,6 +44,9 @@ import com.kant.llm.eval.pipeline.service.ratelimit.ModelCallRateLimiter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.UserMessage;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -47,6 +54,8 @@ import java.util.EnumSet;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Collectors;
 
 /**
@@ -67,6 +76,7 @@ public class ModelProbeExecutionAdapter implements ProbeExecutionPort {
 
     private final AgentProbeRecordService recordService;
     private final TargetCapabilityPort targetCapabilityPort;
+    private final TargetSessionPort targetSessionPort;
     private final ModelTargetSnapshotFactory snapshotFactory;
     private final ModelInfoService modelInfoService;
     private final ModelCallRateLimiter modelCallRateLimiter;
@@ -78,6 +88,7 @@ public class ModelProbeExecutionAdapter implements ProbeExecutionPort {
 
     public ModelProbeExecutionAdapter(AgentProbeRecordService recordService,
                                       TargetCapabilityPort targetCapabilityPort,
+                                      TargetSessionPort targetSessionPort,
                                       ModelTargetSnapshotFactory snapshotFactory,
                                       ModelInfoService modelInfoService,
                                       ModelCallRateLimiter modelCallRateLimiter,
@@ -88,6 +99,7 @@ public class ModelProbeExecutionAdapter implements ProbeExecutionPort {
                                       ObjectMapper objectMapper) {
         this.recordService = recordService;
         this.targetCapabilityPort = targetCapabilityPort;
+        this.targetSessionPort = targetSessionPort;
         this.snapshotFactory = snapshotFactory;
         this.modelInfoService = modelInfoService;
         this.modelCallRateLimiter = modelCallRateLimiter;
@@ -156,6 +168,13 @@ public class ModelProbeExecutionAdapter implements ProbeExecutionPort {
     }
 
     @Override
+    public Optional<TargetObservation> findByIdempotencyKey(String tenantId, String actorId, String key) {
+        return recordService.findByIdempotencyKey(tenantId, key)
+                .filter(value -> actorId.equals(value.getActorId()))
+                .map(recordService::toObservation);
+    }
+
+    @Override
     public ProbeCancellation requestCancellation(ProbeLookup lookup) {
         AgentProbeExecutionDO current = recordService.findAuthorized(
                         lookup.tenantId(), lookup.actorId(), lookup.executionId())
@@ -171,6 +190,7 @@ public class ModelProbeExecutionAdapter implements ProbeExecutionPort {
     private void executeTarget(ProbeCommand command, TargetSnapshot acceptedSnapshot, String executionId) {
         Instant executionStartedAt = Instant.now();
         boolean targetCallStarted = false;
+        long estimatedInputTokens = TokenEstimator.estimate(command.input());
         try {
             if (command.deadlineAt() != null && !command.deadlineAt().isAfter(Instant.now())) {
                 failWithoutTargetCall(command, executionId, ERROR_DEADLINE_EXPIRED,
@@ -196,11 +216,26 @@ public class ModelProbeExecutionAdapter implements ProbeExecutionPort {
 
             ModelInfoVO modelInfoVO = toModelInfoVO(modelInfo);
             try (ModelCallPermit ignored = modelCallRateLimiter.acquire(modelInfoVO)) {
-                targetCallStarted = true;
-                ModelResponse response = strategy.call(ModelRequest.builder()
+                ModelRequest.ModelRequestBuilder requestBuilder = ModelRequest.builder()
                         .clientModelInfo(clientModelInfo)
-                        .inputText(command.input())
-                        .build());
+                        .inputText(command.input());
+                if (command.executionMode() == ExecutionMode.ADAPTIVE_MULTI_TURN) {
+                    TargetSessionReference session = targetSessionPort.find(
+                            command.context(), command.sessionRef());
+                    List<TargetSessionMessage> history = targetSessionPort.history(
+                            command.context(), session);
+                    requestBuilder.userMessages(toConversationMessages(history));
+                    estimatedInputTokens = estimateConversationTokens(history)
+                            + TokenEstimator.estimate(command.input());
+                }
+                // 只有请求已经完成会话读取、消息组装并即将交给模型客户端时，
+                // 才能把异常归类为“目标调用可能已经发生”。会话校验失败不能
+                // 被错误地记录成 UNKNOWN。
+                // 等待模型限流期间控制命令或租约可能变化，调用前再次校验。
+                if (command.executionMode() == ExecutionMode.ADAPTIVE_MULTI_TURN)
+                    recordService.checkMultiTurnCallBoundary(command);
+                targetCallStarted = true;
+                ModelResponse response = strategy.call(requestBuilder.build());
                 if (response == null || response.getRespContent() == null) {
                     throw new IllegalStateException("目标客户端未返回可确认的响应内容");
                 }
@@ -212,7 +247,7 @@ public class ModelProbeExecutionAdapter implements ProbeExecutionPort {
                         identifierGenerator.responseEvidenceRef(),
                         response.getRespContent(),
                         latencyMs,
-                        estimatedSuccessUsage(command.input(), response.getRespContent()),
+                         estimatedSuccessUsage(estimatedInputTokens, response.getRespContent()),
                         Instant.now());
                 log.info("动态探测目标调用完成，executionId: {}, traceId: {}, targetId: {}, status: SUCCEEDED",
                         executionId, command.context().traceId(), command.target().targetId());
@@ -234,7 +269,7 @@ public class ModelProbeExecutionAdapter implements ProbeExecutionPort {
                     targetCallStarted,
                     elapsedMillis(executionStartedAt),
                     targetCallStarted
-                            ? estimatedUnknownUsage(command.input())
+                             ? estimatedUnknownUsage(estimatedInputTokens)
                             : unavailableUsage(),
                     Instant.now());
             // 只记录业务标识和异常类型，避免把输入、响应或第三方凭据写入普通日志。
@@ -267,11 +302,11 @@ public class ModelProbeExecutionAdapter implements ProbeExecutionPort {
     }
 
     /** 成功返回时使用输入和响应正文生成统一的估算计量。 */
-    private UsageRecord estimatedSuccessUsage(String input, String response) {
+    private UsageRecord estimatedSuccessUsage(long inputTokens, String response) {
         return new UsageRecord(
                 1,
                 0,
-                TokenEstimator.estimate(input),
+                inputTokens,
                 TokenEstimator.estimate(response),
                 null,
                 null,
@@ -279,11 +314,11 @@ public class ModelProbeExecutionAdapter implements ProbeExecutionPort {
     }
 
     /** 已进入目标调用但没有拿到响应时，只能确认输入侧估算。 */
-    private UsageRecord estimatedUnknownUsage(String input) {
+    private UsageRecord estimatedUnknownUsage(long inputTokens) {
         return new UsageRecord(
                 1,
                 0,
-                TokenEstimator.estimate(input),
+                inputTokens,
                 null,
                 null,
                 null,
@@ -331,9 +366,20 @@ public class ModelProbeExecutionAdapter implements ProbeExecutionPort {
             throw new ClientException("目标能力快照与请求目标不一致",
                     AgentProbeErrorCode.TARGET_SNAPSHOT_CHANGED);
         }
-        if (command.executionMode() != ExecutionMode.STATIC_SINGLE_TURN) {
-            throw new ClientException("D01仅支持STATIC_SINGLE_TURN静态单轮探测",
+        if (command.executionMode() != ExecutionMode.STATIC_SINGLE_TURN
+                && command.executionMode() != ExecutionMode.ADAPTIVE_MULTI_TURN) {
+            throw new ClientException("当前目标适配器不支持该交互模式",
                     AgentProbeErrorCode.TARGET_CAPABILITY_UNSUPPORTED);
+        }
+        if (command.executionMode() == ExecutionMode.ADAPTIVE_MULTI_TURN
+                && command.sessionRef() == null) {
+            throw new ClientException("多轮探测必须绑定目标会话",
+                    AgentProbeErrorCode.INVALID_PROBE_REQUEST);
+        }
+        if (command.executionMode() == ExecutionMode.STATIC_SINGLE_TURN
+                && command.sessionRef() != null) {
+            throw new ClientException("静态单轮探测不能绑定目标会话",
+                    AgentProbeErrorCode.INVALID_PROBE_REQUEST);
         }
         if (snapshot.status() != TargetStatus.AVAILABLE) {
             throw new ClientException("模型目标未启用，targetId=" + command.target().targetId(),
@@ -345,6 +391,9 @@ public class ModelProbeExecutionAdapter implements ProbeExecutionPort {
                     AgentProbeErrorCode.TARGET_SNAPSHOT_CHANGED);
         }
         Set<TargetCapability> required = EnumSet.of(TargetCapability.SINGLE_TURN);
+        if (command.executionMode() == ExecutionMode.ADAPTIVE_MULTI_TURN) {
+            required.add(TargetCapability.MULTI_TURN);
+        }
         required.addAll(command.requiredCapabilities());
         if (!snapshot.capabilities().supportsAll(required)) {
             String unsupported = required.stream()
@@ -419,6 +468,38 @@ public class ModelProbeExecutionAdapter implements ProbeExecutionPort {
             throw new ServiceException("目标快照序列化失败",
                     AgentProbeErrorCode.PROBE_PERSISTENCE_ERROR);
         }
+    }
+
+    /**
+     * 将平台会话中的已确认历史转换为 Spring AI 消息。
+     * 当前输入仍作为最后一条 user message 由各模型策略追加，避免把本轮输入
+     * 提前写入历史后造成重复发送。
+     */
+    private List<Message> toConversationMessages(List<TargetSessionMessage> history) {
+        List<Message> messages = new ArrayList<>();
+        if (history == null) {
+            return messages;
+        }
+        for (TargetSessionMessage message : history) {
+            if (message.role() == TargetSessionMessageRole.USER) {
+                messages.add(new UserMessage(message.content()));
+            } else {
+                messages.add(new AssistantMessage(message.content()));
+            }
+        }
+        return messages;
+    }
+
+    /** 估算已经发送到目标的历史消息正文总量。 */
+    private long estimateConversationTokens(List<TargetSessionMessage> history) {
+        long total = 0L;
+        if (history == null) {
+            return total;
+        }
+        for (TargetSessionMessage message : history) {
+            total = Math.addExact(total, TokenEstimator.estimate(message.content()));
+        }
+        return total;
     }
 
     private long resolveLatency(ModelResponse response, Instant executionStartedAt) {

@@ -13,7 +13,10 @@ import lombok.Setter;
 import java.util.List;
 
 /**
- * 创建 D02 自动红队任务请求。
+ * 创建自动红队任务请求。
+ *
+ * <p>D02 使用单轮模式，D03 使用同一目标会话的多轮模式；两种模式共用任务
+ * 配置入口，但服务端会根据目标快照分别校验所需能力。</p>
  */
 @Getter
 @Setter
@@ -39,7 +42,7 @@ public class CreateRedTeamTaskRequest {
     @Positive(message = "targetModelId必须大于0")
     private Long targetModelId;
 
-    /** D02 当前只接受一个风险编码。 */
+    /** 当前任务使用的风险编码；D04 之前仍为单风险任务。 */
     @NotBlank(message = "riskId不能为空")
     @Size(max = 128, message = "riskId长度不能超过128")
     private String riskId;
@@ -49,7 +52,7 @@ public class CreateRedTeamTaskRequest {
     @Size(max = 128, message = "ruleSetVersion长度不能超过128")
     private String ruleSetVersion;
 
-    /** D02 必须是 ADAPTIVE_SINGLE_TURN。 */
+    /** 任务交互模式；当前支持自适应单轮和自适应多轮。 */
     @NotNull(message = "executionMode不能为空")
     private ExecutionMode executionMode;
 

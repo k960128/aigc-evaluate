@@ -24,6 +24,22 @@ public final class BudgetLedger {
         this.policy = ContractChecks.required(policy, "policy");
     }
 
+    /**
+     * 从已经持久化的运行快照恢复预算账本。
+     *
+     * <p>D03 恢复时不能把进程内计数重新置零，否则重启后可能越过原任务预算。
+     * 尚未结算的预留 Token 不允许在恢复时被静默释放。</p>
+     */
+    public BudgetLedger(BudgetPolicy policy, BudgetSnapshot snapshot) {
+        this.policy = ContractChecks.required(policy, "policy");
+        BudgetSnapshot saved = ContractChecks.required(snapshot, "snapshot");
+        this.targetCalls = saved.targetCalls();
+        this.agentCalls = saved.agentCalls();
+        this.attempts = saved.attempts();
+        this.tokens = saved.tokens();
+        this.reservedTokens = saved.reservedTokens();
+    }
+
     /** 预留一次目标调用；预留失败表示硬预算已耗尽。 */
     public synchronized boolean reserveTargetCall() {
         if (targetCalls >= policy.maxTargetCalls()) {
