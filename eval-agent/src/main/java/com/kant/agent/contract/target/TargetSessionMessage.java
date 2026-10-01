@@ -23,8 +23,8 @@ public record TargetSessionMessage(
         role = ContractChecks.required(role, "role");
         // 输入不能为空；助手空回复仍是真实执行事实，不能丢弃或编造替代正文。
         content = ContractChecks.maxLength(role == TargetSessionMessageRole.USER
-                ? ContractChecks.notBlankPreserving(content, "content")
-                : ContractChecks.required(content, "content"),
+                        ? ContractChecks.notBlankPreserving(content, "content")
+                        : ContractChecks.required(content, "content"),
                 role == TargetSessionMessageRole.USER ? 100_000 : 200_000, "content");
     }
 }

@@ -11,14 +11,16 @@ import com.kant.agent.contract.evidence.EvidenceType;
  * @param input 已核对的输入索引、归属和正文哈希
  * @param response 已核对的响应索引、归属和正文哈希
  */
-public record FindingEvidenceSnapshot(int sequence,String executionId,EvidenceReference input,EvidenceReference response) {
+public record FindingEvidenceSnapshot(int sequence, String executionId, EvidenceReference input,
+                                      EvidenceReference response) {
     public FindingEvidenceSnapshot {
-        ContractChecks.positive(sequence,"sequence");
-        executionId=ContractChecks.notBlank(executionId,"executionId");
-        input=ContractChecks.required(input,"input"); response=ContractChecks.required(response,"response");
-        ContractChecks.require(input.type()==EvidenceType.PROBE_INPUT && response.type()==EvidenceType.TARGET_RESPONSE,
+        ContractChecks.positive(sequence, "sequence");
+        executionId = ContractChecks.notBlank(executionId, "executionId");
+        input = ContractChecks.required(input, "input");
+        response = ContractChecks.required(response, "response");
+        ContractChecks.require(input.type() == EvidenceType.PROBE_INPUT && response.type() == EvidenceType.TARGET_RESPONSE,
                 "快照必须保存成对的输入和响应索引");
         ContractChecks.require("PROBE_EXECUTION".equals(input.ownerType()) && "PROBE_EXECUTION".equals(response.ownerType())
-                && executionId.equals(input.ownerRef()) && executionId.equals(response.ownerRef()),"证据必须归属当前物理执行");
+                && executionId.equals(input.ownerRef()) && executionId.equals(response.ownerRef()), "证据必须归属当前物理执行");
     }
 }

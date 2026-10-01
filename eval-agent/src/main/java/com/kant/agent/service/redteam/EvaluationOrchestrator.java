@@ -35,6 +35,7 @@ import com.kant.agent.port.redteam.RedTeamRunRecorder;
 import com.kant.agent.port.redteam.RedTeamRunStarter;
 import com.kant.agent.port.redteam.RedTeamTaskRepository;
 import com.kant.agent.service.budget.TokenEstimator;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -413,10 +414,10 @@ public class EvaluationOrchestrator {
                                 attemptId,
                                 newId("trace_"),
                                 task.authorizationRef()),
-                         probeId,
-                         task.target(),
-                         task.targetSnapshotRef(),
-                         task.riskId(),
+                        probeId,
+                        task.target(),
+                        task.targetSnapshotRef(),
+                        task.riskId(),
                         task.ruleSetVersion(),
                         // 自适应发生在攻击者历史层；每次目标调用本身仍是干净单轮上下文。
                         ExecutionMode.STATIC_SINGLE_TURN,

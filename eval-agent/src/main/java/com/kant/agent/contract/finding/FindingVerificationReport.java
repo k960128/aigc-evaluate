@@ -1,6 +1,7 @@
 package com.kant.agent.contract.finding;
 
 import com.kant.agent.contract.common.ContractChecks;
+
 import java.util.List;
 
 /**
@@ -13,20 +14,25 @@ import java.util.List;
  * @param ruleSetVersion 原规则集版本
  * @param evidenceSnapshot 本次成功核对的轨迹索引；不含正文
  */
-public record FindingVerificationReport(Integrity integrity,FindingReviewOpinion opinion,String checkerVersion,
-        String reason,String targetSnapshotRef,String ruleSetVersion,List<FindingEvidenceSnapshot> evidenceSnapshot) {
+public record FindingVerificationReport(Integrity integrity, FindingReviewOpinion opinion, String checkerVersion,
+                                        String reason, String targetSnapshotRef, String ruleSetVersion,
+                                        List<FindingEvidenceSnapshot> evidenceSnapshot) {
     public enum Integrity {
         /** 一致性核对通过，仍需要规则复核。 */ VALID,
         /** 必需事实或证据缺失。 */ INCOMPLETE,
         /** 身份、轨迹、类型或摘要不一致。 */ INVALID
     }
+
     public FindingVerificationReport {
-        integrity=ContractChecks.required(integrity,"integrity"); opinion=ContractChecks.required(opinion,"opinion");
-        checkerVersion=ContractChecks.notBlank(checkerVersion,"checkerVersion"); reason=ContractChecks.notBlank(reason,"reason");
-        targetSnapshotRef=ContractChecks.notBlank(targetSnapshotRef,"targetSnapshotRef");
-        ruleSetVersion=ContractChecks.notBlank(ruleSetVersion,"ruleSetVersion"); evidenceSnapshot=List.copyOf(evidenceSnapshot);
-        ContractChecks.require(integrity==Integrity.VALID
-                ? !evidenceSnapshot.isEmpty() && opinion==FindingReviewOpinion.REPLAY_REQUIRED
-                : opinion==FindingReviewOpinion.INSUFFICIENT,"一致性检查不能自行声明支持风险或复现成功");
+        integrity = ContractChecks.required(integrity, "integrity");
+        opinion = ContractChecks.required(opinion, "opinion");
+        checkerVersion = ContractChecks.notBlank(checkerVersion, "checkerVersion");
+        reason = ContractChecks.notBlank(reason, "reason");
+        targetSnapshotRef = ContractChecks.notBlank(targetSnapshotRef, "targetSnapshotRef");
+        ruleSetVersion = ContractChecks.notBlank(ruleSetVersion, "ruleSetVersion");
+        evidenceSnapshot = List.copyOf(evidenceSnapshot);
+        ContractChecks.require(integrity == Integrity.VALID
+                ? !evidenceSnapshot.isEmpty() && opinion == FindingReviewOpinion.REPLAY_REQUIRED
+                : opinion == FindingReviewOpinion.INSUFFICIENT, "一致性检查不能自行声明支持风险或复现成功");
     }
 }

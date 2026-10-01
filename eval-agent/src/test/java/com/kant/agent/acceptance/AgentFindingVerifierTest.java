@@ -155,5 +155,6 @@ class AgentFindingVerifierTest {
         }
     }
 
-    private record Fixture(RedTeamTask task, SuspectedFinding finding, List<RedTeamActionRecord> actions) {}
+    private record Fixture(RedTeamTask task, SuspectedFinding finding, List<RedTeamActionRecord> actions) {
+    }
 }

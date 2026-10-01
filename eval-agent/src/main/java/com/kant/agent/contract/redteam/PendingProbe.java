@@ -19,6 +19,7 @@ public record PendingProbe(int sequence, String actionId, AttackAction action,
             throw new IllegalArgumentException("待执行操作日志不完整");
         }
     }
+
     /** 不更改执行输入及幂等键，只推进日志状态。 */
     public PendingProbe withStatus(String value) {
         return new PendingProbe(sequence, actionId, action, command, reservedTokens, value);

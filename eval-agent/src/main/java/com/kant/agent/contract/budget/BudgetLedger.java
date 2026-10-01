@@ -61,7 +61,7 @@ public final class BudgetLedger {
      * @return 结算后仍未超过目标调用上限时返回 {@code true}
      */
     public synchronized boolean settleKnownTargetCalls(long reservedTargetCalls,
-                                                        long actualTargetCalls) {
+                                                       long actualTargetCalls) {
         ContractChecks.positive(reservedTargetCalls, "reservedTargetCalls");
         ContractChecks.nonNegative(actualTargetCalls, "actualTargetCalls");
         if (reservedTargetCalls > targetCalls) {
@@ -87,7 +87,7 @@ public final class BudgetLedger {
      * @return 保守记账后仍未超过目标调用上限时返回 {@code true}
      */
     public synchronized boolean settleUnknownTargetCalls(long reservedTargetCalls,
-                                                          long observedTargetCalls) {
+                                                         long observedTargetCalls) {
         ContractChecks.positive(reservedTargetCalls, "reservedTargetCalls");
         ContractChecks.nonNegative(observedTargetCalls, "observedTargetCalls");
         if (reservedTargetCalls > targetCalls) {
@@ -161,8 +161,8 @@ public final class BudgetLedger {
      * @return 结算后仍未超过 Token 上限时返回 {@code true}
      */
     public synchronized boolean settleKnownTargetTokens(long reservedInputTokens,
-                                                         long inputTokens,
-                                                         long outputTokens) {
+                                                        long inputTokens,
+                                                        long outputTokens) {
         ContractChecks.nonNegative(reservedInputTokens, "reservedInputTokens");
         ContractChecks.nonNegative(inputTokens, "inputTokens");
         ContractChecks.nonNegative(outputTokens, "outputTokens");
@@ -189,8 +189,8 @@ public final class BudgetLedger {
      * @return 结算后仍未超过 Token 上限时返回 {@code true}
      */
     public synchronized boolean settlePartiallyKnownTargetTokens(long reservedInputTokens,
-                                                                   Long inputTokens,
-                                                                   Long outputTokens) {
+                                                                 Long inputTokens,
+                                                                 Long outputTokens) {
         ContractChecks.nonNegative(reservedInputTokens, "reservedInputTokens");
         if (inputTokens == null && outputTokens == null) {
             throw new IllegalArgumentException("部分Token结算至少需要一项已知用量");

@@ -20,7 +20,7 @@ public interface RedTeamTaskRepository {
 
     /** 更新任务的汇总状态，不修改已经固定的配置字段。 */
     void updateStatus(String tenantId,
-                     String actorId,
-                     String taskId,
-                     RedTeamTask task);
+                      String actorId,
+                      String taskId,
+                      RedTeamTask task);
 }

@@ -1,4 +1,5 @@
 package com.kant.agent.contract.finding;
+
 /** 依据规则和影响确定严重度，不使用模型自报置信度替代。 */
 public enum FindingSeverity {
     /** 未评定。 */ PENDING,

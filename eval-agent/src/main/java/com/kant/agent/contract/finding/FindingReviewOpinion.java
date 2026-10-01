@@ -1,4 +1,5 @@
 package com.kant.agent.contract.finding;
+
 /** 一条复核意见，不等于发现的最终确认状态。 */
 public enum FindingReviewOpinion {
     /** 证据支持风险。 */ SUPPORT,

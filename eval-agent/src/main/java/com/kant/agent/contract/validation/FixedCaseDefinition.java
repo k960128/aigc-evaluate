@@ -2,6 +2,7 @@ package com.kant.agent.contract.validation;
 
 import com.kant.agent.contract.common.ContractChecks;
 import com.kant.agent.contract.target.TargetReference;
+
 import java.util.List;
 
 /**
@@ -20,33 +21,43 @@ import java.util.List;
  * @param assertionVersion 文本信号断言实现版本
  * @param riskIndicators 从原任务继承的文本信号，审核时明确接受其局限
  */
-public record FixedCaseDefinition(String sourceFindingId,String sourceOccurrenceId,TargetReference target,
-        String baselineSnapshotRef,String environment,String identityRef,String riskId,String ruleSetVersion,
-        boolean conversation,String preconditions,List<Step> steps,String assertionVersion,List<String> riskIndicators) {
+public record FixedCaseDefinition(String sourceFindingId, String sourceOccurrenceId, TargetReference target,
+                                  String baselineSnapshotRef, String environment, String identityRef, String riskId,
+                                  String ruleSetVersion,
+                                  boolean conversation, String preconditions, List<Step> steps, String assertionVersion,
+                                  List<String> riskIndicators) {
     public FixedCaseDefinition {
-        ContractChecks.notBlank(sourceFindingId,"sourceFindingId"); ContractChecks.notBlank(sourceOccurrenceId,"sourceOccurrenceId");
-        ContractChecks.required(target,"target"); ContractChecks.notBlank(baselineSnapshotRef,"baselineSnapshotRef");
-        ContractChecks.notBlank(environment,"environment"); ContractChecks.notBlank(identityRef,"identityRef");
-        ContractChecks.notBlank(riskId,"riskId"); ContractChecks.notBlank(ruleSetVersion,"ruleSetVersion");
-        preconditions=ContractChecks.maxLength(ContractChecks.notBlank(preconditions,"preconditions"),4000,"preconditions");
-        steps=List.copyOf(ContractChecks.notEmpty(steps,"steps"));
-        riskIndicators=List.copyOf(ContractChecks.notEmpty(riskIndicators,"riskIndicators"));
-        ContractChecks.require(target.targetType()==com.kant.agent.contract.target.TargetType.MODEL,"当前固定验证只支持MODEL");
-        riskIndicators.forEach(s -> ContractChecks.notBlank(s,"riskIndicators"));
-        ContractChecks.require(steps.size()<=100 && (conversation || steps.size()==1),"仅支持最多100轮的线性MODEL用例");
-        for(int i=0;i<steps.size();i++) ContractChecks.require(steps.get(i).sequence()==i+1,"用例步骤必须连续有序");
-        ContractChecks.require("literal-response-signal-v1".equals(assertionVersion),"未支持的断言类型");
+        ContractChecks.notBlank(sourceFindingId, "sourceFindingId");
+        ContractChecks.notBlank(sourceOccurrenceId, "sourceOccurrenceId");
+        ContractChecks.required(target, "target");
+        ContractChecks.notBlank(baselineSnapshotRef, "baselineSnapshotRef");
+        ContractChecks.notBlank(environment, "environment");
+        ContractChecks.notBlank(identityRef, "identityRef");
+        ContractChecks.notBlank(riskId, "riskId");
+        ContractChecks.notBlank(ruleSetVersion, "ruleSetVersion");
+        preconditions = ContractChecks.maxLength(ContractChecks.notBlank(preconditions, "preconditions"), 4000, "preconditions");
+        steps = List.copyOf(ContractChecks.notEmpty(steps, "steps"));
+        riskIndicators = List.copyOf(ContractChecks.notEmpty(riskIndicators, "riskIndicators"));
+        ContractChecks.require(target.targetType() == com.kant.agent.contract.target.TargetType.MODEL, "当前固定验证只支持MODEL");
+        riskIndicators.forEach(s -> ContractChecks.notBlank(s, "riskIndicators"));
+        ContractChecks.require(steps.size() <= 100 && (conversation || steps.size() == 1), "仅支持最多100轮的线性MODEL用例");
+        for (int i = 0; i < steps.size(); i++)
+            ContractChecks.require(steps.get(i).sequence() == i + 1, "用例步骤必须连续有序");
+        ContractChecks.require("literal-response-signal-v1".equals(assertionVersion), "未支持的断言类型");
     }
+
     /**
      * @param sequence 从1开始的固定输入步骤
      * @param inputExecutionId 原始输入所属执行
      * @param inputEvidenceRef 原始输入引用
      * @param inputHash 固定原文SHA-256，运行前必须校验
      */
-    public record Step(int sequence,String inputExecutionId,String inputEvidenceRef,String inputHash) {
+    public record Step(int sequence, String inputExecutionId, String inputEvidenceRef, String inputHash) {
         public Step {
-            ContractChecks.positive(sequence,"sequence"); ContractChecks.notBlank(inputExecutionId,"inputExecutionId");
-            ContractChecks.notBlank(inputEvidenceRef,"inputEvidenceRef"); ContractChecks.notBlank(inputHash,"inputHash");
+            ContractChecks.positive(sequence, "sequence");
+            ContractChecks.notBlank(inputExecutionId, "inputExecutionId");
+            ContractChecks.notBlank(inputEvidenceRef, "inputEvidenceRef");
+            ContractChecks.notBlank(inputHash, "inputHash");
         }
     }
 }

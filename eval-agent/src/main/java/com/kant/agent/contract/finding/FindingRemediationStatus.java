@@ -1,4 +1,5 @@
 package com.kant.agent.contract.finding;
+
 /** 已确认发现的整改状态；当前D04切片仅初始化OPEN，不允许直接声称修复。 */
 public enum FindingRemediationStatus {
     /** 待处理。 */ OPEN,
