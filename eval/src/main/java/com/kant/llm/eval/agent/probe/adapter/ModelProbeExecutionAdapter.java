@@ -232,7 +232,7 @@ public class ModelProbeExecutionAdapter implements ProbeExecutionPort {
                 // 才能把异常归类为“目标调用可能已经发生”。会话校验失败不能
                 // 被错误地记录成 UNKNOWN。
                 // 等待模型限流期间控制命令或租约可能变化，调用前再次校验。
-                if (command.executionMode() == ExecutionMode.ADAPTIVE_MULTI_TURN)
+                if (command.executionMode() == ExecutionMode.ADAPTIVE_MULTI_TURN || command.context().runId().startsWith("vrun_"))
                     recordService.checkMultiTurnCallBoundary(command);
                 targetCallStarted = true;
                 ModelResponse response = strategy.call(requestBuilder.build());

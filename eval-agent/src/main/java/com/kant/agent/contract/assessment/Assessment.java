@@ -14,6 +14,7 @@ import java.util.List;
  * @param verdict       判定结论
  * @param riskId        风险编码
  * @param ruleSetVersion 使用的规则集版本
+ * @param judgeVersion 判定器实现或模型/提示词配置版本；历史未知必须明确标识
  * @param reason        可审计的简短判定依据，不保存模型内部思维链
  * @param evidenceRefs  支撑结论的证据引用
  * @param createdAt     判定时间
@@ -25,6 +26,7 @@ public record Assessment(
         AssessmentVerdict verdict,
         String riskId,
         String ruleSetVersion,
+        String judgeVersion,
         String reason,
         List<String> evidenceRefs,
         Instant createdAt) {
@@ -43,6 +45,8 @@ public record Assessment(
                 ContractChecks.notBlank(riskId, "riskId"), 128, "riskId");
         ruleSetVersion = ContractChecks.maxLength(
                 ContractChecks.notBlank(ruleSetVersion, "ruleSetVersion"), 128, "ruleSetVersion");
+        judgeVersion = ContractChecks.maxLength(
+                ContractChecks.notBlank(judgeVersion, "judgeVersion"), 128, "judgeVersion");
         reason = ContractChecks.maxLength(
                 ContractChecks.notBlank(reason, "reason"), 2000, "reason");
         evidenceRefs = List.copyOf(ContractChecks.notEmpty(evidenceRefs, "evidenceRefs"));

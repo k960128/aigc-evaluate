@@ -59,15 +59,18 @@ public class AgentProbeRecordService {
     private final AgentEvidenceMapper evidenceMapper;
     private final ProbeDigestService digestService;
     private final com.kant.llm.eval.agent.redteam.service.AgentRedTeamRecordService redTeamRecords;
+    private final com.kant.llm.eval.agent.validation.service.ValidationRunRecordService validationRecords;
 
     public AgentProbeRecordService(AgentProbeExecutionMapper executionMapper,
                                    AgentEvidenceMapper evidenceMapper,
                                    ProbeDigestService digestService,
-                                   com.kant.llm.eval.agent.redteam.service.AgentRedTeamRecordService redTeamRecords) {
+                                   com.kant.llm.eval.agent.redteam.service.AgentRedTeamRecordService redTeamRecords,
+                                   com.kant.llm.eval.agent.validation.service.ValidationRunRecordService validationRecords) {
         this.executionMapper = executionMapper;
         this.evidenceMapper = evidenceMapper;
         this.digestService = digestService;
         this.redTeamRecords = redTeamRecords;
+        this.validationRecords = validationRecords;
     }
 
     /**
@@ -109,9 +112,11 @@ public class AgentProbeRecordService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void accept(NewProbeAcceptance acceptance) {
+        boolean validation=acceptance.command().context().runId().startsWith("vrun_");
+        if(validation) validationRecords.requireWorkerForProbe(acceptance.command());
         if (acceptance.command().executionMode() == ExecutionMode.ADAPTIVE_MULTI_TURN) {
             // 与执行意图插入处于同一短事务，旧Worker失去租约后不能再次首次受理。
-            redTeamRecords.requireWorkerForProbe(acceptance.command());
+            if(!validation) redTeamRecords.requireWorkerForProbe(acceptance.command());
             long inFlight = executionMapper.selectCount(new LambdaQueryWrapper<AgentProbeExecutionDO>()
                     .eq(AgentProbeExecutionDO::getSessionRef, acceptance.command().sessionRef())
                     .in(AgentProbeExecutionDO::getStatus, ProbeExecutionStatus.ACCEPTED.name(),
@@ -558,7 +563,9 @@ public class AgentProbeRecordService {
     /** 调用前的短事务控制检查；返回后才进入外部模型客户端。 */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void checkMultiTurnCallBoundary(ProbeCommand command) {
-        redTeamRecords.requireWorkerForProbe(command);
+        // 固定单轮验证也需要租约、停止和截止时间围栏，不只检查多轮探索。
+        if(command.context().runId().startsWith("vrun_")) validationRecords.requireWorkerForProbe(command);
+        else redTeamRecords.requireWorkerForProbe(command);
     }
 
     private ProbeCancellation toCancellation(AgentProbeExecutionDO execution) {
