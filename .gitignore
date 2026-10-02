@@ -6,6 +6,11 @@
 !gradle/wrapper/gradle-wrapper.jar
 
 target/
+# Java目标契约包不是Maven构建产物，必须纳入版本管理。
+!eval-agent/src/main/java/com/kant/agent/contract/target/
+!eval-agent/src/main/java/com/kant/agent/contract/target/**
+!eval-agent/src/main/java/com/kant/agent/port/target/
+!eval-agent/src/main/java/com/kant/agent/port/target/**
 !.mvn/wrapper/maven-wrapper.jar
 
 .flattened-pom.xml

@@ -31,7 +31,7 @@ public class EvalEsSyncDispatchServiceImpl implements EvalEsSyncDispatchService 
     private final MessageQueueProducer messageQueueProducer;
 
     @Override
-//    @Scheduled(fixedDelay = 30_000L, initialDelay = 30_000L)
+//    // @Scheduled(fixedDelay = 30_000L, initialDelay = 30_000L)
     public void dispatchPendingEvents() {
         List<EvalEsSyncEventDO> events = evalEsSyncEventMapper.selectList(new LambdaQueryWrapper<EvalEsSyncEventDO>()
                 .in(EvalEsSyncEventDO::getSyncStatus,
