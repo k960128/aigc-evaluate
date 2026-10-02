@@ -11,7 +11,7 @@ import java.time.Instant;
 public class ScheduledTaskTrigger {
     private final SampleProductionService production;
     public ScheduledTaskTrigger(SampleProductionService production) { this.production=production; }
-    @Scheduled(fixedDelayString="${eval.agent.sample-factory.schedule-interval-ms:5000}")
+    // @Scheduled(fixedDelayString="${eval.agent.sample-factory.schedule-interval-ms:5000}")
     public void trigger() {
         Instant at=Instant.now();
         for(var task:production.due(at)) try { production.triggerScheduled(task.getTaskId(),at); }

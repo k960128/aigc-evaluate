@@ -15,7 +15,7 @@ public class RiskVocabularyAcNodeHeartbeat {
 
     private final L1InterceptionEngine l1InterceptionEngine;
 
-//    @Scheduled(fixedDelay = 20_000L, initialDelay = 5_000L)
+//    // @Scheduled(fixedDelay = 20_000L, initialDelay = 5_000L)
     public void heartbeat() {
         try {
             l1InterceptionEngine.heartbeat();

@@ -40,9 +40,9 @@ public class RedTeamRunRecoveryWorker {
     }
 
     /** 周期性接管排队或上次进程中断留下的运行。 */
-    @Scheduled(
-            fixedDelayString = "${eval.agent.red-team.recovery-interval-ms:1000}",
-            initialDelayString = "${eval.agent.red-team.recovery-initial-delay-ms:1000}")
+    // @Scheduled(
+//            fixedDelayString = "${eval.agent.red-team.recovery-interval-ms:1000}",
+//            initialDelayString = "${eval.agent.red-team.recovery-initial-delay-ms:1000}")
     public void dispatchRecoverableRuns() {
         for (RedTeamRun candidate : runRecorder.listRecoverableRuns()) {
             String workerId = newWorkerId();
@@ -81,7 +81,7 @@ public class RedTeamRunRecoveryWorker {
     }
 
     /** 模型调用可能持续超过30秒，续租不依赖模型调用线程返回。 */
-    @Scheduled(fixedDelay = 5000L)
+    // @Scheduled(fixedDelay = 5000L)
     public void heartbeat() {
         active.forEach((workerId, run) -> {
             try {

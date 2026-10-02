@@ -69,7 +69,7 @@ public class ModelCallPipelineCompensator {
         this.evalEsSyncOutboxService = evalEsSyncOutboxService;
     }
 
-//    @Scheduled(fixedDelay = 60_000L, initialDelay = 120_000L)
+//    // @Scheduled(fixedDelay = 60_000L, initialDelay = 120_000L)
     public void compensate() {
         RLock lock = redissonClient.getLock(COMPENSATE_LOCK_KEY);
         boolean locked;

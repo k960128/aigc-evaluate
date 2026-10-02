@@ -55,7 +55,7 @@ public class RiskVocabularyAcPublishCoordinator {
 
     private final AcSnapshotDirtyShardService dirtyShardService;
 
-//    @Scheduled(fixedDelay = 5_000L, initialDelay = 10_000L)
+//    // @Scheduled(fixedDelay = 5_000L, initialDelay = 10_000L)
     public void coordinate() {
         List<AcSnapshotPublishRecordDO> records = publishRecordService.list(new LambdaQueryWrapper<AcSnapshotPublishRecordDO>()
                 .in(AcSnapshotPublishRecordDO::getStatus,

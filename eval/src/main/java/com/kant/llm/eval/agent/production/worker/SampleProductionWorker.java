@@ -30,7 +30,7 @@ public class SampleProductionWorker {
             FactoryJsonSupport json,@Qualifier("sampleProductionExecutor") TaskExecutor executor) {
         this.records=records; this.production=production; this.generator=generator; this.json=json; this.executor=executor;
     }
-    @Scheduled(fixedDelayString="${eval.agent.sample-factory.recovery-interval-ms:5000}")
+    // @Scheduled(fixedDelayString="${eval.agent.sample-factory.recovery-interval-ms:5000}")
     public void dispatch() {
         for(var run:records.recoverable()) {
             String worker="spworker_"+UUID.randomUUID().toString().replace("-",""); if(!records.claim(run.getRunId(),worker)) continue;
@@ -39,7 +39,7 @@ public class SampleProductionWorker {
             catch(RuntimeException ex) { active.remove(worker); release(run,worker); safeLog("生产批次未投递",run,ex); }
         }
     }
-    @Scheduled(fixedDelay=5000L)
+    // @Scheduled(fixedDelay=5000L)
     public void heartbeat() { active.forEach((worker,run) -> { try { if(!records.heartbeat(run.getRunId(),worker)) active.remove(worker); }
         catch(RuntimeException ex) { safeLog("生产租约续租失败",run,ex); } }); }
     private void execute(AgentSampleRunDO original,String worker) {

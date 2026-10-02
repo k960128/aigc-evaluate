@@ -35,7 +35,7 @@ public class ValidationRunWorker {
         this.records=records; this.probes=probes; this.evidence=evidence; this.json=json; this.executor=executor;
     }
     /** 使用独立有限线程池，BLOCKED只做迟到事实查询，不重复调用外部模型。 */
-    @Scheduled(fixedDelayString="${eval.agent.validation.recovery-interval-ms:5000}",initialDelayString="${eval.agent.validation.initial-delay-ms:5000}")
+    // @Scheduled(fixedDelayString="${eval.agent.validation.recovery-interval-ms:5000}",initialDelayString="${eval.agent.validation.initial-delay-ms:5000}")
     public void dispatch() {
         for(var row:records.recoverable()) {
             String worker="vworker_"+UUID.randomUUID().toString().replace("-","");
@@ -46,7 +46,7 @@ public class ValidationRunWorker {
         }
     }
     /** 心跳独立于耗时模型调用，已过期租约不能被旧线程复活。 */
-    @Scheduled(fixedDelay=5000L)
+    // @Scheduled(fixedDelay=5000L)
     public void heartbeat() {
         active.forEach((worker,row) -> { try { if(!records.heartbeat(row.getRunId(),worker)) active.remove(worker); }
             catch(RuntimeException ex) { log.warn("D04验证续租失败，runId={}, errorType={}",row.getRunId(),ex.getClass().getSimpleName()); } });
