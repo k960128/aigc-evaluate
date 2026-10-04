@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** D05确定性质检、去重规范和计划时区测试；不调用生成模型或调度后台。 */
 class AgentProductionWorkflowTest {
+    /** 本地确定性规则实例，不启动Spring、数据库或真实生成服务。 */
     private final SampleQualityWorkflow quality = new SampleQualityWorkflow();
 
     @Test
@@ -108,16 +109,19 @@ class AgentProductionWorkflowTest {
                 () -> schedule("Asia/Shanghai", "2026-10-01", "2026-10-02", LocalTime.of(2, 0, 1)));
     }
 
+    /** 创建单槽位虚构配置，仅将改写次数作为变量，主题和长度用于区分PASS/REVISE。 */
     private GenerationSpec spec(int rewrites) {
         return new GenerationSpec("seed-test", 1, "generator-test", "sample-generation-v1",
                 "fictional-risk", "rules-v1", 1, List.of("保留虚构场景，改变表达"), List.of("主题"),
                 4, 100, rewrites, "仅用于授权的虚构场景", "只验证文本机制，不声明漏洞");
     }
 
+    /** 构造内存生成结果；10/10 Token只是假数据，不表示供应商真实用量。 */
     private SampleGenerationPort.Result result(String status, String content) {
         return new SampleGenerationPort.Result(status, content, "机制测试", 10, 10, "ESTIMATED");
     }
 
+    /** 按显式时区和日期建立有界每日计划，仅计算槽位，不触发后台定时任务。 */
     private ProductionSchedule schedule(String zone, String start, String end, LocalTime time) {
         return new ProductionSchedule(zone, time, LocalDate.parse(start), LocalDate.parse(end),
                 ProductionSchedule.MisfirePolicy.FIRE_LATEST, 60);

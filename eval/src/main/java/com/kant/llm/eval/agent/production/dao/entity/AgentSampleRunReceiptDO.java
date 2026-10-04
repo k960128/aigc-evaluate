@@ -6,7 +6,11 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Getter;
 import lombok.Setter;
 
-/** 手动/补跑请求的首次回执；多个请求键可引用同一计划槽位，但不能更换各自请求内容。 */
+/**
+ * 手动或补跑请求的首次受理回执；多个请求键可以引用同一个原调度槽位批次。
+ * 同键必须保留原槽位与原请求，resultJson不随批次推进刷新，实时进度需查询Run。
+ * 对应agent_sample_run_receipt表，不向外开放通用覆盖或删除接口；数据库时间约定为UTC微秒精度。
+ */
 @Getter
 @Setter
 @TableName("agent_sample_run_receipt")

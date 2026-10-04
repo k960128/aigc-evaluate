@@ -26,12 +26,18 @@ import java.util.Set;
  */
 @Service
 public class CandidateCaseService {
+    /** 候选状态、原文、来源及父链。 */
     private final AgentSampleCandidateMapper candidates;
+    /** 生成响应与用量事实；对外只投影元数据，不暴露commandJson。 */
     private final AgentSampleOperationMapper operations;
+    /** 批次授权与固定操作读取。 */
     private final SampleRunRecordService records;
+    /** 当前登录主体的服务端身份。 */
     private final ProbePrincipalProvider principals;
+    /** 持久化JSON读取、原文摘要核对与UTC转换。 */
     private final FactoryJsonSupport json;
 
+    /** 注入只读工作台依赖，不执行质检、改写或审核。 */
     public CandidateCaseService(AgentSampleCandidateMapper candidates, AgentSampleOperationMapper operations,
             SampleRunRecordService records, ProbePrincipalProvider principals, FactoryJsonSupport json) {
         this.candidates = candidates;
@@ -56,12 +62,15 @@ public class CandidateCaseService {
                 .eq(status != null, AgentSampleCandidateDO::getStatus, status)
                 .gt(AgentSampleCandidateDO::getId, afterId).orderByAsc(AgentSampleCandidateDO::getId)
                 .last("LIMIT " + (limit + 1)));
+        // 多读一条只用于判断下一页，nextCursor使用实际返回的最后一条主键。
+        // 状态过滤不是冻结快照，审核后刷新待审队列应从游标0开始。
         boolean more = rows.size() > limit;
         var page = rows.subList(0, Math.min(rows.size(), limit));
         return new FactoryResponses.Page<>(page.stream().map(this::response).toList(),
                 page.isEmpty() ? afterId : page.get(page.size() - 1).getId(), more);
     }
 
+    /** 返回候选元数据、生成计量及质量报告；原文由content接口单独授权读取。 */
     public FactoryResponses.Candidate detail(String candidateId) {
         var p = principals.currentPrincipal();
         return response(authorized(p.tenantId(), p.actorId(), candidateId));
@@ -121,11 +130,13 @@ public class CandidateCaseService {
         return row;
     }
 
+    /** 按原始正文核对SHA-256；null正文只允许对应null摘要，不使用去重规范化结果替代原文。 */
     public void verifyContent(AgentSampleCandidateDO row) {
         String digest = row.getContent() == null ? null : json.digest(row.getContent());
         if (!Objects.equals(digest, row.getContentHash())) throw error(SampleFactoryErrorCode.PERSISTENCE_ERROR);
     }
 
+    /** 组合候选与已确认生成事实，并核对二者属于同一批次；质量状态和人工准入状态分别返回。 */
     private FactoryResponses.Candidate response(AgentSampleCandidateDO row) {
         var op = records.operation(row.getOperationId());
         if (!row.getRunId().equals(op.getRunId()) || !"SUCCEEDED".equals(op.getStatus())) {
@@ -137,14 +148,17 @@ public class CandidateCaseService {
                 row.getStatus(), row.getVersion(), json.instant(row.getCreatedAt()));
     }
 
+    /** 只投影生成分类、固定原因和计量，不将响应中的正文混入普通列表。 */
     private FactoryResponses.Generation generation(AgentSampleOperationDO op) {
         var result = json.read(op.getResultJson(), SampleGenerationPort.Result.class);
         return new FactoryResponses.Generation(result.status(), result.reason(), result.inputTokens(), result.outputTokens(), result.measurement());
     }
 
+    /** 游标必须非负，页大小限定1至100；限制通过后才允许拼接数值LIMIT。 */
     public static void checkPage(long cursor, int limit) {
         if (cursor < 0 || limit < 1 || limit > 100) throw error(SampleFactoryErrorCode.INVALID_REQUEST);
     }
 
+    /** 将读取异常映射为固定业务错误，避免暴露其他主体的数据。 */
     private static ClientException error(SampleFactoryErrorCode code) { return new ClientException(code.message(), code); }
 }

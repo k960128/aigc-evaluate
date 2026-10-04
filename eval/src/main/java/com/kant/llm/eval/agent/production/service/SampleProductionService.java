@@ -17,19 +17,35 @@ import org.springframework.transaction.annotation.*;
 import java.time.*;
 import java.util.*;
 
-/** 种子、不可变生产计划、手动批次、计划控制与调度受理；本类绝不调用生成模型或被测目标。 */
+/**
+ * D05生产任务的受理层：保存专家种子、冻结生产计划，并将手动或定时请求转换为待执行批次。
+ * <p>计划定义与运行事实分开存储：一个计划可以创建多个批次，重置计划则创建新的计划标识，
+ * 不覆盖历史配置。本类只读取生成角色配置，不调用生成模型或被测目标；模型调用由Worker负责。</p>
+ * <p>HTTP写操作先校验主体，再处理幂等回放，最后执行版本和业务检查。
+ * 后台调度没有登录线程上下文，使用数据库计划中保存的归属信息。</p>
+ */
 @Service
 public class SampleProductionService {
+    /** 不可变专家种子及正文摘要。 */
     private final AgentSampleSeedMapper seeds;
+    /** 冻结配置、调度开关及调度游标。 */
     private final AgentSampleTaskMapper tasks;
+    /** 每次生产的独立进度与预算账本。 */
     private final AgentSampleRunMapper runs;
+    /** 计划启停及批次停止的首次控制回执。 */
     private final AgentSampleCommandMapper commands;
+    /** 定时触发、单槽位遗漏及遗漏区间的审计记录。 */
     private final AgentSampleScheduleFireMapper fires;
+    /** 手动运行或补跑请求对应的首次受理快照。 */
     private final AgentSampleRunReceiptMapper receipts;
+    /** 从服务端登录上下文提取主体，客户端不能指定租户或操作者。 */
     private final ProbePrincipalProvider principals;
+    /** 本类仅使用该端口读取当前生成角色快照。 */
     private final SampleGenerationPort generator;
+    /** 持久化JSON、摘要与UTC微秒时间转换。 */
     private final FactoryJsonSupport json;
 
+    /** 注入持久化与身份依赖；不在构造阶段访问数据库或调用模型。 */
     public SampleProductionService(AgentSampleSeedMapper seeds, AgentSampleTaskMapper tasks, AgentSampleRunMapper runs,
                                    AgentSampleCommandMapper commands, AgentSampleScheduleFireMapper fires, ProbePrincipalProvider principals,
                                    SampleGenerationPort generator, FactoryJsonSupport json, AgentSampleRunReceiptMapper receipts) {
@@ -44,12 +60,18 @@ public class SampleProductionService {
         this.receipts = receipts;
     }
 
+    /** 返回当前登录主体可见的生成角色配置；available不表示模型服务已经通过健康检查。 */
     public SampleGenerationPort.Profile profile() {
         principals.currentPrincipal();
         return generator.profile();
     }
 
-    /** 专家种子是独立不可变资产，修改时创建新seedId，而不是覆盖已进入批次的原文。 */
+    /**
+     * 幂等创建不可变专家种子；同键同内容返回原种子，同键不同内容报冲突。
+     * 正文按原样保存并计算摘要，不按去重规则改写。修订素材需要另建seedId。
+     * @param request 名称、正文、可选来源引用和主体内创建幂等键
+     * @return 不含正文的种子元数据，正文通过独立接口读取
+     */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public FactoryResponses.Seed createSeed(FactoryRequests.Seed request) {
         var p = principals.currentPrincipal();
@@ -75,7 +97,12 @@ public class SampleProductionService {
         return seedResponse(row);
     }
 
-    /** 生成配置快照与独立预算先冻结；创建任务不会启用计划或发出模型请求。 */
+    /**
+     * 创建冻结生产计划：校验种子归属及完整性、当前生成角色快照与最低调用次数预算。
+     * 仅保存计划定义，不创建批次，不调用模型，也不自动开启定时任务。
+     * @param request 专家选定的种子、生成约束、单批预算及可选每日计划
+     * @return 新计划，或幂等命中计划的当前控制状态
+     */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public FactoryResponses.Task createTask(FactoryRequests.Task request) {
         var p = principals.currentPrincipal();
@@ -86,6 +113,7 @@ public class SampleProductionService {
             same(hash, old.getRequestHash());
             return taskResponse(old);
         }
+        // 每个根槽位至少预留一次调用的次数上限；这并不保证Token预算足够覆盖所有生成。
         seed(p.tenantId(), p.actorId(), request.spec().seedId());
         requireProfile(request.spec());
         if (request.budget().maxAgentCalls() < request.spec().quantity())
@@ -116,6 +144,11 @@ public class SampleProductionService {
      * 旧计划可能引用应用重启前的生成角色快照；重置时保留原种子、变异、风险、预算和调度定义，
      * 只重新读取当前生成角色并写入新的generatorProfileRef。新计划默认不启用定时任务，避免重置动作
      * 意外补发旧计划的调度槽位；原计划和原批次仍可继续审计。
+     * <p>不修改旧计划的调度开关，不停止旧批次；旧预算也原样复制，不能用重置解决预算不足。
+     * 新计划保留原日期范围，随后人工启用时仍按原漏触发策略处理。</p>
+     * @param sourceTaskId 当前主体拥有的来源计划标识
+     * @param request 新计划名称及创建键；与普通创建共享主体内幂等键空间
+     * @return 新计划的当前状态；同键重试不会再次刷新已冻结的生成角色快照
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public FactoryResponses.Task resetTask(String sourceTaskId, FactoryRequests.ResetTask request) {
@@ -165,7 +198,14 @@ public class SampleProductionService {
         return taskResponse(row);
     }
 
-    /** 手动运行或补跑均使用新批次；精确计划槽位唯一，补跑不能覆盖原批次。 */
+    /**
+     * 受理一次手动生产或精确调度槽位补跑，不同步等待生成结果。
+     * <p>首次请求先锁计划，同键重试回放首次受理结果；不同键的同槽位请求共用原批次，
+     * 不覆盖原执行事实。当前进度应通过批次查询读取，不能根据首次回执判断。</p>
+     * @param taskId 冻结生产计划标识
+     * @param request 计划控制版本、幂等键及可选原UTC槽位；不填槽位表示手动运行
+     * @return 本请求首次受理的批次快照
+     */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public FactoryResponses.Run start(String taskId, FactoryRequests.Run request) {
         var p = principals.currentPrincipal();
@@ -196,6 +236,10 @@ public class SampleProductionService {
         return result;
     }
 
+    /**
+     * 显式开启或关闭每日生产；版本来自计划而非批次，同键回放优先于版本检查。
+     * 关闭只阻止后续调度，不停止已排队/在途批次；重新启用也不重置原调度游标。
+     */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public FactoryResponses.Control controlSchedule(String taskId, FactoryRequests.ScheduleControl request) {
         var p = principals.currentPrincipal();
@@ -233,6 +277,7 @@ public class SampleProductionService {
         var schedule = schedule(task);
         requireProfile(spec(task));
         if (schedule.misfirePolicy() == ProductionSchedule.MisfirePolicy.FIRE_LATEST) {
+            // 只补最新到期槽位，更早遗漏记为一个区间，避免停机后集中产生大量模型请求。
             Instant latest = schedule.latestDue(at);
             if (latest == null) return;
             if (latest.isAfter(planned)) {
@@ -247,6 +292,7 @@ public class SampleProductionService {
             var run = queue(task, key, json.hash(key), "slot:" + planned, "SCHEDULED", planned);
             fire(task, planned, "QUEUED", run.getRunId(), Map.of("zoneId", schedule.zoneId(), "misfirePolicy", schedule.misfirePolicy().name()));
         }
+        // 从计划槽位而非实际执行时间推进，避免累计漂移；日期范围耗尽时自动关闭计划。
         Instant next = schedule.next(planned);
         var update = new LambdaUpdateWrapper<AgentSampleTaskDO>().eq(AgentSampleTaskDO::getId, task.getId())
                 .set(AgentSampleTaskDO::getNextFireAt, json.utc(next));
@@ -254,6 +300,11 @@ public class SampleProductionService {
         tasks.update(null, update);
     }
 
+    /**
+     * 在调用方事务与计划行锁内创建QUEUED批次；相同触发身份复用原批次。
+     * key/hash是首次受理身份，trigger区分手动请求或精确槽位，kind只记录首次触发类型。
+     * 固定期限从受理时刻起算，包含排队时间，Worker恢复不会延长它。
+     */
     private AgentSampleRunDO queue(AgentSampleTaskDO task, String key, String hash, String trigger, String kind, Instant planned) {
         var old = runs.selectOne(new LambdaQueryWrapper<AgentSampleRunDO>().eq(AgentSampleRunDO::getTaskId, task.getTaskId()).eq(AgentSampleRunDO::getTriggerKey, trigger));
         if (old != null) return old;
@@ -279,6 +330,7 @@ public class SampleProductionService {
         return row;
     }
 
+    /** 保存原UTC槽位的触发/遗漏事实；同槽位已有审计则保留，遗漏记录的runId可以为空。 */
     private void fire(AgentSampleTaskDO task, Instant planned, String kind, String runId, Map<String, String> details) {
         var old = fires.selectOne(new LambdaQueryWrapper<AgentSampleScheduleFireDO>().eq(AgentSampleScheduleFireDO::getTaskId, task.getTaskId()).eq(AgentSampleScheduleFireDO::getPlannedFor, json.utc(planned)));
         if (old != null) return;
@@ -292,34 +344,40 @@ public class SampleProductionService {
         fires.insert(row);
     }
 
+    /** 查询当前主体的种子元数据，不返回原文。 */
     public FactoryResponses.Seed seed(String id) {
         var p = principals.currentPrincipal();
         return seedResponse(seed(p.tenantId(), p.actorId(), id));
     }
 
+    /** 校验主体及原文摘要后单独返回种子正文；调用方应将正文作为不可信纯文本展示。 */
     public FactoryResponses.Content seedContent(String id) {
         var p = principals.currentPrincipal();
         var seed = seed(p.tenantId(), p.actorId(), id);
         return new FactoryResponses.Content(id, seed.getContent(), seed.getContentHash());
     }
 
+    /** 查询计划冻结定义和当前调度控制状态；查询不刷新生成角色引用。 */
     public FactoryResponses.Task task(String id) {
         var p = principals.currentPrincipal();
         return taskResponse(authorizedTask(p.tenantId(), p.actorId(), id));
     }
 
+    /** 返回当前主体最近100条计划，供导航选择；不是全量分页接口。 */
     public List<FactoryResponses.Task> tasks() {
         var p = principals.currentPrincipal();
         return tasks.selectList(new LambdaQueryWrapper<AgentSampleTaskDO>()
                 .eq(AgentSampleTaskDO::getTenantId, p.tenantId()).eq(AgentSampleTaskDO::getActorId, p.actorId()).orderByDesc(AgentSampleTaskDO::getId).last("LIMIT 100")).stream().map(this::taskResponse).toList();
     }
 
+    /** 返回当前主体最近100条种子元数据，正文仍须单独请求。 */
     public List<FactoryResponses.Seed> seeds() {
         var p = principals.currentPrincipal();
         return seeds.selectList(new LambdaQueryWrapper<AgentSampleSeedDO>()
                 .eq(AgentSampleSeedDO::getTenantId, p.tenantId()).eq(AgentSampleSeedDO::getActorId, p.actorId()).orderByDesc(AgentSampleSeedDO::getId).last("LIMIT 100")).stream().map(this::seedResponse).toList();
     }
 
+    /** 校验计划归属后返回最近100条调度审计，时间统一转为UTC时间点。 */
     public List<FactoryResponses.Fire> fires(String taskId) {
         var p = principals.currentPrincipal();
         authorizedTask(p.tenantId(), p.actorId(), taskId);
@@ -327,18 +385,21 @@ public class SampleProductionService {
                 .stream().map(f -> new FactoryResponses.Fire(json.instant(f.getPlannedFor()), f.getKind(), f.getRunId(), f.getDetailsJson(), json.instant(f.getCreatedAt()))).toList();
     }
 
+    /** 返回指定计划最近100个批次的当前快照，包括失败和停止的历史批次。 */
     public List<FactoryResponses.Run> runs(String taskId) {
         var p = principals.currentPrincipal();
         authorizedTask(p.tenantId(), p.actorId(), taskId);
         return runs.selectList(new LambdaQueryWrapper<AgentSampleRunDO>().eq(AgentSampleRunDO::getTaskId, taskId).orderByDesc(AgentSampleRunDO::getId).last("LIMIT 100")).stream().map(this::runResponse).toList();
     }
 
+    /** 按计划、租户、操作者三者查询；不存在和越权统一报错，避免泄露他人资源是否存在。 */
     public AgentSampleTaskDO authorizedTask(String tenant, String actor, String id) {
         var row = tasks.selectOne(new LambdaQueryWrapper<AgentSampleTaskDO>().eq(AgentSampleTaskDO::getTaskId, id).eq(AgentSampleTaskDO::getTenantId, tenant).eq(AgentSampleTaskDO::getActorId, actor));
         if (row == null) throw error(SampleFactoryErrorCode.NOT_FOUND);
         return row;
     }
 
+    /** 为HTTP与Worker共用的种子读取边界：检查归属，并核对原文SHA-256防止静默篡改。 */
     public AgentSampleSeedDO seed(String tenant, String actor, String id) {
         var row = seeds.selectOne(new LambdaQueryWrapper<AgentSampleSeedDO>().eq(AgentSampleSeedDO::getSeedId, id).eq(AgentSampleSeedDO::getTenantId, tenant).eq(AgentSampleSeedDO::getActorId, actor));
         if (row == null) throw error(SampleFactoryErrorCode.NOT_FOUND);
@@ -347,24 +408,29 @@ public class SampleProductionService {
         return row;
     }
 
+    /** 将计划中冻结的生成JSON恢复为领域契约，不从当前配置补写历史字段。 */
     public GenerationSpec spec(AgentSampleTaskDO task) {
         return json.read(task.getSpecJson(), GenerationSpec.class);
     }
 
+    /** 读取单批预算上限；不是整个每日计划的累计预算。 */
     public ProductionBudget budget(AgentSampleTaskDO task) {
         return json.read(task.getBudgetJson(), ProductionBudget.class);
     }
 
+    /** 读取冻结的每日调度定义；null表示该计划没有定时生产配置。 */
     public ProductionSchedule schedule(AgentSampleTaskDO task) {
         return task.getScheduleJson() == null ? null : json.read(task.getScheduleJson(), ProductionSchedule.class);
     }
 
+    /** 转换运行快照；ordinal对外称completedSlots，表示已结束根槽位数而非合格样本数。 */
     public FactoryResponses.Run runResponse(AgentSampleRunDO r) {
         return new FactoryResponses.Run(r.getRunId(), r.getTaskId(), r.getStatus(), r.getVersion(), r.getTriggerKind(),
                 json.instant(r.getPlannedFor()), r.getOrdinal(), r.getRewriteRound(), r.getPendingOperationId(), json.read(r.getUsageJson(), ProductionBudget.Usage.class),
                 Boolean.TRUE.equals(r.getStopRequested()), r.getErrorCode(), json.instant(r.getCreatedAt()), json.instant(r.getDeadlineAt()), json.instant(r.getFinishedAt()));
     }
 
+    /** 查询资源内控制命令回执；没有回执返回null，同键异参报冲突，命中则返回首次结果。 */
     public FactoryResponses.Control controlReplay(String resource, String key, String hash) {
         var old = commands.selectOne(new LambdaQueryWrapper<AgentSampleCommandDO>().eq(AgentSampleCommandDO::getResourceId, resource).eq(AgentSampleCommandDO::getIdempotencyKey, key));
         if (old == null) return null;
@@ -372,6 +438,7 @@ public class SampleProductionService {
         return json.read(old.getResultJson(), FactoryResponses.Control.class);
     }
 
+    /** 在调用方业务事务内记录控制回执，使状态变更与幂等结果一起提交或回滚。 */
     public void saveControl(String resource, String key, String hash, FactoryResponses.Control result) {
         var row = new AgentSampleCommandDO();
         row.setResourceId(resource);
@@ -381,39 +448,47 @@ public class SampleProductionService {
         commands.insert(row);
     }
 
+    /** 事务内锁定计划行，串行化启停、调度与批次受理；HTTP调用者须先校验归属。 */
     private AgentSampleTaskDO lockTask(String id) {
         var t = tasks.selectOne(new LambdaQueryWrapper<AgentSampleTaskDO>().eq(AgentSampleTaskDO::getTaskId, id).last("LIMIT 1 FOR UPDATE"));
         if (t == null) throw error(SampleFactoryErrorCode.NOT_FOUND);
         return t;
     }
 
+    /** 校验生成角色已启用且指纹与计划完全一致；不进行模型网络探活，也不替换旧快照。 */
     private void requireProfile(GenerationSpec spec) {
         var profile = generator.profile();
         if (!profile.available() || !profile.profileRef().equals(spec.generatorProfileRef()))
             throw error(SampleFactoryErrorCode.GENERATOR_UNAVAILABLE);
     }
 
+    /** 构造不可变版本1的种子索引，避免普通列表暴露正文。 */
     private FactoryResponses.Seed seedResponse(AgentSampleSeedDO s) {
         return new FactoryResponses.Seed(s.getSeedId(), 1, s.getName(), s.getContentHash(), s.getSourceRef(), json.instant(s.getCreatedAt()));
     }
 
+    /** 组合冻结定义与可变控制状态，返回生产任务而非自动红队任务。 */
     private FactoryResponses.Task taskResponse(AgentSampleTaskDO t) {
         return new FactoryResponses.Task(t.getTaskId(), "SAMPLE_PRODUCTION", t.getName(), t.getActivityId(), t.getAuthorizationRef(),
                 spec(t), budget(t), schedule(t), Boolean.TRUE.equals(t.getScheduleEnabled()), json.instant(t.getNextFireAt()), t.getVersion(), json.instant(t.getCreatedAt()));
     }
 
+    /** 幂等键只允许重放相同请求，不能携带新参数覆盖首次事实。 */
     private void same(String expected, String actual) {
         if (!expected.equals(actual)) throw error(SampleFactoryErrorCode.IDEMPOTENCY_CONFLICT);
     }
 
+    /** 生成带业务前缀的UUID标识；不是数据库自增主键或分页游标。 */
     private String id(String prefix) {
         return prefix + UUID.randomUUID().toString().replace("-", "");
     }
 
+    /** 使用UTC且截断为微秒，匹配MySQL DATETIME(6)存储精度。 */
     private LocalDateTime now() {
         return json.utc(Instant.now());
     }
 
+    /** 统一构造D05安全错误，不附带SQL、种子或模型原文。 */
     private ClientException error(SampleFactoryErrorCode code) {
         return new ClientException(code.message(), code);
     }

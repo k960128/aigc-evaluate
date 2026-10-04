@@ -14,6 +14,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(assignableTypes = SampleFactoryController.class)
 public class SampleFactoryRequestAdvice {
+    /** 请求JSON、Bean校验或路径/查询参数转换失败统一返回A053004，不回显非法输入和解析异常。 */
     @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentNotValidException.class,
             MethodArgumentTypeMismatchException.class})
     public Result<Void> invalidRequest(Exception ignored) {

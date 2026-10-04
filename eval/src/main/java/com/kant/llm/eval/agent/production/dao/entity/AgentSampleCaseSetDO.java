@@ -3,7 +3,11 @@ import com.baomidou.mybatisplus.annotation.*;
 import lombok.Getter;
 import lombok.Setter;
 import java.time.LocalDateTime;
-/** D05agent_sample_case_set事实存储，不开放通用覆盖或删除接口。 */
+/**
+ * 人工选择正式用例精确版本形成的不可变集合，当前集合版本为1。
+ * casesJson保留原选择顺序，不接受候选ID或latest；创建集合不调用被测目标。
+ * 对应agent_sample_case_set表，不向外开放通用覆盖或删除接口；数据库时间约定为UTC微秒精度。
+ */
 @Getter @Setter @TableName("agent_sample_case_set")
 public class AgentSampleCaseSetDO {
     /** 数据库主键。 */ @TableId(type=IdType.AUTO) private Long id;
@@ -14,6 +18,6 @@ public class AgentSampleCaseSetDO {
     /** 创建幂等键。 */ private String idempotencyKey;
     /** 请求摘要。 */ private String requestHash;
     /** 集合展示名称。 */ private String name;
-    /** 精确正式用例版本集合。 */ private String casesJson;
+    /** 有序CaseRef数组JSON，每项为caseId与精确version；不存候选ID或动态latest引用。 */ private String casesJson;
     /** UTC创建时间。 */ private LocalDateTime createdAt;
 }

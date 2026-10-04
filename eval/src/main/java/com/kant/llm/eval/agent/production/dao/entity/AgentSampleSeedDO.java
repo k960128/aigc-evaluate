@@ -3,7 +3,11 @@ import com.baomidou.mybatisplus.annotation.*;
 import lombok.Getter;
 import lombok.Setter;
 import java.time.LocalDateTime;
-/** D05agent_sample_seed事实存储，不开放通用覆盖或删除接口。 */
+/**
+ * 不可变专家种子及来源，作为生成素材而非自动生成的正式资产。
+ * 原文与SHA-256同时保留；每条种子当前固定版本1，修订须另建seedId，不覆盖原文。
+ * 对应agent_sample_seed表，不向外开放通用覆盖或删除接口；数据库时间约定为UTC微秒精度。
+ */
 @Getter @Setter @TableName("agent_sample_seed")
 public class AgentSampleSeedDO {
     /** 数据库主键。 */ @TableId(type=IdType.AUTO) private Long id;

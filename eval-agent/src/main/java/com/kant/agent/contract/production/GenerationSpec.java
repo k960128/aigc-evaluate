@@ -15,9 +15,9 @@ import java.util.List;
  * @param quantity 根样本槽位数；低质量不强行补足通过数量
  * @param mutations 专家允许的变异要求，作为数据而非平台工具指令
  * @param topicTerms 确定性质检的主题锚点，至少命中一项；不是语义相关性的完整证明
- * @param minLength 最小正文字符数
- * @param maxLength 最大正文字符数
- * @param maxRewrites 每个槽位最多质量改写次数
+ * @param minLength 最小正文长度，按Java字符串UTF-16单元计算，不是Token数
+ * @param maxLength 最大正文长度，按UTF-16单元计算，不小于minLength且不超过10000
+ * @param maxRewrites 每个槽位最多质量改写0至2次，不含第一次生成
  * @param preconditions 专家提供的可核对前置条件
  * @param assertionDescription 专家填写的评测断言说明，未经目标执行不生成安全结论
  */
@@ -26,6 +26,7 @@ public record GenerationSpec(String seedId, long seedVersion, String generatorPr
                              List<String> topicTerms,
                              int minLength, int maxLength, int maxRewrites, String preconditions,
                              String assertionDescription) {
+    /** 构造时校验冻结契约，不依赖Spring校验器，同样适用于持久化JSON恢复。 */
     public GenerationSpec {
         seedId = ContractChecks.maxLength(ContractChecks.notBlank(seedId, "seedId"), 96, "seedId");
         ContractChecks.require(seedVersion == 1, "当前种子只支持不可变版本1");
@@ -34,6 +35,7 @@ public record GenerationSpec(String seedId, long seedVersion, String generatorPr
         riskId = ContractChecks.maxLength(ContractChecks.notBlank(riskId, "riskId"), 128, "riskId");
         ruleSetVersion = ContractChecks.maxLength(ContractChecks.notBlank(ruleSetVersion, "ruleSetVersion"), 128, "ruleSetVersion");
         ContractChecks.require(quantity >= 1 && quantity <= 500, "每批根样本数量为1至500");
+        // 防御性复制，防止调用方后续修改集合而改变已经受理的生成约束。
         mutations = List.copyOf(ContractChecks.notEmpty(mutations, "mutations"));
         topicTerms = List.copyOf(ContractChecks.notEmpty(topicTerms, "topicTerms"));
         ContractChecks.require(mutations.size() <= 10 && topicTerms.size() <= 20, "变异要求或主题锚点过多");
@@ -41,6 +43,7 @@ public record GenerationSpec(String seedId, long seedVersion, String generatorPr
         topicTerms.forEach(s -> ContractChecks.maxLength(ContractChecks.notBlank(s, "topicTerm"), 128, "topicTerm"));
         ContractChecks.require(minLength >= 1 && maxLength >= minLength && maxLength <= 10000, "正文长度范围不合法");
         ContractChecks.require(maxRewrites >= 0 && maxRewrites <= 2, "每个样本最多两次质量改写");
+        // 专家资料只校验不改写，不是模型可以修改的授权或可执行脚本。
         ContractChecks.maxLength(ContractChecks.notBlankPreserving(preconditions, "preconditions"), 4000, "preconditions");
         ContractChecks.maxLength(ContractChecks.notBlankPreserving(assertionDescription, "assertionDescription"), 4000, "assertionDescription");
     }

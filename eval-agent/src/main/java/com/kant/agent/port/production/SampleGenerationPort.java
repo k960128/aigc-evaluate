@@ -5,20 +5,41 @@ public interface SampleGenerationPort {
     /** 只读当前生成角色配置，不调用模型；profileRef必须随配置变化。 */
     Profile profile();
 
-    /** 对一个固定槽位生成或改写一个结构化候选；持久化和预算由外层工作流管理。 */
+    /**
+     * 对固定槽位生成或改写候选，持久化、预算与重试决策由外层工作流管理。
+     * @param command 已固定角色、提示词与本轮资料的命令
+     * @return 可确认的生成分类与用量；无法确认的请求由适配器抛出异常，不伪造零消耗
+     */
     Result generate(Command command);
 
-    /** profileRef配置快照；available是否显式启用；modelName模型名；maxOutputTokens输出上限。 */
+    /**
+     * 生成角色只读快照，区别于被测目标能力声明。
+     * @param profileRef 配置指纹，相同配置应稳定，真实配置变更应改变此引用
+     * @param available 是否显式启用且配置可用，不是模型健康检查结果
+     * @param modelName 独立生成模型标签，不是被测目标名称
+     * @param maxOutputTokens 单次输出上限，用于调用前Token预留
+     */
     record Profile(String profileRef, boolean available, String modelName, int maxOutputTokens) {
     }
 
-    /** operationId操作标识；profileRef固定配置；systemPrompt平台指令；userPayloadJSON将种子、反馈作为数据。 */
+    /**
+     * 持久化的固定命令，含受限正文，不应出现在普通列表或日志中。
+     * @param operationId 批次、根槽位及轮次确定的操作身份
+     * @param profileRef 本次生成绑定的配置指纹
+     * @param systemPrompt 平台固定指令，不能由种子或反馈覆盖
+     * @param userPayloadJson 种子、变异、父候选和反馈等JSON资料，按不可信数据处理
+     */
     record Command(String operationId, String profileRef, String systemPrompt, String userPayloadJson) {
     }
 
     /**
-     * status为GENERATED/REFUSED/INVALID；content仅为候选输入；reason为拒绝/解析原因。
-     * inputTokens/outputTokens是本次计量；measurement为ACTUAL或ESTIMATED，不含内部思维链。
+     * 已确认响应的分类和计量，不包含内部思维链，仍须质检和人工准入。
+     * @param status GENERATED结构合法、REFUSED结构化拒绝、INVALID结构不合法
+     * @param content 可空候选输入，拒绝或非法响应不能伪造可执行样本
+     * @param reason 适配器固定分类说明，不照搬模型原始拒绝原因
+     * @param inputTokens 本次输入Token，必须非负
+     * @param outputTokens 本次输出Token，必须非负，非法结果也需计量
+     * @param measurement ACTUAL为供应商实报，ESTIMATED为平台估算
      */
     record Result(String status, String content, String reason, long inputTokens, long outputTokens,
                   String measurement) {

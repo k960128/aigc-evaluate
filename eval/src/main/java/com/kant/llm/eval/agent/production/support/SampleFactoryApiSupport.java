@@ -11,8 +11,15 @@ import java.util.function.Supplier;
  * 不得包裹Worker或生成端口，避免把唯一键处理变成模型隐式重发。
  */
 public final class SampleFactoryApiSupport {
+    /** 只提供静态控制面保护函数，不持有运行状态。 */
     private SampleFactoryApiSupport() {}
 
+    /**
+     * 执行已经过Spring事务代理的控制面动作；唯一键竞争后最多回读一次胜者幂等结果。
+     * @param action 不发起模型请求的业务方法，不能是Worker或有外部调用副作用的动作
+     * @param <T> 控制面返回类型
+     * @return 业务结果或已提交回执；认证/业务异常保留，其他异常转为固定安全错误
+     */
     public static <T> T safely(Supplier<T> action) {
         try {
             try { return action.get(); }

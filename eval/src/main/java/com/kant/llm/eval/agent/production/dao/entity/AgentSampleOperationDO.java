@@ -3,19 +3,23 @@ import com.baomidou.mybatisplus.annotation.*;
 import lombok.Getter;
 import lombok.Setter;
 import java.time.LocalDateTime;
-/** D05agent_sample_operation事实存储，不开放通用覆盖或删除接口。 */
+/**
+ * 一次物理生成请求的固定输入、发送者、确认结果及计量事实。
+ * SUCCEEDED仅表示响应已确认；CALLING/UNKNOWN不得自动重发，预留须保留到确认结算。
+ * 对应agent_sample_operation表，不向外开放通用覆盖或删除接口；数据库时间约定为UTC微秒精度。
+ */
 @Getter @Setter @TableName("agent_sample_operation")
 public class AgentSampleOperationDO {
     /** 数据库主键。 */ @TableId(type=IdType.AUTO) private Long id;
-    /** 固定生成操作。 */ private String operationId;
+    /** 由runId、ordinal和rewriteRound派生的固定生成操作ID。 */ private String operationId;
     /** 生产批次。 */ private String runId;
     /** 0基根槽位。 */ private Integer ordinal;
     /** 当前质量改写轮次。 */ private Integer rewriteRound;
     /** 原父候选。 */ private String parentCandidateId;
     /** 固定模型命令，含受限种子与反馈，不公开。 */ private String commandJson;
-    /** 输入估算及输出上限预留。 */ private Long reservationTokens;
-    /** ACCEPTED CALLING SUCCEEDED UNKNOWN CANCELLED。 */ private String status;
+    /** 原始输入估算加输出上限的Token预留；结算只释放批次账本，不覆盖此历史值。 */ private Long reservationTokens;
+    /** ACCEPTED已预留、CALLING已进入发送、SUCCEEDED响应确认、UNKNOWN结果未知、CANCELLED未发送已取消。 */ private String status;
     /** 首次调用线程身份，迟到事实只能由原调用者追加。 */ private String dispatchWorkerId;
-    /** 确认结构化结果与计量，不存内部思维链。 */ private String resultJson;
+    /** Result分类、可空候选正文和计量；无确认响应时为空，不存非法原始响应或内部思维链。 */ private String resultJson;
     /** UTC首次预留时间。 */ private LocalDateTime createdAt;
 }

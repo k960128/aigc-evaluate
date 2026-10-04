@@ -3,7 +3,11 @@ import com.baomidou.mybatisplus.annotation.*;
 import lombok.Getter;
 import lombok.Setter;
 import java.time.LocalDateTime;
-/** D05agent_sample_command事实存储，不开放通用覆盖或删除接口。 */
+/**
+ * 计划启停或批次停止的幂等控制回执，不是发给模型的生成命令。
+ * resourceId与idempotencyKey确定首次命令，状态变更与回执在同一事务内提交。
+ * 对应agent_sample_command表，不向外开放通用覆盖或删除接口；数据库时间约定为UTC微秒精度。
+ */
 @Getter @Setter @TableName("agent_sample_command")
 public class AgentSampleCommandDO {
     /** 数据库主键。 */ @TableId(type=IdType.AUTO) private Long id;

@@ -3,7 +3,11 @@ import com.baomidou.mybatisplus.annotation.*;
 import lombok.Getter;
 import lombok.Setter;
 import java.time.LocalDateTime;
-/** D05agent_sample_asset事实存储，不开放通用覆盖或删除接口。 */
+/**
+ * 人工批准形成的正式单消息资产；以caseId和caseVersion精确定位。
+ * 正文通过candidateId引用并核对冻结哈希，不复制到旧dataset表；准入不代表目标风险已经验证。
+ * 对应agent_sample_asset表，不向外开放通用覆盖或删除接口；数据库时间约定为UTC微秒精度。
+ */
 @Getter @Setter @TableName("agent_sample_asset")
 public class AgentSampleAssetDO {
     /** 数据库主键。 */ @TableId(type=IdType.AUTO) private Long id;
@@ -13,6 +17,6 @@ public class AgentSampleAssetDO {
     /** 服务端租户。 */ private String tenantId;
     /** 操作者。 */ private String actorId;
     /** 审核记录引用。 */ private String approvalRef;
-    /** 固定前置条件输入引用断言原规则配置。 */ private String definitionJson;
+    /** Asset冻结定义：输入引用/哈希、专家前置条件、断言说明、风险/规则版本及审批引用，不含正文。 */ private String definitionJson;
     /** UTC发布时间。 */ private LocalDateTime createdAt;
 }

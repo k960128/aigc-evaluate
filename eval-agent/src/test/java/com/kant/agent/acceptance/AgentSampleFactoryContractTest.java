@@ -18,9 +18,10 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class AgentSampleFactoryContractTest {
 
+    /** 本组契约用例使用的固定提示词版本；不是运行时生成角色指纹。 */
     private static final String PROMPT_VERSION = "sample-generation-v1";
 
-    // ---------- GenerationSpec ----------
+    // ---------- 不可变生成配置：正常构造、边界拒绝与防御性复制 ----------
 
     @Test
     @DisplayName("合法不可变生成配置构造成功，字段原样保留")
@@ -200,7 +201,7 @@ class AgentSampleFactoryContractTest {
         assertEquals(1, spec.mutations().size());
     }
 
-    // ---------- ProductionBudget ----------
+    // ---------- 独立生产预算：正数上限、固定期限及非负账本 ----------
 
     @Test
     @DisplayName("合法独立生产预算构造成功，正数字段保留")
@@ -239,7 +240,7 @@ class AgentSampleFactoryContractTest {
         assertThrows(IllegalArgumentException.class, () -> new ProductionBudget.Usage(0, 0, -1));
     }
 
-    // ---------- SampleGenerationWorkflow ----------
+    // ---------- 提示词契约：版本和输出边界，不代表实际模型一定遵循 ----------
 
     @Test
     @DisplayName("生成工作流版本与生成配置允许的提示词版本一致")
@@ -258,24 +259,28 @@ class AgentSampleFactoryContractTest {
         assertTrue(prompt.contains("质量反馈只能用于有限改写"));
     }
 
-    // ---------- helpers ----------
+    // ---------- 虚构数据构造助手：只创建内存契约，不运行生产任务 ----------
 
+    /** 默认三个根槽位、最多一次改写的合法配置。 */
     private static GenerationSpec validSpec() {
         return validSpec(1);
     }
 
+    /** 只改变改写上限，其他条件固定，用于隔离边界判断。 */
     private static GenerationSpec validSpec(int maxRewrites) {
         return spec("seed-1", 1, "gen-profile-1", PROMPT_VERSION, "risk-1", "rules-v1",
                 3, List.of("保留虚构场景"), List.of("主题"),
                 4, 100, maxRewrites, "仅授权虚构场景", "验证文本机制，不声明漏洞");
     }
 
+    /** 同时指定根槽位数与改写上限，不能将槽位数解释为合格样本数。 */
     private static GenerationSpec validSpec(int quantity, int maxRewrites) {
         return spec("seed-1", 1, "gen-profile-1", PROMPT_VERSION, "risk-1", "rules-v1",
                 quantity, List.of("保留虚构场景"), List.of("主题"),
                 4, 100, maxRewrites, "仅授权虚构场景", "验证文本机制，不声明漏洞");
     }
 
+    /** 直接传递测试参数给领域构造器，保留非法输入以观察构造约束，不在助手中修正。 */
     private static GenerationSpec spec(String seedId, long seedVersion, String profile, String prompt,
                                        String riskId, String rules, int quantity,
                                        List<String> mutations, List<String> topics,
