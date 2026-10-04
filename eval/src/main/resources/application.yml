@@ -102,3 +102,16 @@ management:
   endpoint:
     health:
       show-details: always
+
+
+eval:
+  agent:
+    sample-factory:
+      worker-enabled: true
+      generator:
+        enabled: true
+        base-url: http://localhost:11434
+        model: deepseek-r1:1.5b
+        max-output-tokens: 1024
+        temperature: 0.7
+        request-timeout-seconds: 120
