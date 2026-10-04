@@ -70,6 +70,15 @@ public class SampleFactoryController {
         return Results.success(safely(() -> production.createTask(request)));
     }
 
+    /**
+     * 基于旧计划创建新的配置快照；不修改旧计划，不自动启用新计划的定时任务。
+     */
+    @PostMapping("/tasks/{taskId}/reset")
+    public Result<FactoryResponses.Task> resetTask(@PathVariable String taskId,
+                                                   @Valid @RequestBody FactoryRequests.ResetTask request) {
+        return Results.success(safely(() -> production.resetTask(taskId, request)));
+    }
+
     @GetMapping("/tasks")
     public Result<List<FactoryResponses.Task>> tasks() {
         return Results.success(safely(production::tasks));

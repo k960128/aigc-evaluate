@@ -21,6 +21,7 @@ import org.springframework.web.client.RestClient;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * 独立Ollama生成角色，默认关闭。无工具、检索、记忆、反思Advisor或请求正文日志。
@@ -55,8 +56,17 @@ public class OllamaSampleGenerationAdapter implements SampleGenerationPort {
         this.temperature = temperature;
         this.json = json;
         this.requestTimeoutSeconds = requestTimeoutSeconds;
-        String fingerprint = support.hash(Map.of("baseUrl", baseUrl, "model", modelName, "outputLimit", outputLimit, "temperature", temperature,
-                "requestTimeoutSeconds", requestTimeoutSeconds, "promptVersion", SampleGenerationWorkflow.VERSION, "adapterVersion", "ollama-generator-v1"));
+        // 使用固定顺序的TreeMap生成配置快照，避免Map.of的无序遍历导致应用重启后profileRef变化。
+        // profileRef属于生产计划的配置身份；同一组配置必须跨进程、跨重启得到同一个指纹。
+        Map<String, Object> fingerprintSource = new TreeMap<>();
+        fingerprintSource.put("adapterVersion", "ollama-generator-v1");
+        fingerprintSource.put("baseUrl", baseUrl);
+        fingerprintSource.put("model", modelName);
+        fingerprintSource.put("outputLimit", outputLimit);
+        fingerprintSource.put("promptVersion", SampleGenerationWorkflow.VERSION);
+        fingerprintSource.put("requestTimeoutSeconds", requestTimeoutSeconds);
+        fingerprintSource.put("temperature", temperature);
+        String fingerprint = support.hash(fingerprintSource);
         this.profile = new Profile("genprofile_" + fingerprint, enabled && !modelName.isBlank(), modelName, outputLimit);
     }
 

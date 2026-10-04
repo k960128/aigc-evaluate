@@ -110,6 +110,61 @@ public class SampleProductionService {
         return taskResponse(row);
     }
 
+    /**
+     * 重置生产计划不是覆盖旧计划，而是创建一个新的冻结计划。
+     *
+     * 旧计划可能引用应用重启前的生成角色快照；重置时保留原种子、变异、风险、预算和调度定义，
+     * 只重新读取当前生成角色并写入新的generatorProfileRef。新计划默认不启用定时任务，避免重置动作
+     * 意外补发旧计划的调度槽位；原计划和原批次仍可继续审计。
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public FactoryResponses.Task resetTask(String sourceTaskId, FactoryRequests.ResetTask request) {
+        var p = principals.currentPrincipal();
+        var source = authorizedTask(p.tenantId(), p.actorId(), sourceTaskId);
+        String resetHash = json.hash(new ResetTaskIdentity(sourceTaskId, request.idempotencyKey(), request.name()));
+
+        // 先处理幂等回放；即使当前模型配置后来不可用，也应返回首次创建的新计划。
+        var old = tasks.selectOne(new LambdaQueryWrapper<AgentSampleTaskDO>()
+                .eq(AgentSampleTaskDO::getTenantId, p.tenantId())
+                .eq(AgentSampleTaskDO::getActorId, p.actorId())
+                .eq(AgentSampleTaskDO::getIdempotencyKey, request.idempotencyKey()));
+        if (old != null) {
+            same(resetHash, old.getRequestHash());
+            return taskResponse(old);
+        }
+
+        var profile = generator.profile();
+        if (!profile.available()) throw error(SampleFactoryErrorCode.GENERATOR_UNAVAILABLE);
+
+        var sourceSpec = spec(source);
+        var resetSpec = new GenerationSpec(sourceSpec.seedId(), sourceSpec.seedVersion(), profile.profileRef(),
+                sourceSpec.promptVersion(), sourceSpec.riskId(), sourceSpec.ruleSetVersion(), sourceSpec.quantity(),
+                sourceSpec.mutations(), sourceSpec.topicTerms(), sourceSpec.minLength(), sourceSpec.maxLength(),
+                sourceSpec.maxRewrites(), sourceSpec.preconditions(), sourceSpec.assertionDescription());
+        var sourceBudget = budget(source);
+        var sourceSchedule = schedule(source);
+        seed(p.tenantId(), p.actorId(), resetSpec.seedId());
+
+        var row = new AgentSampleTaskDO();
+        row.setTaskId(id("sptask_"));
+        row.setTenantId(p.tenantId());
+        row.setActorId(p.actorId());
+        row.setIdempotencyKey(request.idempotencyKey());
+        row.setRequestHash(resetHash);
+        row.setName(request.name());
+        row.setActivityId(source.getActivityId());
+        row.setAuthorizationRef(source.getAuthorizationRef());
+        row.setSpecJson(json.write(resetSpec));
+        row.setBudgetJson(json.write(sourceBudget));
+        row.setScheduleJson(sourceSchedule == null ? null : json.write(sourceSchedule));
+        row.setScheduleEnabled(false);
+        row.setNextFireAt(sourceSchedule == null ? null : json.utc(sourceSchedule.at(sourceSchedule.startDate())));
+        row.setVersion(0L);
+        row.setCreatedAt(now());
+        tasks.insert(row);
+        return taskResponse(row);
+    }
+
     /** 手动运行或补跑均使用新批次；精确计划槽位唯一，补跑不能覆盖原批次。 */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public FactoryResponses.Run start(String taskId, FactoryRequests.Run request) {
@@ -361,5 +416,9 @@ public class SampleProductionService {
 
     private ClientException error(SampleFactoryErrorCode code) {
         return new ClientException(code.message(), code);
+    }
+
+    /** 重置请求的幂等摘要同时绑定来源计划，避免同一个请求键被错误回放到另一计划。 */
+    private record ResetTaskIdentity(String sourceTaskId, String idempotencyKey, String name) {
     }
 }
