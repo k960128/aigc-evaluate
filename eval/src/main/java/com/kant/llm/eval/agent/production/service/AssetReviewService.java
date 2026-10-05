@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.kant.agent.service.production.SampleQualityWorkflow;
+import com.kant.agent.service.production.SampleReflectionAgent;
 import com.kant.framework.exception.ClientException;
 import com.kant.llm.eval.agent.probe.application.ProbePrincipalProvider;
 import com.kant.llm.eval.agent.production.dao.entity.*;
@@ -85,15 +86,20 @@ public class AssetReviewService {
         if (row.getVersion() != request.expectedVersion().longValue()) throw error(SampleFactoryErrorCode.VERSION_CONFLICT);
         var quality = json.read(row.getQualityJson(), SampleQualityWorkflow.Report.class);
         if (!"PENDING_REVIEW".equals(row.getStatus()) || row.getDuplicateOfCandidateId() != null
-                || !"PASS".equals(quality.outcome()) || !SampleQualityWorkflow.VERSION.equals(quality.version())) {
+                || !"PASS".equals(quality.outcome()) || !SampleReflectionAgent.supportedQualityVersion(quality.version())) {
             throw error(SampleFactoryErrorCode.INVALID_REQUEST);
         }
         // 准入时重新核对质量版本、生成事实与原文摘要，不能只相信前端展示的PASS标签。
         candidates.verifyContent(row);
-        var generation = candidates.detail(candidateId).generation();
+        var detail = candidates.detail(candidateId);
+        var generation = detail.generation();
         if (!"GENERATED".equals(generation.status()) || row.getContent() == null || row.getContent().isBlank()) {
             throw error(SampleFactoryErrorCode.PERSISTENCE_ERROR);
         }
+        // 新版综合PASS必须有同轮已确认Critic PASS，不能仅靠候选状态跳过评审；旧规则报告仍按原边界审核。
+        if (SampleReflectionAgent.QUALITY_VERSION.equals(quality.version())
+                && (detail.reflection() == null || !"PASS".equals(detail.reflection().outcome())))
+            throw error(SampleFactoryErrorCode.PERSISTENCE_ERROR);
         boolean approve = request.decision() == FactoryRequests.Review.Decision.APPROVE;
         if (approve && !request.acknowledgeQualityOnly()) throw error(SampleFactoryErrorCode.INVALID_REQUEST);
         String reviewId = id("sreview_");

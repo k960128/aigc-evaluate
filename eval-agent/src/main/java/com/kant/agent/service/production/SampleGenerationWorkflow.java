@@ -1,8 +1,8 @@
 package com.kant.agent.service.production;
 
 /**
- * 结构化生成 + 有界质量反馈改写的提示词契约，不引入自由ReAct工具循环。
- * 借鉴Reflection的有限改写模式，由数据库明确管理轮次；不直接复制Demo的隐式调用与日志。
+ * Reflection Agent中Actor角色的结构化生成提示词契约，不引入自由ReAct工具循环。
+ * 保留v1提示词以兼容前端配置；架构和Critic版本由SampleReflectionAgent独立维护并进入模型配置指纹。
  */
 public final class SampleGenerationWorkflow {
     /** 提示词契约版本，进入计划和角色指纹；此类只定义契约，不执行生成循环。 */

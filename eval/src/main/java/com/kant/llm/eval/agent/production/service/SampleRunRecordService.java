@@ -4,6 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.kant.agent.contract.production.*;
 import com.kant.agent.port.production.SampleGenerationPort;
+import com.kant.agent.port.production.SampleReflectionPort;
+import com.kant.agent.service.production.SampleGenerationWorkflow;
+import com.kant.agent.service.production.SampleReflectionAgent;
 import com.kant.agent.service.production.SampleQualityWorkflow;
 import com.kant.framework.exception.ClientException;
 import com.kant.llm.eval.agent.production.dao.entity.*;
@@ -19,7 +22,7 @@ import java.time.*;
 import java.util.*;
 
 /**
- * D05单批生产状态机及调用账本：维护租约、操作事实、Token预留、候选与执行检查点。
+ * D05 Reflection持久化运行时：维护租约、生成/评审操作事实、Token预留、候选与阶段检查点。
  * <p>一次生成依次经过prepare预留、markCalling发送围栏、recordResponse记录响应和settle结算。
  * 这些步骤各自使用短事务，实际模型请求在事务外执行，避免持锁等待远端响应。</p>
  * <p>操作SUCCEEDED只表示响应已确认，不表示质量通过。CALLING/UNKNOWN结果未确认时保留预留，
@@ -41,16 +44,20 @@ public class SampleRunRecordService {
     private final FactoryJsonSupport json;
     /** 无模型调用的确定性质量规则。 */
     private final SampleQualityWorkflow quality = new SampleQualityWorkflow();
+    /** 唯一的生成/评审/改写决策主体，本服务只把决策和账目原子落库。 */
+    private final SampleReflectionAgent agent;
 
     /** 注入账本与计划依赖，不在构造时启动Worker或生成操作。 */
     public SampleRunRecordService(AgentSampleRunMapper runs, AgentSampleOperationMapper operations, AgentSampleCandidateMapper candidates,
-                                  AgentSampleContentIndexMapper index, SampleProductionService production, FactoryJsonSupport json) {
+                                  AgentSampleContentIndexMapper index, SampleProductionService production, FactoryJsonSupport json,
+                                  SampleReflectionAgent agent) {
         this.runs = runs;
         this.operations = operations;
         this.candidates = candidates;
         this.index = index;
         this.production = production;
         this.json = json;
+        this.agent = agent;
     }
 
     /** 按服务端主体读取批次；外部入口不能自行传入他人的tenant/actor。 */
@@ -114,7 +121,7 @@ public class SampleRunRecordService {
     }
 
     /**
-     * 固定操作、调用次数与完整Token预留同事务保存，一个槽位的一次改写只有一个操作ID。
+     * 固定操作、调用次数与完整Token预留同事务保存；同轮的生成与评审各自拥有唯一操作ID。
      * @param runId 当前生产批次
      * @param worker 必须仍持有租约的执行者
      * @param command 已绑定生成角色、系统提示词及本轮输入的固定命令
@@ -126,6 +133,11 @@ public class SampleRunRecordService {
         var r = owned(runId, worker);
         if (r.getPendingOperationId() != null) return false;
         if (!"RUNNING".equals(r.getStatus())) throw error(SampleFactoryErrorCode.INVALID_REQUEST);
+        if (!SampleReflectionAgent.VERSION.equals(r.getWorkflowVersion())) {
+            terminal(r, "FAILED", "REFLECTION_UPGRADE_REQUIRED");
+            save(r);
+            return false;
+        }
         if (Boolean.TRUE.equals(r.getStopRequested()) || !r.getDeadlineAt().isAfter(now())) {
             boolean stopped = Boolean.TRUE.equals(r.getStopRequested());
             terminal(r, stopped ? "STOPPED" : "FAILED", stopped ? "STOP_REQUESTED" : "DEADLINE_EXPIRED");
@@ -138,6 +150,9 @@ public class SampleRunRecordService {
         var usage = json.read(r.getUsageJson(), ProductionBudget.Usage.class);
         if (!command.profileRef().equals(spec.generatorProfileRef()) || !command.operationId().equals(operationId(r)))
             throw error(SampleFactoryErrorCode.INVALID_REQUEST);
+        String expectedPrompt = phase(r) == SampleReflectionAgent.Phase.REFLECT
+                ? SampleReflectionAgent.CRITIC_PROMPT : SampleGenerationWorkflow.SYSTEM_PROMPT;
+        if (!expectedPrompt.equals(command.systemPrompt())) throw error(SampleFactoryErrorCode.INVALID_REQUEST);
         // 有余额也可能不足以覆盖下一次预留；先扣除实际消耗和所有尚未释放的预留再比较。
         if (reservation <= 0 || usage.agentCalls() >= policy.maxAgentCalls() || reservation > policy.maxTokens() - usage.tokens() - usage.reservedTokens()) {
             terminal(r, "FAILED", "PRODUCTION_BUDGET_EXHAUSTED");
@@ -149,6 +164,7 @@ public class SampleRunRecordService {
         op.setRunId(runId);
         op.setOrdinal(r.getOrdinal());
         op.setRewriteRound(r.getRewriteRound());
+        op.setOperationKind(phase(r).name());
         op.setParentCandidateId(r.getParentCandidateId());
         op.setCommandJson(json.write(command));
         op.setReservationTokens(reservation);
@@ -178,7 +194,20 @@ public class SampleRunRecordService {
         if (result == null || result.status() == null || !Set.of("GENERATED", "REFUSED", "INVALID").contains(result.status()) || result.inputTokens() < 0 || result.outputTokens() < 0
                 || result.measurement() == null || !Set.of("ACTUAL", "ESTIMATED").contains(result.measurement()))
             throw error(SampleFactoryErrorCode.PERSISTENCE_ERROR);
+        confirmResponse(operationId, dispatchWorker, "GENERATE", result);
+    }
+
+    /** 评审是另一笔物理调用，单独确认结果；模型意见经过端口契约验证，不能直接批准候选。 */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordReflectionResponse(String operationId, String dispatchWorker, SampleReflectionPort.Result result) {
+        if (result == null) throw error(SampleFactoryErrorCode.PERSISTENCE_ERROR);
+        confirmResponse(operationId, dispatchWorker, "REFLECT", result);
+    }
+
+    /** 只允许原发送者为匹配角色的未确认操作追加一次响应；失租时也不能修改批次检查点。 */
+    private void confirmResponse(String operationId, String dispatchWorker, String kind, Object result) {
         int changed = operations.update(null, new LambdaUpdateWrapper<AgentSampleOperationDO>().eq(AgentSampleOperationDO::getOperationId, operationId)
+                .eq(AgentSampleOperationDO::getOperationKind, kind)
                 .eq(AgentSampleOperationDO::getDispatchWorkerId, dispatchWorker).in(AgentSampleOperationDO::getStatus, "CALLING", "UNKNOWN")
                 .set(AgentSampleOperationDO::getResultJson, json.write(result)).set(AgentSampleOperationDO::getStatus, "SUCCEEDED"));
         if (changed != 1) throw error(SampleFactoryErrorCode.INVALID_REQUEST);
@@ -216,9 +245,9 @@ public class SampleRunRecordService {
     }
 
     /**
-     * 结算已确认响应：候选、质量报告、去重索引、Token账本与槽位检查点在同一事务内提交。
-     * <p>即使响应为REFUSED/INVALID也保存候选事实并计入已发生的用量。
-     * 待人工审核只是候选状态，不暂停批次，Worker可继续处理后续槽位。</p>
+     * 结算一个物理调用：由Reflection Agent决定下一步，再原子保存候选、报告、账目和检查点。
+     * <p>生成的硬规则通过后先保存REFLECTING，下一笔操作才调用Critic；只有综合PASS才能去重并待审。
+     * 评审不会再创建一条候选，而是更新同一轮候选的质量报告并递增版本。每次改写仍创建新候选。</p>
      * @param runId 待结算批次，其pendingOperationId必须指向当前槽位的SUCCEEDED操作
      * @param worker 当前有效租约持有者，不一定是原请求发送者
      */
@@ -230,46 +259,31 @@ public class SampleRunRecordService {
         var task = production.authorizedTask(r.getTenantId(), r.getActorId(), r.getTaskId());
         var spec = production.spec(task);
         var policy = production.budget(task);
-        var result = json.read(op.getResultJson(), SampleGenerationPort.Result.class);
-        // 质检是本地规则，不是模型安全判定；原响应已确认和质检通过属于不同维度。
-        var report = quality.inspect(spec, result);
+        var settlement = phase(r) == SampleReflectionAgent.Phase.REFLECT
+                ? settleReflection(r, op, spec) : settleGeneration(r, op, spec);
+        var c = settlement.candidate();
+        var decision = settlement.decision();
         var usage = json.read(r.getUsageJson(), ProductionBudget.Usage.class);
-        long tokens = Math.addExact(usage.tokens(), Math.addExact(result.inputTokens(), result.outputTokens()));
-        var c = new AgentSampleCandidateDO();
-        // 由操作身份导出候选身份，配合事务和唯一键避免恢复时为同一响应生成多个候选。
-        c.setCandidateId("candidate_" + json.digest(op.getOperationId()).substring(0, 32));
-        c.setTaskId(r.getTaskId());
-        c.setRunId(runId);
-        c.setTenantId(r.getTenantId());
-        c.setActorId(r.getActorId());
-        c.setOperationId(op.getOperationId());
-        c.setOrdinal(op.getOrdinal());
-        c.setRewriteRound(op.getRewriteRound());
-        c.setParentCandidateId(op.getParentCandidateId());
-        c.setSeedId(spec.seedId());
-        c.setContent(result.content());
-        c.setContentHash(result.content() == null ? null : json.digest(result.content()));
-        c.setQualityJson(json.write(report));
-        c.setStatus("PASS".equals(report.outcome()) ? "PENDING_REVIEW" : "QUALITY_REJECTED");
-        c.setVersion(0L);
-        c.setCreatedAt(now());
-        candidates.insert(c);
-        if ("PASS".equals(report.outcome())) deduplicate(c);
+        long tokens = Math.addExact(usage.tokens(), Math.addExact(settlement.inputTokens(), settlement.outputTokens()));
+        if ("PASS".equals(decision.report().outcome())) deduplicate(c);
         r.setPendingOperationId(null);
         r.setUsageJson(json.write(new ProductionBudget.Usage(usage.agentCalls(), tokens, usage.reservedTokens() - op.getReservationTokens())));
-        // 只有REVISE允许有限改写；拒绝、重复或低质量不会无限补足“通过数量”。
-        // 下一轮仍需经过prepare预留检查，这里仅判断是否还有改写资格。
-        boolean revise = "REVISE".equals(report.outcome()) && r.getRewriteRound() < spec.maxRewrites() && !Boolean.TRUE.equals(r.getStopRequested())
-                && tokens <= policy.maxTokens() && r.getDeadlineAt().isAfter(now());
-        if (revise) {
-            r.setParentCandidateId(c.getCandidateId());
-            r.setRewriteRound(r.getRewriteRound() + 1);
-        } else {
-            r.setOrdinal(r.getOrdinal() + 1);
-            r.setRewriteRound(0);
-            r.setParentCandidateId(null);
+        // Agent唯一决定阶段和改写资格；此处只落库，不再独立判断maxRewrites或运行第二套改写循环。
+        switch (decision.next()) {
+            case REFLECT -> r.setPhase(SampleReflectionAgent.Phase.REFLECT.name());
+            case REWRITE -> {
+                r.setPhase(SampleReflectionAgent.Phase.GENERATE.name());
+                r.setParentCandidateId(c.getCandidateId());
+                r.setRewriteRound(r.getRewriteRound() + 1);
+            }
+            case NEXT_SLOT -> {
+                r.setPhase(SampleReflectionAgent.Phase.GENERATE.name());
+                r.setOrdinal(r.getOrdinal() + 1);
+                r.setRewriteRound(0);
+                r.setParentCandidateId(null);
+            }
         }
-        // 停止、实际超额和超期优先于完成；COMPLETED只表示根槽位全部结束，不代表全部合格或已审核。
+        // 无论Agent建议什么，工程边界优先；下次生成或评审都还要单独经过prepare预留检查。
         if (Boolean.TRUE.equals(r.getStopRequested())) terminal(r, "STOPPED", "STOP_REQUESTED");
         else if (tokens > policy.maxTokens()) terminal(r, "FAILED", "TOKEN_BUDGET_EXCEEDED");
         else if (!r.getDeadlineAt().isAfter(now())) terminal(r, "FAILED", "DEADLINE_EXPIRED");
@@ -280,6 +294,55 @@ public class SampleRunRecordService {
         }
         save(r);
     }
+
+    /** 生成响应落成不可变正文候选。硬规则未通过不调用Critic，拒绝/非法生成也保留记录和消耗。 */
+    private Settlement settleGeneration(AgentSampleRunDO r, AgentSampleOperationDO op, GenerationSpec spec) {
+        var result = json.read(op.getResultJson(), SampleGenerationPort.Result.class);
+        var decision = SampleReflectionAgent.VERSION.equals(r.getWorkflowVersion())
+                ? agent.afterGeneration(spec, r.getRewriteRound(), result) : agent.settleLegacy(spec, result);
+        var c = new AgentSampleCandidateDO();
+        // 由操作身份导出候选身份，配合事务和唯一键避免恢复时为同一响应生成多个候选。
+        c.setCandidateId("candidate_" + json.digest(op.getOperationId()).substring(0, 32));
+        c.setTaskId(r.getTaskId());
+        c.setRunId(r.getRunId());
+        c.setTenantId(r.getTenantId());
+        c.setActorId(r.getActorId());
+        c.setOperationId(op.getOperationId());
+        c.setOrdinal(op.getOrdinal());
+        c.setRewriteRound(op.getRewriteRound());
+        c.setParentCandidateId(op.getParentCandidateId());
+        c.setSeedId(spec.seedId());
+        c.setContent(result.content());
+        c.setContentHash(result.content() == null ? null : json.digest(result.content()));
+        c.setQualityJson(json.write(decision.report()));
+        c.setStatus(candidateStatus(decision));
+        c.setVersion(0L);
+        c.setCreatedAt(now());
+        candidates.insert(c);
+        return new Settlement(c, decision, result.inputTokens(), result.outputTokens());
+    }
+
+    /** 评审只更新对应生成候选的质量，不覆盖正文；批次行锁和候选状态共同阻止重复结算。 */
+    private Settlement settleReflection(AgentSampleRunDO r, AgentSampleOperationDO op, GenerationSpec spec) {
+        var c = currentCandidate(r);
+        var result = json.read(op.getResultJson(), SampleReflectionPort.Result.class);
+        var decision = agent.afterReflection(spec, r.getRewriteRound(), c.getContent(), result);
+        c.setQualityJson(json.write(decision.report()));
+        c.setStatus(candidateStatus(decision));
+        c.setVersion(c.getVersion() + 1);
+        candidates.updateById(c);
+        return new Settlement(c, decision, result.inputTokens(), result.outputTokens());
+    }
+
+    /** 明确区分尚未评审与质量通过；达到改写上限不会进入待人工审核。 */
+    private String candidateStatus(SampleReflectionAgent.Decision decision) {
+        if (decision.next() == SampleReflectionAgent.Next.REFLECT) return "REFLECTING";
+        return "PASS".equals(decision.report().outcome()) ? "PENDING_REVIEW" : "QUALITY_REJECTED";
+    }
+
+    /** 事务内结算中间值，不作为API或数据库JSON结构。 */
+    private record Settlement(AgentSampleCandidateDO candidate, SampleReflectionAgent.Decision decision,
+                              long inputTokens, long outputTokens) { }
 
     /** 跨批次规范精确去重，不冒充语义去重；竞争唯一键失败只查胜者，不重复生成。 */
     private void deduplicate(AgentSampleCandidateDO c) {
@@ -316,7 +379,7 @@ public class SampleRunRecordService {
     }
 
     /**
-     * 人工请求停止新增生成，expectedVersion来自批次；状态变更与命令回执同事务保存。
+     * 人工请求停止新增生成及评审，expectedVersion来自批次；状态变更与命令回执同事务保存。
      * 有在途操作时仅记录意图，不能承诺取消供应商请求；无待结算操作时立即转STOPPED。
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
@@ -333,14 +396,52 @@ public class SampleRunRecordService {
         r.setStopRequested(true);
         if (r.getPendingOperationId() == null) terminal(r, "STOPPED", "STOP_REQUESTED");
         save(r);
-        var result = new FactoryResponses.Control(runId, r.getVersion(), null, true, "停止新增生成，保留在途和迟到事实");
+        var result = new FactoryResponses.Control(runId, r.getVersion(), null, true, "停止新增生成与评审，保留在途和迟到事实");
         production.saveControl(runId, request.idempotencyKey(), hash, result);
         return result;
     }
 
-    /** 由批次、0基根槽位、改写轮次确定操作身份；恢复同一检查点不会换成新的调用身份。 */
+    /** 按批次当前阶段生成固定操作身份；生成ID保持旧算法，评审使用独立命名空间。 */
     public String operationId(AgentSampleRunDO r) {
-        return "genop_" + json.digest(r.getRunId() + ":" + r.getOrdinal() + ":" + r.getRewriteRound()).substring(0, 32);
+        return operationId(r.getRunId(), r.getOrdinal(), r.getRewriteRound(), phase(r));
+    }
+
+    /** 相同槽位同轮次的Actor与Critic永不共用操作ID，查询历史评审时也使用相同算法。 */
+    public String operationId(String runId, int ordinal, int rewriteRound, SampleReflectionAgent.Phase phase) {
+        String source = runId + ":" + ordinal + ":" + rewriteRound;
+        return phase == SampleReflectionAgent.Phase.GENERATE
+                ? "genop_" + json.digest(source).substring(0, 32)
+                : "refop_" + json.digest(source + ":REFLECT").substring(0, 32);
+    }
+
+    /** 严格恢复持久化阶段，不用默认GENERATE掩盖未知或损坏的阶段。 */
+    public SampleReflectionAgent.Phase phase(AgentSampleRunDO run) {
+        if (!SampleReflectionAgent.VERSION.equals(run.getWorkflowVersion()) && !SampleGenerationWorkflow.VERSION.equals(run.getWorkflowVersion()))
+            throw error(SampleFactoryErrorCode.PERSISTENCE_ERROR);
+        if ("GENERATE".equals(run.getPhase())) return SampleReflectionAgent.Phase.GENERATE;
+        if ("REFLECT".equals(run.getPhase()) && SampleReflectionAgent.VERSION.equals(run.getWorkflowVersion()))
+            return SampleReflectionAgent.Phase.REFLECT;
+        throw error(SampleFactoryErrorCode.PERSISTENCE_ERROR);
+    }
+
+    /** 读取同槽位同轮的待评审候选并核对正文、父链和生成响应，不允许借其他候选完成评审。 */
+    public AgentSampleCandidateDO currentCandidate(AgentSampleRunDO run) {
+        if (phase(run) != SampleReflectionAgent.Phase.REFLECT) throw error(SampleFactoryErrorCode.INVALID_REQUEST);
+        String generationId = operationId(run.getRunId(), run.getOrdinal(), run.getRewriteRound(), SampleReflectionAgent.Phase.GENERATE);
+        var c = candidates.selectOne(new LambdaQueryWrapper<AgentSampleCandidateDO>()
+                .eq(AgentSampleCandidateDO::getOperationId, generationId).eq(AgentSampleCandidateDO::getRunId, run.getRunId())
+                .eq(AgentSampleCandidateDO::getTenantId, run.getTenantId()).eq(AgentSampleCandidateDO::getActorId, run.getActorId()));
+        if (c == null || !"REFLECTING".equals(c.getStatus()) || !run.getOrdinal().equals(c.getOrdinal())
+                || !run.getRewriteRound().equals(c.getRewriteRound()) || !Objects.equals(run.getParentCandidateId(), c.getParentCandidateId())
+                || c.getContent() == null || !Objects.equals(c.getContentHash(), json.digest(c.getContent())))
+            throw error(SampleFactoryErrorCode.PERSISTENCE_ERROR);
+        var op = operation(generationId);
+        if (!run.getRunId().equals(op.getRunId()) || !run.getOrdinal().equals(op.getOrdinal())
+                || !run.getRewriteRound().equals(op.getRewriteRound()) || !Objects.equals(run.getParentCandidateId(), op.getParentCandidateId())
+                || !"GENERATE".equals(op.getOperationKind()) || !"SUCCEEDED".equals(op.getStatus())
+                || !Objects.equals(json.read(op.getResultJson(), SampleGenerationPort.Result.class).content(), c.getContent()))
+            throw error(SampleFactoryErrorCode.PERSISTENCE_ERROR);
+        return c;
     }
 
     /** 恢复/结算前校验固定操作归属当前检查点，不能借其他批次或轮次的回执推进。 */
@@ -348,7 +449,8 @@ public class SampleRunRecordService {
         if (run.getPendingOperationId() == null) throw error(SampleFactoryErrorCode.INVALID_REQUEST);
         var op = operation(run.getPendingOperationId());
         if (!run.getRunId().equals(op.getRunId()) || !run.getOrdinal().equals(op.getOrdinal()) || !run.getRewriteRound().equals(op.getRewriteRound())
-                || !Objects.equals(run.getParentCandidateId(), op.getParentCandidateId()) || !operationId(run).equals(op.getOperationId()))
+                || !Objects.equals(run.getParentCandidateId(), op.getParentCandidateId()) || !operationId(run).equals(op.getOperationId())
+                || !phase(run).name().equals(op.getOperationKind()))
             throw error(SampleFactoryErrorCode.PERSISTENCE_ERROR);
         return op;
     }
@@ -368,8 +470,16 @@ public class SampleRunRecordService {
         return r;
     }
 
-    /** 仅修改内存对象的终态、原因和结束时间；由调用方save持久化，租约由Worker最终释放。 */
+    /** 结束时将未完成反思的候选明确拒绝，不能遗留一个永远待评审的候选；与批次终态同事务提交。 */
     private void terminal(AgentSampleRunDO r, String status, String reason) {
+        if ("REFLECT".equals(r.getPhase()) && r.getPendingOperationId() == null) {
+            var c = currentCandidate(r);
+            c.setStatus("QUALITY_REJECTED");
+            c.setQualityJson(json.write(new SampleQualityWorkflow.Report(SampleReflectionAgent.QUALITY_VERSION,
+                    "REJECT", List.of("模型反思评审未完成，批次结束：" + reason))));
+            c.setVersion(c.getVersion() + 1);
+            candidates.updateById(c);
+        }
         r.setStatus(status);
         r.setErrorCode(reason);
         r.setFinishedAt(now());
@@ -382,6 +492,7 @@ public class SampleRunRecordService {
         int count = runs.update(null, new LambdaUpdateWrapper<AgentSampleRunDO>().eq(AgentSampleRunDO::getId, r.getId()).eq(AgentSampleRunDO::getVersion, previous)
                 .set(AgentSampleRunDO::getVersion, r.getVersion()).set(AgentSampleRunDO::getStatus, r.getStatus()).set(AgentSampleRunDO::getUsageJson, r.getUsageJson())
                 .set(AgentSampleRunDO::getOrdinal, r.getOrdinal()).set(AgentSampleRunDO::getRewriteRound, r.getRewriteRound())
+                .set(AgentSampleRunDO::getPhase, r.getPhase())
                 .set(AgentSampleRunDO::getParentCandidateId, r.getParentCandidateId()).set(AgentSampleRunDO::getPendingOperationId, r.getPendingOperationId())
                 .set(AgentSampleRunDO::getStopRequested, r.getStopRequested()).set(AgentSampleRunDO::getErrorCode, r.getErrorCode()).set(AgentSampleRunDO::getFinishedAt, r.getFinishedAt()));
         if (count != 1) throw error(SampleFactoryErrorCode.VERSION_CONFLICT);

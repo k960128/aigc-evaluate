@@ -4,8 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.kant.agent.port.production.SampleGenerationPort;
+import com.kant.agent.port.production.SampleReflectionPort;
 import com.kant.agent.service.budget.TokenEstimator;
 import com.kant.agent.service.production.SampleGenerationWorkflow;
+import com.kant.agent.service.production.SampleReflectionAgent;
 import com.kant.llm.eval.agent.production.support.FactoryJsonSupport;
 import io.micrometer.observation.ObservationRegistry;
 import org.springframework.ai.chat.client.ChatClient;
@@ -22,13 +24,17 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 
 /**
- * 独立Ollama生成角色，默认关闭。无工具、检索、记忆、反思Advisor或请求正文日志。
- * 一次操作只进行一次显式call，不因解析失败或模型拒绝自动补发。
+ * Reflection的Actor/Critic适配器，默认关闭；当前两种角色共用同一模型配置，但分别请求、分别计量。
+ * 无工具、检索、记忆、隐藏反思Advisor或正文日志；一次操作只进行一次显式call。
+ * 同模型评审不是独立安全验证，不因解析失败、评审未通过或模型拒绝在适配器中补发。
  */
 @Component
-public class OllamaSampleGenerationAdapter implements SampleGenerationPort {
+public class OllamaSampleGenerationAdapter implements SampleGenerationPort, SampleReflectionPort {
     /** 显式生成开关，仅配置启用不意味着模型服务可达。 */
     private final boolean enabled;
     /** 独立生成角色的Ollama地址，不是被测目标地址。 */
@@ -72,7 +78,10 @@ public class OllamaSampleGenerationAdapter implements SampleGenerationPort {
         // 使用固定顺序的TreeMap生成配置快照，避免Map.of的无序遍历导致应用重启后profileRef变化。
         // profileRef属于生产计划的配置身份；同一组配置必须跨进程、跨重启得到同一个指纹。
         Map<String, Object> fingerprintSource = new TreeMap<>();
-        fingerprintSource.put("adapterVersion", "ollama-generator-v1");
+        fingerprintSource.put("adapterVersion", "ollama-reflection-v1");
+        fingerprintSource.put("agentVersion", SampleReflectionAgent.VERSION);
+        fingerprintSource.put("criticVersion", SampleReflectionAgent.CRITIC_VERSION);
+        fingerprintSource.put("qualityVersion", SampleReflectionAgent.QUALITY_VERSION);
         fingerprintSource.put("baseUrl", baseUrl);
         fingerprintSource.put("model", modelName);
         fingerprintSource.put("outputLimit", outputLimit);
@@ -96,9 +105,67 @@ public class OllamaSampleGenerationAdapter implements SampleGenerationPort {
      * @throws IllegalStateException 配置不匹配或没有可确认响应，外层保守记录未知操作
      */
     @Override
-    public Result generate(Command command) {
+    public SampleGenerationPort.Result generate(Command command) {
+        var response = callOnce(command, SampleGenerationWorkflow.SYSTEM_PROMPT);
+        String raw = response.text();
+        long input = response.inputTokens();
+        long output = response.outputTokens();
+        String measurement = response.measurement();
+        // 非法结构仍按已收到响应结算，只保存分类和计量，不保存原始响应。
+        try {
+            if (raw.length() > 100000) return new SampleGenerationPort.Result("INVALID", null, "结构化响应过大", input, output, measurement);
+            JsonNode tree = json.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(raw);
+            if (tree == null || !tree.isObject())
+                return new SampleGenerationPort.Result("INVALID", null, "未返回单一JSON对象", input, output, measurement);
+            String status = tree.path("status").asText();
+            if ("REFUSED".equals(status))
+                return new SampleGenerationPort.Result("REFUSED", null, "生成模型拒绝该请求", input, output, measurement);
+            var content = tree.path("content");
+            if (!"GENERATED".equals(status) || !content.isTextual() || content.asText().length() > 10000)
+                return new SampleGenerationPort.Result("INVALID", null, "状态、正文类型或长度不满足契约", input, output, measurement);
+            return new SampleGenerationPort.Result("GENERATED", content.asText(), "", input, output, measurement);
+        } catch (java.io.IOException ex) {
+            return new SampleGenerationPort.Result("INVALID", null, "结构化响应解析失败", input, output, measurement);
+        }
+    }
+
+    /** 一次独立Critic请求；严格解析结果，不修补JSON，不在失败时调用第二次模型。 */
+    @Override
+    public SampleReflectionPort.Result reflect(Command command) {
+        var response = callOnce(command, SampleReflectionAgent.CRITIC_PROMPT);
+        try {
+            if (response.text().length() > 100000) return invalidReflection(response);
+            JsonNode tree = json.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(response.text());
+            if (tree == null || !tree.isObject() || !tree.path("outcome").isTextual() || !tree.path("issues").isArray())
+                return invalidReflection(response);
+            String outcome = tree.path("outcome").asText();
+            var issuesNode = tree.path("issues");
+            if (!Set.of("PASS", "REVISE", "REJECT").contains(outcome) || issuesNode.size() > 5)
+                return invalidReflection(response);
+            List<String> issues = new ArrayList<>();
+            for (JsonNode item : issuesNode) {
+                if (!item.isTextual() || item.asText().isBlank() || item.asText().length() > 500
+                        || item.asText().codePoints().anyMatch(c -> Character.isISOControl(c) && c != '\n' && c != '\r' && c != '\t'))
+                    return invalidReflection(response);
+                issues.add(item.asText());
+            }
+            if ("PASS".equals(outcome) != issues.isEmpty()) return invalidReflection(response);
+            return new SampleReflectionPort.Result(outcome, issues, response.inputTokens(), response.outputTokens(), response.measurement());
+        } catch (java.io.IOException ex) {
+            return invalidReflection(response);
+        }
+    }
+
+    /** 非法评审也是已确认响应，保留消耗并保守拒绝，不能伪装成通过或零消耗。 */
+    private SampleReflectionPort.Result invalidReflection(ModelResponse response) {
+        return new SampleReflectionPort.Result("INVALID", List.of("模型评审未返回合法的结构化质量结论"),
+                response.inputTokens(), response.outputTokens(), response.measurement());
+    }
+
+    /** 共享单次网络调用。原始文本仅在内存解析，不写入普通日志、观察器或数据库。 */
+    private ModelResponse callOnce(Command command, String expectedPrompt) {
         if (!enabled || !profile.available() || !profile.profileRef().equals(command.profileRef())
-                || !SampleGenerationWorkflow.SYSTEM_PROMPT.equals(command.systemPrompt()))
+                || !expectedPrompt.equals(command.systemPrompt()))
             throw new IllegalStateException("生成角色未启用或快照已变化");
         // 有限连接/读取超时只限制客户端等待，不等于供应商一定没有执行。
         var requestFactory = new JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build());
@@ -124,22 +191,9 @@ public class OllamaSampleGenerationAdapter implements SampleGenerationPort {
             output = usage.getCompletionTokens();
             measurement = "ACTUAL";
         }
-        // 非法结构仍按已收到响应结算，只保存分类和计量，不保存可能包含内部思维链的原始响应。
-        try {
-            if (raw.length() > 100000) return new Result("INVALID", null, "结构化响应过大", input, output, measurement);
-            // 只接受单一JSON对象，不剥离Markdown、不修补字段、不为凑足数量再次请求模型。
-            JsonNode tree = json.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(raw);
-            if (tree == null || !tree.isObject())
-                return new Result("INVALID", null, "未返回单一JSON对象", input, output, measurement);
-            String status = tree.path("status").asText();
-            if ("REFUSED".equals(status))
-                return new Result("REFUSED", null, "生成模型拒绝该请求", input, output, measurement);
-            var content = tree.path("content");
-            if (!"GENERATED".equals(status) || !content.isTextual() || content.asText().length() > 10000)
-                return new Result("INVALID", null, "状态、正文类型或长度不满足契约", input, output, measurement);
-            return new Result("GENERATED", content.asText(), "", input, output, measurement);
-        } catch (java.io.IOException ex) {
-            return new Result("INVALID", null, "结构化响应解析失败", input, output, measurement);
-        }
+        return new ModelResponse(raw, input, output, measurement);
     }
+
+    /** 单次网络响应的短期内存容器，不作为持久化契约或API响应。 */
+    private record ModelResponse(String text, long inputTokens, long outputTokens, String measurement) { }
 }

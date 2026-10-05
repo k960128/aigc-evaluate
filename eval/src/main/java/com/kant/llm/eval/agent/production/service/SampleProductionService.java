@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.kant.agent.contract.production.*;
 import com.kant.agent.port.production.SampleGenerationPort;
+import com.kant.agent.service.production.SampleReflectionAgent;
 import com.kant.framework.exception.ClientException;
 import com.kant.llm.eval.agent.probe.application.ProbePrincipalProvider;
 import com.kant.llm.eval.agent.production.dao.entity.*;
@@ -113,7 +114,8 @@ public class SampleProductionService {
             same(hash, old.getRequestHash());
             return taskResponse(old);
         }
-        // 每个根槽位至少预留一次调用的次数上限；这并不保证Token预算足够覆盖所有生成。
+        // 保留原最低次数门槛，允许有界尝试；Reflection正常通过通常需每槽位生成+评审两次。
+        // 次数和Token都不会自动扩容，较小预算可能在评审前耗尽，不能承诺所有槽位都能完成。
         seed(p.tenantId(), p.actorId(), request.spec().seedId());
         requireProfile(request.spec());
         if (request.budget().maxAgentCalls() < request.spec().quantity())
@@ -319,6 +321,8 @@ public class SampleProductionService {
         row.setTriggerKind(kind);
         row.setPlannedFor(json.utc(planned));
         row.setStatus("QUEUED");
+        row.setWorkflowVersion(SampleReflectionAgent.VERSION);
+        row.setPhase(SampleReflectionAgent.Phase.GENERATE.name());
         row.setVersion(0L);
         row.setUsageJson(json.write(new ProductionBudget.Usage(0, 0, 0)));
         row.setOrdinal(0);
@@ -427,7 +431,8 @@ public class SampleProductionService {
     public FactoryResponses.Run runResponse(AgentSampleRunDO r) {
         return new FactoryResponses.Run(r.getRunId(), r.getTaskId(), r.getStatus(), r.getVersion(), r.getTriggerKind(),
                 json.instant(r.getPlannedFor()), r.getOrdinal(), r.getRewriteRound(), r.getPendingOperationId(), json.read(r.getUsageJson(), ProductionBudget.Usage.class),
-                Boolean.TRUE.equals(r.getStopRequested()), r.getErrorCode(), json.instant(r.getCreatedAt()), json.instant(r.getDeadlineAt()), json.instant(r.getFinishedAt()));
+                Boolean.TRUE.equals(r.getStopRequested()), r.getErrorCode(), json.instant(r.getCreatedAt()), json.instant(r.getDeadlineAt()), json.instant(r.getFinishedAt()),
+                r.getWorkflowVersion(), r.getPhase());
     }
 
     /** 查询资源内控制命令回执；没有回执返回null，同键异参报冲突，命中则返回首次结果。 */

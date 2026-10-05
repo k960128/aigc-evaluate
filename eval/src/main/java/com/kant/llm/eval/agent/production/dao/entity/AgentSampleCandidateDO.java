@@ -26,7 +26,7 @@ public class AgentSampleCandidateDO {
     /** 仅对质量PASS候选计算的规范化摘要，按去重算法生成，不用于替代原文完整性检查。 */ private String normalizedHash;
     /** 重复来源候选。 */ private String duplicateOfCandidateId;
     /** Report的JSON：version检查器版本、outcome质量分类、issues问题列表，不是安全判定。 */ private String qualityJson;
-    /** PENDING_REVIEW待审、QUALITY_REJECTED质检拒绝、DUPLICATE重复、RETURNED退回、APPROVED批准。 */ private String status;
-    /** 人工审核资源版本，候选形成时0，审核后递增，与计划或批次版本无关。 */ private Long version;
+    /** REFLECTING待模型评审、PENDING_REVIEW待人工、QUALITY_REJECTED拒绝、DUPLICATE重复、RETURNED退回、APPROVED批准。 */ private String status;
+    /** 候选控制版本，形成时0，反思结算/终止收口/人工审核递增，与计划或批次版本无关。 */ private Long version;
     /** UTC生成时间。 */ private LocalDateTime createdAt;
 }

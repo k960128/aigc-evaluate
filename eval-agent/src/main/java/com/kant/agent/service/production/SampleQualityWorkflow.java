@@ -7,7 +7,7 @@ import java.text.Normalizer;
 import java.util.*;
 
 /**
- * 首版确定性质检：根据生成分类、正文长度、主题锚点和控制字符做本地判断，不调用模型。
+ * Reflection Agent的硬规则检查器：根据生成分类、正文长度、主题锚点和控制字符做本地判断，不调用模型。
  * PASS只是基础规则通过，不是语义相关性、完整隐私检测或目标安全验证。
  * 去重唯一性由持久化层保证，正式准入仍需人工审核。
  */
@@ -20,7 +20,7 @@ public final class SampleQualityWorkflow {
     /**
      * 不可变质量报告，也是有限改写的反馈资料。
      * @param version 检查器版本，不是候选审核版本
-     * @param outcome PASS通过、REVISE可改写、REJECT拒绝；能否改写还受外层预算控制
+     * @param outcome PASS通过、REVISE可改写、REJECT拒绝；Reflection综合报告还可为PENDING待模型评审
      * @param issues 质量问题列表，PASS通常为空，不是目标风险证据
      */
     public record Report(String version, String outcome, List<String> issues) {

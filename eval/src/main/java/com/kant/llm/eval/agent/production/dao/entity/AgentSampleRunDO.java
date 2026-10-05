@@ -38,6 +38,10 @@ public class AgentSampleRunDO {
     private LocalDateTime plannedFor;
     /** QUEUED排队、RUNNING执行、BLOCKED结果未知、STOPPED停止、COMPLETED槽位结束、FAILED失败。 */
     private String status;
+    /** 批次架构版本；升级前批次保留sample-generation-v1，不静默补做模型反思。 */
+    private String workflowVersion;
+    /** 当前物理调用阶段：GENERATE生成/改写，REFLECT模型评审；终态保留最后检查点。 */
+    private String phase;
     /** 批次控制版本。 */
     private Long version;
     /** Usage的JSON：agentCalls已受理次数、tokens已确认用量、reservedTokens未结算预留。 */
@@ -48,7 +52,7 @@ public class AgentSampleRunDO {
     private Integer rewriteRound;
     /** 当前改写父候选。 */
     private String parentCandidateId;
-    /** 待确认或待结算生成操作；SUCCEEDED但未settle时仍保留，结算后显式清空。 */
+    /** 待确认或待结算的生成/评审操作；SUCCEEDED但未settle时仍保留，结算后显式清空。 */
     private String pendingOperationId;
     /** 停止新增调用的意图，不保证已发送的供应商请求立刻取消，也不释放未知预算。 */
     private Boolean stopRequested;

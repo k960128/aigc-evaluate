@@ -2,6 +2,8 @@ package com.kant.llm.eval.agent.production.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.kant.agent.port.production.SampleGenerationPort;
+import com.kant.agent.port.production.SampleReflectionPort;
+import com.kant.agent.service.production.SampleReflectionAgent;
 import com.kant.agent.service.production.SampleQualityWorkflow;
 import com.kant.framework.exception.ClientException;
 import com.kant.llm.eval.agent.probe.application.ProbePrincipalProvider;
@@ -50,7 +52,7 @@ public class CandidateCaseService {
     /** 升序主键游标，最多100条；status只能使用候选状态，不与批次或质量状态混用。 */
     public FactoryResponses.Page<FactoryResponses.Candidate> list(String runId, String status, long afterId, int limit) {
         checkPage(afterId, limit);
-        if (status != null && !Set.of("PENDING_REVIEW", "QUALITY_REJECTED", "DUPLICATE", "APPROVED", "RETURNED").contains(status)) {
+        if (status != null && !Set.of("REFLECTING", "PENDING_REVIEW", "QUALITY_REJECTED", "DUPLICATE", "APPROVED", "RETURNED").contains(status)) {
             throw error(SampleFactoryErrorCode.INVALID_REQUEST);
         }
         var principal = principals.currentPrincipal();
@@ -117,7 +119,8 @@ public class CandidateCaseService {
         var page = rows.subList(0, Math.min(rows.size(), limit));
         var items = page.stream().map(op -> new FactoryResponses.Operation(op.getOperationId(), op.getOrdinal(),
                 op.getRewriteRound(), op.getParentCandidateId(), op.getStatus(), op.getReservationTokens(),
-                op.getResultJson() == null ? null : generation(op), json.instant(op.getCreatedAt()))).toList();
+                op.getResultJson() == null || !"GENERATE".equals(op.getOperationKind()) ? null : generation(op),
+                json.instant(op.getCreatedAt()), op.getOperationKind(), reflection(op))).toList();
         return new FactoryResponses.Page<>(items, page.isEmpty() ? afterId : page.get(page.size() - 1).getId(), more);
     }
 
@@ -139,19 +142,38 @@ public class CandidateCaseService {
     /** 组合候选与已确认生成事实，并核对二者属于同一批次；质量状态和人工准入状态分别返回。 */
     private FactoryResponses.Candidate response(AgentSampleCandidateDO row) {
         var op = records.operation(row.getOperationId());
-        if (!row.getRunId().equals(op.getRunId()) || !"SUCCEEDED".equals(op.getStatus())) {
+        if (!row.getRunId().equals(op.getRunId()) || !"SUCCEEDED".equals(op.getStatus()) || !"GENERATE".equals(op.getOperationKind())) {
             throw error(SampleFactoryErrorCode.PERSISTENCE_ERROR);
         }
         return new FactoryResponses.Candidate(row.getCandidateId(), row.getTaskId(), row.getRunId(), row.getSeedId(),
                 row.getOperationId(), row.getOrdinal(), row.getRewriteRound(), row.getParentCandidateId(), row.getContentHash(),
                 row.getDuplicateOfCandidateId(), generation(op), json.read(row.getQualityJson(), SampleQualityWorkflow.Report.class),
-                row.getStatus(), row.getVersion(), json.instant(row.getCreatedAt()));
+                row.getStatus(), row.getVersion(), json.instant(row.getCreatedAt()), candidateReflection(row));
     }
 
     /** 只投影生成分类、固定原因和计量，不将响应中的正文混入普通列表。 */
     private FactoryResponses.Generation generation(AgentSampleOperationDO op) {
         var result = json.read(op.getResultJson(), SampleGenerationPort.Result.class);
         return new FactoryResponses.Generation(result.status(), result.reason(), result.inputTokens(), result.outputTokens(), result.measurement());
+    }
+
+    /** 候选引用同轮Critic事实；历史纯规则候选和未发起评审的候选返回null，不伪造模型意见。 */
+    private FactoryResponses.Reflection candidateReflection(AgentSampleCandidateDO row) {
+        String operationId = records.operationId(row.getRunId(), row.getOrdinal(), row.getRewriteRound(), SampleReflectionAgent.Phase.REFLECT);
+        var op = operations.selectOne(new LambdaQueryWrapper<AgentSampleOperationDO>()
+                .eq(AgentSampleOperationDO::getOperationId, operationId).eq(AgentSampleOperationDO::getRunId, row.getRunId()));
+        if (op != null && (!"REFLECT".equals(op.getOperationKind()) || !row.getOrdinal().equals(op.getOrdinal())
+                || !row.getRewriteRound().equals(op.getRewriteRound()) || !Objects.equals(row.getParentCandidateId(), op.getParentCandidateId())))
+            throw error(SampleFactoryErrorCode.PERSISTENCE_ERROR);
+        return reflection(op);
+    }
+
+    /** 只投影已确认的结构化反思报告及计量，不暴露模型命令或原始响应。 */
+    private FactoryResponses.Reflection reflection(AgentSampleOperationDO op) {
+        if (op == null || !"REFLECT".equals(op.getOperationKind()) || !"SUCCEEDED".equals(op.getStatus()) || op.getResultJson() == null) return null;
+        var result = json.read(op.getResultJson(), SampleReflectionPort.Result.class);
+        return new FactoryResponses.Reflection(op.getOperationId(), result.outcome(), result.issues(),
+                result.inputTokens(), result.outputTokens(), result.measurement());
     }
 
     /** 游标必须非负，页大小限定1至100；限制通过后才允许拼接数值LIMIT。 */

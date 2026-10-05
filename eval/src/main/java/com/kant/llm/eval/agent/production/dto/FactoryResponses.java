@@ -63,11 +63,18 @@ public final class FactoryResponses {
      * @param createdAt 批次受理UTC时间
      * @param deadlineAt 从受理起算的固定期限，包含排队，恢复不延长
      * @param finishedAt 可空确定终态时间；BLOCKED不是确定终态
+     * @param workflowVersion 批次架构版本，sample-reflection-v1为新架构；历史回执缺省为sample-generation-v1
+     * @param phase 当前检查点GENERATE生成/改写或REFLECT评审；终态保留最后检查点，不表示仍在调用
      */
     public record Run(String runId, String taskId, String status, long version, String triggerKind, Instant plannedFor,
                       int completedSlots, int rewriteRound,
                       String pendingOperationId, ProductionBudget.Usage usage, boolean stopRequested, String errorCode,
-                      Instant createdAt, Instant deadlineAt, Instant finishedAt) {
+                      Instant createdAt, Instant deadlineAt, Instant finishedAt, String workflowVersion, String phase) {
+        /** 历史幂等回执缺少新增字段时只补原版本和原生成阶段，不升级其业务事实。 */
+        public Run {
+            workflowVersion = workflowVersion == null ? "sample-generation-v1" : workflowVersion;
+            phase = phase == null ? "GENERATE" : phase;
+        }
     }
 
     /**
@@ -83,16 +90,30 @@ public final class FactoryResponses {
      * @param contentHash 可空原文摘要，正文需单独读取
      * @param duplicateOfCandidateId 可空首个同规范键候选ID，不表示语义相似或风险归并
      * @param generation 生成分类与用量，不含响应正文
-     * @param quality 确定性质检报告，不是目标安全判定
-     * @param status PENDING_REVIEW待审、QUALITY_REJECTED质检拒绝、DUPLICATE重复、APPROVED批准、RETURNED退回
-     * @param version 候选审核版本，形成时0，审核后递增
+     * @param quality 综合质量报告，PENDING待反思、PASS通过、REVISE可改写、REJECT拒绝；历史版本只有规则检查
+     * @param status REFLECTING待模型评审、PENDING_REVIEW待人工、QUALITY_REJECTED质检拒绝、DUPLICATE重复、APPROVED批准、RETURNED退回
+     * @param version 候选控制版本，形成时0，反思结算或人工审核后递增，不能硬编码审核版本
      * @param createdAt 候选落库UTC时间
+     * @param reflection 可空模型反思结果；无评审或未确认时为空，不能据此推断通过或零消耗
      */
     public record Candidate(String candidateId, String taskId, String runId, String seedId, String operationId,
                             int ordinal, int rewriteRound, String parentCandidateId,
                             String contentHash, String duplicateOfCandidateId, Generation generation,
-                            SampleQualityWorkflow.Report quality, String status, long version, Instant createdAt) {
+                            SampleQualityWorkflow.Report quality, String status, long version, Instant createdAt,
+                            Reflection reflection) {
     }
+
+    /**
+     * 独立模型评审事实；反馈是受限业务资料，前端应按不可信纯文本展示。
+     * @param operationId 本次评审物理操作ID，不是生成操作ID
+     * @param outcome PASS通过、REVISE建议改写、REJECT拒绝、INVALID非法结构，不是人工审核决定
+     * @param issues 简短评审意见，PASS为空；不是目标风险证据或模型思维链
+     * @param inputTokens 评审输入Token，与generation中的用量分别记账
+     * @param outputTokens 评审输出Token
+     * @param measurement ACTUAL供应商实报或ESTIMATED估算
+     */
+    public record Reflection(String operationId, String outcome, List<String> issues, long inputTokens,
+                             long outputTokens, String measurement) { }
 
     /**
      * 单次模型响应的安全元数据。
@@ -115,10 +136,12 @@ public final class FactoryResponses {
      * @param reservationTokens 原始预留Token，结算不覆盖这个历史字段
      * @param result 可空确认响应元数据；空不能推断零消耗或允许重发
      * @param createdAt 首次预留UTC时间
+     * @param operationKind GENERATE生成/改写或REFLECT模型评审
+     * @param reflection 仅REFLECT已确认时存在；result仅用于GENERATE，不混用两种响应
      */
     public record Operation(String operationId, int ordinal, int rewriteRound, String parentCandidateId, String status,
                             long reservationTokens,
-                            Generation result, Instant createdAt) {
+                            Generation result, Instant createdAt, String operationKind, Reflection reflection) {
     }
 
     /**
