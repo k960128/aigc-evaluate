@@ -10,7 +10,10 @@ import java.util.Set;
  * 一次reflect只允许一次物理模型请求；生成与评审分别由外层持久化、预留和结算。
  */
 public interface SampleReflectionPort {
-    /** 使用与生成角色共同冻结的配置快照执行一次评审，不在端口内部循环改写。 */
+    /** 只读Critic独立配置身份、可用性和输出上限，不调用模型，不返回Actor配置。 */
+    SampleGenerationPort.Profile profile();
+
+    /** 按Critic自己的配置快照执行一次评审，不在端口内部循环改写。 */
     Result reflect(SampleGenerationPort.Command command);
 
     /**

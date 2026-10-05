@@ -5,6 +5,7 @@ import com.kant.agent.port.production.SampleReflectionPort;
 import com.kant.agent.service.budget.TokenEstimator;
 import com.kant.agent.service.production.SampleQualityWorkflow;
 import com.kant.agent.service.production.SampleReflectionAgent;
+import com.kant.llm.eval.agent.production.config.SampleFactoryModelConfiguration;
 import com.kant.llm.eval.agent.production.dao.entity.AgentSampleRunDO;
 import com.kant.llm.eval.agent.production.support.FactoryJsonSupport;
 import lombok.extern.slf4j.Slf4j;
@@ -30,21 +31,24 @@ public class SampleReflectionRunner {
     private final SampleGenerationPort generator;
     /** Critic单次评审端口，不在内部改写。 */
     private final SampleReflectionPort critic;
+    /** 计划绑定两个角色的组合快照；每阶段另取当前角色自己的身份及输出上限。 */
+    private final SampleFactoryModelConfiguration models;
     /** 唯一的提示词和有限改写决策核心。 */
     private final SampleReflectionAgent agent;
     /** 序列化与UTC时间工具。 */
     private final FactoryJsonSupport json;
 
-    /** Actor和Critic为不同端口，当前Ollama适配器共用一个配置快照，不共享对话记忆。 */
+    /** Actor和Critic独立适配、独立配置；允许使用同一物理模型，不共享对话记忆。 */
     public SampleReflectionRunner(SampleRunRecordService records, SampleProductionService production,
                                   SampleGenerationPort generator, SampleReflectionPort critic,
-                                  SampleReflectionAgent agent, FactoryJsonSupport json) {
+                                  SampleReflectionAgent agent, FactoryJsonSupport json, SampleFactoryModelConfiguration models) {
         this.records = records;
         this.production = production;
         this.generator = generator;
         this.critic = critic;
         this.agent = agent;
         this.json = json;
+        this.models = models;
     }
 
     /**
@@ -56,6 +60,8 @@ public class SampleReflectionRunner {
         while (true) {
             var run = records.authorized(original.getTenantId(), original.getActorId(), original.getRunId());
             if (!worker.equals(run.getWorkerId()) || !Set.of("RUNNING", "BLOCKED").contains(run.getStatus())) return;
+            var task = production.authorizedTask(run.getTenantId(), run.getActorId(), run.getTaskId());
+            var spec = production.spec(task);
             if (run.getPendingOperationId() == null) {
                 if (!SampleReflectionAgent.VERSION.equals(run.getWorkflowVersion())) {
                     records.end(run.getRunId(), worker, "FAILED", "REFLECTION_UPGRADE_REQUIRED");
@@ -67,15 +73,13 @@ public class SampleReflectionRunner {
                     return;
                 }
                 if ("BLOCKED".equals(run.getStatus())) return;
-                var task = production.authorizedTask(run.getTenantId(), run.getActorId(), run.getTaskId());
-                var spec = production.spec(task);
-                var profile = generator.profile();
-                if (!profile.available() || !profile.profileRef().equals(spec.generatorProfileRef())) {
+                if (!models.matches(spec.generatorProfileRef())) {
                     records.end(run.getRunId(), worker, "FAILED", "GENERATOR_CONFIGURATION_CHANGED");
                     return;
                 }
                 var seed = production.seed(run.getTenantId(), run.getActorId(), spec.seedId());
                 var phase = records.phase(run);
+                var profile = roleProfile(phase);
                 var parent = records.parent(run);
                 var candidate = phase == SampleReflectionAgent.Phase.REFLECT ? records.currentCandidate(run) : null;
                 var context = new SampleReflectionAgent.Context(spec, seed.getContent(), run.getOrdinal(), run.getRewriteRound(),
@@ -87,7 +91,7 @@ public class SampleReflectionRunner {
                         prompt.systemPrompt(), json.write(prompt.payload()));
                 long reservation = TokenEstimator.estimate(command.systemPrompt())
                         + TokenEstimator.estimate(command.userPayloadJson()) + profile.maxOutputTokens();
-                // Critic也必须单独占用一次调用和Token预留，绝不能只在Actor处记账。
+                // Critic独立占用一次调用，并使用自己的输出上限预留，不能沿用Actor的参数。
                 if (!records.prepare(run.getRunId(), worker, command, reservation)) return;
                 run = records.authorized(run.getTenantId(), run.getActorId(), run.getRunId());
             }
@@ -111,9 +115,9 @@ public class SampleReflectionRunner {
                 return;
             }
             var command = json.read(op.getCommandJson(), SampleGenerationPort.Command.class);
-            var profile = generator.profile();
+            var profile = roleProfile(records.phase(run));
             if (Boolean.TRUE.equals(run.getStopRequested()) || expired(run)
-                    || !profile.available() || !profile.profileRef().equals(command.profileRef())) {
+                    || !models.matches(spec.generatorProfileRef()) || !profile.available() || !profile.profileRef().equals(command.profileRef())) {
                 records.cancelAccepted(run.getRunId(), worker, "STOP_DEADLINE_OR_CONFIGURATION");
                 return;
             }
@@ -135,6 +139,11 @@ public class SampleReflectionRunner {
                 return;
             }
         }
+    }
+
+    /** 生成阶段取Actor配置，反思阶段取Critic配置；不再共用一个输出上限或角色指纹。 */
+    private SampleGenerationPort.Profile roleProfile(SampleReflectionAgent.Phase phase) {
+        return phase == SampleReflectionAgent.Phase.GENERATE ? generator.profile() : critic.profile();
     }
 
     /** 原固定期限包含排队和评审，进入下一阶段不延长截止时间。 */

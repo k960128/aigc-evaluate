@@ -10,8 +10,8 @@ public enum SampleFactoryErrorCode implements IErrorCode {
     IDEMPOTENCY_CONFLICT("A053003","样本工厂幂等键冲突"),
     /** 参数、引用或当前状态不允许执行该动作，例如直接审核重复候选。 */
     INVALID_REQUEST("A053004","生产参数或状态不允许"),
-    /** 生成角色未启用/未配置模型，或当前配置指纹与计划不一致；不是预算错误。 */
-    GENERATOR_UNAVAILABLE("A053005","生成角色未启用或配置快照已变化"),
+    /** 生成或评审角色不可用，或组合指纹与计划不一致；保留原错误码，不是预算错误。 */
+    GENERATOR_UNAVAILABLE("A053005","生成或评审角色未启用、未配置模型，或配置快照已变化"),
     /** 事实解析、关联核对或持久化失败，固定消息不暴露SQL及私有正文。 */
     PERSISTENCE_ERROR("B053001","样本生产事实读取或保存失败");
     /** 对外稳定业务错误码，与批次中的执行errorCode不是同一枚举。 */

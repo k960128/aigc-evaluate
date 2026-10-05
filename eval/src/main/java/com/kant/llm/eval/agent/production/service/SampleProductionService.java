@@ -3,10 +3,10 @@ package com.kant.llm.eval.agent.production.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.kant.agent.contract.production.*;
-import com.kant.agent.port.production.SampleGenerationPort;
 import com.kant.agent.service.production.SampleReflectionAgent;
 import com.kant.framework.exception.ClientException;
 import com.kant.llm.eval.agent.probe.application.ProbePrincipalProvider;
+import com.kant.llm.eval.agent.production.config.SampleFactoryModelConfiguration;
 import com.kant.llm.eval.agent.production.dao.entity.*;
 import com.kant.llm.eval.agent.production.dao.mapper.*;
 import com.kant.llm.eval.agent.production.dto.*;
@@ -21,7 +21,7 @@ import java.util.*;
 /**
  * D05生产任务的受理层：保存专家种子、冻结生产计划，并将手动或定时请求转换为待执行批次。
  * <p>计划定义与运行事实分开存储：一个计划可以创建多个批次，重置计划则创建新的计划标识，
- * 不覆盖历史配置。本类只读取生成角色配置，不调用生成模型或被测目标；模型调用由Worker负责。</p>
+ * 不覆盖历史配置。本类只读取生成/评审的组合配置，不调用模型或被测目标；模型调用由Runner负责。</p>
  * <p>HTTP写操作先校验主体，再处理幂等回放，最后执行版本和业务检查。
  * 后台调度没有登录线程上下文，使用数据库计划中保存的归属信息。</p>
  */
@@ -41,30 +41,30 @@ public class SampleProductionService {
     private final AgentSampleRunReceiptMapper receipts;
     /** 从服务端登录上下文提取主体，客户端不能指定租户或操作者。 */
     private final ProbePrincipalProvider principals;
-    /** 本类仅使用该端口读取当前生成角色快照。 */
-    private final SampleGenerationPort generator;
+    /** 组合快照同时冻结Actor与Critic；任一角色变更都不能静默替换旧计划。 */
+    private final SampleFactoryModelConfiguration models;
     /** 持久化JSON、摘要与UTC微秒时间转换。 */
     private final FactoryJsonSupport json;
 
     /** 注入持久化与身份依赖；不在构造阶段访问数据库或调用模型。 */
     public SampleProductionService(AgentSampleSeedMapper seeds, AgentSampleTaskMapper tasks, AgentSampleRunMapper runs,
                                    AgentSampleCommandMapper commands, AgentSampleScheduleFireMapper fires, ProbePrincipalProvider principals,
-                                   SampleGenerationPort generator, FactoryJsonSupport json, AgentSampleRunReceiptMapper receipts) {
+                                   SampleFactoryModelConfiguration models, FactoryJsonSupport json, AgentSampleRunReceiptMapper receipts) {
         this.seeds = seeds;
         this.tasks = tasks;
         this.runs = runs;
         this.commands = commands;
         this.fires = fires;
         this.principals = principals;
-        this.generator = generator;
+        this.models = models;
         this.json = json;
         this.receipts = receipts;
     }
 
-    /** 返回当前登录主体可见的生成角色配置；available不表示模型服务已经通过健康检查。 */
-    public SampleGenerationPort.Profile profile() {
+    /** 返回当前主体可见的组合及单角色配置；available要求两个角色均可用，但不是健康检查。 */
+    public FactoryResponses.ModelProfile profile() {
         principals.currentPrincipal();
-        return generator.profile();
+        return models.profile();
     }
 
     /**
@@ -99,7 +99,7 @@ public class SampleProductionService {
     }
 
     /**
-     * 创建冻结生产计划：校验种子归属及完整性、当前生成角色快照与最低调用次数预算。
+     * 创建冻结生产计划：校验种子归属及完整性、双角色组合快照与最低调用次数预算。
      * 仅保存计划定义，不创建批次，不调用模型，也不自动开启定时任务。
      * @param request 专家选定的种子、生成约束、单批预算及可选每日计划
      * @return 新计划，或幂等命中计划的当前控制状态
@@ -143,14 +143,14 @@ public class SampleProductionService {
     /**
      * 重置生产计划不是覆盖旧计划，而是创建一个新的冻结计划。
      *
-     * 旧计划可能引用应用重启前的生成角色快照；重置时保留原种子、变异、风险、预算和调度定义，
-     * 只重新读取当前生成角色并写入新的generatorProfileRef。新计划默认不启用定时任务，避免重置动作
+     * 旧计划可能引用变更前的模型角色快照；重置时保留原种子、变异、风险、预算和调度定义，
+     * 重新读取生成与评审角色的组合身份并写入generatorProfileRef。新计划默认不启用定时任务，避免重置动作
      * 意外补发旧计划的调度槽位；原计划和原批次仍可继续审计。
      * <p>不修改旧计划的调度开关，不停止旧批次；旧预算也原样复制，不能用重置解决预算不足。
      * 新计划保留原日期范围，随后人工启用时仍按原漏触发策略处理。</p>
      * @param sourceTaskId 当前主体拥有的来源计划标识
      * @param request 新计划名称及创建键；与普通创建共享主体内幂等键空间
-     * @return 新计划的当前状态；同键重试不会再次刷新已冻结的生成角色快照
+     * @return 新计划的当前状态；同键重试不会再次刷新已冻结的双角色组合快照
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public FactoryResponses.Task resetTask(String sourceTaskId, FactoryRequests.ResetTask request) {
@@ -168,7 +168,7 @@ public class SampleProductionService {
             return taskResponse(old);
         }
 
-        var profile = generator.profile();
+        var profile = models.profile();
         if (!profile.available()) throw error(SampleFactoryErrorCode.GENERATOR_UNAVAILABLE);
 
         var sourceSpec = spec(source);
@@ -460,9 +460,9 @@ public class SampleProductionService {
         return t;
     }
 
-    /** 校验生成角色已启用且指纹与计划完全一致；不进行模型网络探活，也不替换旧快照。 */
+    /** 校验生成与评审角色均可用且组合指纹与计划一致；不进行模型探活，也不替换旧快照。 */
     private void requireProfile(GenerationSpec spec) {
-        var profile = generator.profile();
+        var profile = models.profile();
         if (!profile.available() || !profile.profileRef().equals(spec.generatorProfileRef()))
             throw error(SampleFactoryErrorCode.GENERATOR_UNAVAILABLE);
     }

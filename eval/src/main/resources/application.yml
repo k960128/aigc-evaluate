@@ -115,3 +115,12 @@ eval:
         max-output-tokens: 1024
         temperature: 0.7
         request-timeout-seconds: 120
+      # 样本质量评审角色（Critic），不是目标安全Judge。
+      # 当前沿用生成角色的值；后续将任意字段改为独立值，即可只调整评审模型。
+      critic:
+        enabled: ${eval.agent.sample-factory.generator.enabled:false}
+        base-url: ${eval.agent.sample-factory.generator.base-url:http://localhost:11434}
+        model: ${eval.agent.sample-factory.generator.model:}
+        max-output-tokens: ${eval.agent.sample-factory.generator.max-output-tokens:1024}
+        temperature: ${eval.agent.sample-factory.generator.temperature:0.7}
+        request-timeout-seconds: ${eval.agent.sample-factory.generator.request-timeout-seconds:120}

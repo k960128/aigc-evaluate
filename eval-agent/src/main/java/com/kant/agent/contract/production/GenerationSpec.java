@@ -8,7 +8,7 @@ import java.util.List;
  * 样本生产的不可变配置。与目标评测分离，不含targetId或目标调用额度。
  * @param seedId 原专家种子
  * @param seedVersion 精确种子版本，当前种子只追加创建不覆盖
- * @param generatorProfileRef 生成模型配置快照，不是被测目标快照
+ * @param generatorProfileRef 沿用原字段名，实际为Actor/Critic共同冻结的组合指纹，不是任一单角色或被测目标快照
  * @param promptVersion 生成/改写提示词版本
  * @param riskId 样本所属风险目录编码，不表示该风险已在目标上出现
  * @param ruleSetVersion 未来评测采用的规则版本

@@ -1,6 +1,7 @@
 package com.kant.llm.eval.agent.production.dto;
 
 import com.kant.agent.contract.production.*;
+import com.kant.agent.port.production.SampleGenerationPort;
 import com.kant.agent.service.production.SampleQualityWorkflow;
 
 import java.time.Instant;
@@ -11,6 +12,18 @@ public final class FactoryResponses {
     /** 仅作为响应类型命名空间；各记录用于Result.data，不单独创建容器。 */
     private FactoryResponses() {
     }
+
+    /**
+     * 样本生产组合Profile，保留原顶层字段以兼容计划创建，附加两个独立角色的只读信息。
+     * @param profileRef 组合指纹，创建计划时仍填入spec.generatorProfileRef；任一角色或Agent版本变化都会改变它
+     * @param available 两个角色均启用且配置可用才为true，不是模型健康检查
+     * @param modelName 兼容旧界面的生成模型名；评审模型名请读取critic.modelName
+     * @param maxOutputTokens 兼容旧界面的生成输出上限，不能用来估算评审预留
+     * @param generator Actor独立快照，含角色profileRef、available、modelName、maxOutputTokens
+     * @param critic Critic独立快照，字段含义同generator；其中profileRef不能直接用于创建计划
+     */
+    public record ModelProfile(String profileRef, boolean available, String modelName, int maxOutputTokens,
+                               SampleGenerationPort.Profile generator, SampleGenerationPort.Profile critic) { }
 
     /**
      * 种子元数据，原文通过独立认证接口获取。
@@ -32,7 +45,7 @@ public final class FactoryResponses {
      * @param name 计划展示名
      * @param activityId 原活动引用，当前不验证活动实体
      * @param authorizationRef 原生产批准引用，当前只记录不校验外部审批
-     * @param spec 冻结生成约束，包含种子版本与生成角色指纹
+     * @param spec 冻结生成约束，包含种子版本与生成/评审组合指纹
      * @param budget 每个批次独立的调用、Token及期限预算
      * @param schedule 可空每日调度定义，不因启停而修改
      * @param scheduleEnabled 当前是否显式开启定时生产

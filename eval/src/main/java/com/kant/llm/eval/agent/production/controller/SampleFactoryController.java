@@ -1,6 +1,5 @@
 package com.kant.llm.eval.agent.production.controller;
 
-import com.kant.agent.port.production.SampleGenerationPort;
 import com.kant.framework.convention.Result;
 import com.kant.framework.web.Results;
 import com.kant.llm.eval.agent.probe.application.ProbePrincipalProvider;
@@ -44,9 +43,9 @@ public class SampleFactoryController {
         this.principals = principals;
     }
 
-    /** 部署配置的生成角色快照；available不代表模型健康探测已经成功。 */
+    /** 返回生成/评审的组合快照，沿用原路径与顶层字段；available要求两个角色配置均可用，不是探活。 */
     @GetMapping("/generator-profile")
-    public Result<SampleGenerationPort.Profile> profile() {
+    public Result<FactoryResponses.ModelProfile> profile() {
         return Results.success(safely(production::profile));
     }
 

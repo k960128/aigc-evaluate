@@ -2,7 +2,7 @@ package com.kant.agent.port.production;
 
 /** 样本生成模型端口，不引用ProbeExecutionPort，不具备调用被测目标或业务工具的能力。 */
 public interface SampleGenerationPort {
-    /** 只读当前生成角色配置，不调用模型；profileRef必须随配置变化。 */
+    /** 只读生成角色配置，不调用模型；身份参数变化时更新profileRef，enabled仅控制可用性。 */
     Profile profile();
 
     /**
@@ -13,11 +13,11 @@ public interface SampleGenerationPort {
     Result generate(Command command);
 
     /**
-     * 生成角色只读快照，区别于被测目标能力声明。
-     * @param profileRef Actor/Critic共同配置指纹，包含Reflection版本；相同配置稳定，版本变化需新计划
+     * 单一模型角色的只读快照，由Actor和Critic端口分别返回，区别于计划组合身份和被测目标声明。
+     * @param profileRef 当前角色配置指纹，角色名与提示词版本也参与摘要；不是计划的组合profileRef
      * @param available 是否显式启用且配置可用，不是模型健康检查结果
-     * @param modelName 独立生成模型标签，不是被测目标名称
-     * @param maxOutputTokens 单次输出上限，用于调用前Token预留
+     * @param modelName 当前角色模型标签，两种角色可选择相同或不同模型，不是被测目标名称
+     * @param maxOutputTokens 当前角色单次输出上限，用于该阶段调用前Token预留
      */
     record Profile(String profileRef, boolean available, String modelName, int maxOutputTokens) {
     }
@@ -25,7 +25,7 @@ public interface SampleGenerationPort {
     /**
      * 持久化的固定命令，含受限正文，不应出现在普通列表或日志中。
      * @param operationId 批次、根槽位、轮次及角色确定的操作身份；生成与评审分别使用genop/refop命名空间
-     * @param profileRef 本次生成或评审绑定的共同配置指纹
+     * @param profileRef 本次生成或评审绑定的单角色指纹，不可拿计划组合指纹代替
      * @param systemPrompt 平台固定指令，不能由种子或反馈覆盖
      * @param userPayloadJson 种子、变异、父候选、反馈或待评审正文等JSON资料，按不可信数据处理
      */

@@ -9,6 +9,7 @@ import com.kant.agent.service.production.SampleGenerationWorkflow;
 import com.kant.agent.service.production.SampleReflectionAgent;
 import com.kant.agent.service.production.SampleQualityWorkflow;
 import com.kant.framework.exception.ClientException;
+import com.kant.llm.eval.agent.production.config.SampleFactoryModelConfiguration;
 import com.kant.llm.eval.agent.production.dao.entity.*;
 import com.kant.llm.eval.agent.production.dao.mapper.*;
 import com.kant.llm.eval.agent.production.dto.*;
@@ -46,11 +47,13 @@ public class SampleRunRecordService {
     private final SampleQualityWorkflow quality = new SampleQualityWorkflow();
     /** 唯一的生成/评审/改写决策主体，本服务只把决策和账目原子落库。 */
     private final SampleReflectionAgent agent;
+    /** 在事务边界验证计划组合身份与单次角色身份，不让不同模型的检查点混用。 */
+    private final SampleFactoryModelConfiguration models;
 
     /** 注入账本与计划依赖，不在构造时启动Worker或生成操作。 */
     public SampleRunRecordService(AgentSampleRunMapper runs, AgentSampleOperationMapper operations, AgentSampleCandidateMapper candidates,
                                   AgentSampleContentIndexMapper index, SampleProductionService production, FactoryJsonSupport json,
-                                  SampleReflectionAgent agent) {
+                                  SampleReflectionAgent agent, SampleFactoryModelConfiguration models) {
         this.runs = runs;
         this.operations = operations;
         this.candidates = candidates;
@@ -58,6 +61,7 @@ public class SampleRunRecordService {
         this.production = production;
         this.json = json;
         this.agent = agent;
+        this.models = models;
     }
 
     /** 按服务端主体读取批次；外部入口不能自行传入他人的tenant/actor。 */
@@ -124,7 +128,7 @@ public class SampleRunRecordService {
      * 固定操作、调用次数与完整Token预留同事务保存；同轮的生成与评审各自拥有唯一操作ID。
      * @param runId 当前生产批次
      * @param worker 必须仍持有租约的执行者
-     * @param command 已绑定生成角色、系统提示词及本轮输入的固定命令
+     * @param command 已绑定当前生成或评审角色、系统提示词及本轮输入的固定命令
      * @param reservation 本次输入估算加最大输出的预留Token，尚不是实际消耗
      * @return 是否成功创建ACCEPTED操作；停止、超期或预算不足时不会发出请求
      */
@@ -148,7 +152,12 @@ public class SampleRunRecordService {
         var spec = production.spec(task);
         var policy = production.budget(task);
         var usage = json.read(r.getUsageJson(), ProductionBudget.Usage.class);
-        if (!command.profileRef().equals(spec.generatorProfileRef()) || !command.operationId().equals(operationId(r)))
+        if (!models.matches(spec.generatorProfileRef())) {
+            terminal(r, "FAILED", "GENERATOR_CONFIGURATION_CHANGED");
+            save(r);
+            return false;
+        }
+        if (!command.profileRef().equals(models.role(phase(r)).profile().profileRef()) || !command.operationId().equals(operationId(r)))
             throw error(SampleFactoryErrorCode.INVALID_REQUEST);
         String expectedPrompt = phase(r) == SampleReflectionAgent.Phase.REFLECT
                 ? SampleReflectionAgent.CRITIC_PROMPT : SampleGenerationWorkflow.SYSTEM_PROMPT;
@@ -177,13 +186,17 @@ public class SampleRunRecordService {
         return true;
     }
 
-    /** 实际模型调用前的租约/停止/期限围栏。CALLING之后不能因进程重启再次发送。 */
+    /** 实际调用前再次检查租约、停止、期限及双角色配置；CALLING之后不能因重启再次发送。 */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean markCalling(String runId, String worker) {
         var r = owned(runId, worker);
         var op = pending(r);
         if (!"RUNNING".equals(r.getStatus()) || Boolean.TRUE.equals(r.getStopRequested()) || !r.getDeadlineAt().isAfter(now()) || !"ACCEPTED".equals(op.getStatus()))
             return false;
+        var task = production.authorizedTask(r.getTenantId(), r.getActorId(), r.getTaskId());
+        var command = json.read(op.getCommandJson(), SampleGenerationPort.Command.class);
+        if (!models.matches(production.spec(task).generatorProfileRef())
+                || !models.role(phase(r)).profile().profileRef().equals(command.profileRef())) return false;
         return operations.update(null, new LambdaUpdateWrapper<AgentSampleOperationDO>().eq(AgentSampleOperationDO::getId, op.getId()).eq(AgentSampleOperationDO::getStatus, "ACCEPTED")
                 .set(AgentSampleOperationDO::getStatus, "CALLING").set(AgentSampleOperationDO::getDispatchWorkerId, worker)) == 1;
     }

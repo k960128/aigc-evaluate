@@ -49,6 +49,12 @@ D02 的真实反馈攻击循环。
 
 ## 实现状态与维护约定
 
+2026-10-05 D05角色配置拆分：Actor生成与Critic样本质量评审使用独立适配器及`generator`/`critic`配置区，
+Critic未单独配置的字段默认沿用Generator，当前仍可用同一个模型；并非独立目标安全Judge。
+调用按当前角色的输出上限分别预留，计划冻结两个角色的组合指纹。`/generator-profile`保留顶层字段并增加两角色快照，
+本次需重置/新建计划，不新增数据库迁移；此前Reflection增量迁移仍是前提。配置字段及升级边界见D05接入说明第11.5节。
+本轮未执行测试、Maven、编译、SQL、服务启动或模型调用，尚未进行运行验收。
+
 2026-10-04 D05 Reflection重构：新增专用`SampleReflectionAgent`和Critic端口，采用Actor生成、硬规则门禁、模型评审与有限改写。
 Worker仅调度，Runner按数据库检查点推进，生成与评审各自预留并结算，人工审核独立。需要人工执行新增的Reflection增量迁移，
 并重置/新建生产计划以冻结新配置指纹；前端需识别REFLECTING、phase和独立reflection结果。详见D05接入说明第11节。
