@@ -1,8 +1,10 @@
 package com.kant.llm.eval.agent.production.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.kant.agent.contract.production.*;
 import com.kant.agent.port.production.SampleGenerationPort;
 import com.kant.agent.service.production.SampleQualityWorkflow;
+import com.kant.llm.eval.agent.production.error.SampleRunErrorMessages;
 
 import java.time.Instant;
 import java.util.List;
@@ -61,6 +63,7 @@ public final class FactoryResponses {
 
     /**
      * 一次批次的执行快照；POST回放首次受理结果，GET用于获取当前进度。
+     * <p>额外序列化只读errorMessage，由后端根据errorCode生成中文说明，列表和详情使用同一规则。</p>
      * @param runId 生产批次ID
      * @param taskId 来源冻结计划ID
      * @param status QUEUED排队、RUNNING执行、BLOCKED待确认、STOPPED停止、COMPLETED槽位结束、FAILED失败
@@ -87,6 +90,16 @@ public final class FactoryResponses {
         public Run {
             workflowVersion = workflowVersion == null ? "sample-generation-v1" : workflowVersion;
             phase = phase == null ? "GENERATE" : phase;
+        }
+
+        /**
+         * 供前端直接展示的失败、停止或阻塞说明，无原因时为null。
+         * <p>使用只读JSON属性，不改变record构造参数或数据库结构；历史回执缺少本字段也能正常读取。
+         * 新回执即使包含本字段，反序列化时也会忽略文案并按原errorCode重新生成，不允许文案覆盖执行事实。</p>
+         */
+        @JsonProperty(value = "errorMessage", access = JsonProperty.Access.READ_ONLY)
+        public String errorMessage() {
+            return SampleRunErrorMessages.messageFor(errorCode);
         }
     }
 
