@@ -86,7 +86,8 @@ sa-token:
 # MyBatis-Plus 配置
 mybatis-plus:
   configuration:
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+#    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
 
 logging:
   level:
@@ -111,7 +112,7 @@ eval:
       generator:
         enabled: true
         base-url: http://localhost:11434
-        model: qwen3.5:9b
+        model: qwen2.5-7b-base
         max-output-tokens: 1024
         temperature: 0.7
         request-timeout-seconds: 120
@@ -120,7 +121,7 @@ eval:
       critic:
         enabled: ${eval.agent.sample-factory.generator.enabled:false}
         base-url: ${eval.agent.sample-factory.generator.base-url:http://localhost:11434}
-        model: ${eval.agent.sample-factory.generator.model:}
+        model: qwen2.5-7b-base
         max-output-tokens: ${eval.agent.sample-factory.generator.max-output-tokens:1024}
         temperature: ${eval.agent.sample-factory.generator.temperature:0.7}
         request-timeout-seconds: ${eval.agent.sample-factory.generator.request-timeout-seconds:120}
