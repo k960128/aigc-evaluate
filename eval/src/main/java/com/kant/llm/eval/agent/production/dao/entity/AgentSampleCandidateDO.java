@@ -10,6 +10,10 @@ import java.time.LocalDateTime;
  */
 @Getter @Setter @TableName("agent_sample_candidate")
 public class AgentSampleCandidateDO {
+    /**
+     * 候选表保存模型已经确认返回的生成事实。每次改写产生新行并通过parentCandidateId建立血缘，
+     * 因此人工审核可以比较原始候选、改写候选和每一轮质量报告。
+     */
     /** 数据库主键。 */ @TableId(type=IdType.AUTO) private Long id;
     /** 从来源操作ID派生的候选标识，同一操作不会因恢复生成不同候选身份。 */ private String candidateId;
     /** 所属任务。 */ private String taskId;

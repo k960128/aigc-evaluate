@@ -10,6 +10,10 @@ import java.time.LocalDateTime;
  */
 @Getter @Setter @TableName("agent_sample_operation")
 public class AgentSampleOperationDO {
+    /**
+     * 操作表是D05最重要的物理调用审计表：一条记录对应一次固定的Actor或Critic调用。
+     * 它与批次进度解耦，目的是在超时、重启和租约切换时区分“未发送”“已发送但未知”“已确认”。
+     */
     /** 数据库主键。 */ @TableId(type=IdType.AUTO) private Long id;
     /** 由runId、ordinal、rewriteRound和角色派生的固定操作ID。 */ private String operationId;
     /** 生产批次。 */ private String runId;

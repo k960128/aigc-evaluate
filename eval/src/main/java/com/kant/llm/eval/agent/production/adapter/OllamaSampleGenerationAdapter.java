@@ -15,6 +15,10 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class OllamaSampleGenerationAdapter implements SampleGenerationPort {
+    /**
+     * 该适配器只负责把领域Command转换为一次Ollama请求，再把响应转换为端口Result。
+     * 预算、状态推进、候选落库和重试策略不属于适配器职责，避免网络层偷偷扩大Agent循环。
+     */
     /** 当前Actor配置，不能被Critic覆盖。 */
     private final SampleFactoryModelConfiguration.Role role;
     /** 无状态的单次网络传输，不在此处添加隐藏反思循环。 */
@@ -43,6 +47,7 @@ public class OllamaSampleGenerationAdapter implements SampleGenerationPort {
      */
     @Override
     public SampleGenerationPort.Result generate(Command command) {
+        // 生成端口只允许一次物理调用；结构非法时分类为INVALID并保留已确认的Token计量。
         var response = client.callOnce(role, command, SampleGenerationWorkflow.SYSTEM_PROMPT);
         String raw = response.text();
         long input = response.inputTokens();

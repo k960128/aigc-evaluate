@@ -26,6 +26,13 @@ public record GenerationSpec(String seedId, long seedVersion, String generatorPr
                              List<String> topicTerms,
                              int minLength, int maxLength, int maxRewrites, String preconditions,
                              String assertionDescription) {
+    /**
+     * 该契约代表“一个生产计划冻结后的生成约束”，不是一次模型调用的临时参数。
+     * <p>
+     * 一旦写入计划，后续批次会从数据库恢复这份快照；因此这里的校验不仅是接口参数校验，
+     * 也是历史数据反序列化时的领域不变量校验。任何字段变化都应通过新建或重置计划完成。
+     * </p>
+     */
     /** 构造时校验冻结契约，不依赖Spring校验器，同样适用于持久化JSON恢复。 */
     public GenerationSpec {
         seedId = ContractChecks.maxLength(ContractChecks.notBlank(seedId, "seedId"), 96, "seedId");

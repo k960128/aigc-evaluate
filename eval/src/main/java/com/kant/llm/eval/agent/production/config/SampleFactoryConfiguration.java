@@ -10,9 +10,14 @@ import org.mybatis.spring.annotation.MapperScan;
 @Configuration
 @MapperScan("com.kant.llm.eval.agent.production.dao.mapper")
 public class SampleFactoryConfiguration {
+    /**
+     * D05配置只装配样本工厂自己的Agent和执行线程，不与D01-D04共享后台线程池。
+     * 这样可以控制生产模型调用的并发度，也避免一个模块的阻塞拖垮其他评测业务。
+     */
     /** 无状态Reflection决策核心，供执行器与事务结算共享；不在Bean创建时调用模型。 */
     @Bean
     public SampleReflectionAgent sampleReflectionAgent() {
+        // Agent本身无状态，不在Bean初始化阶段读取数据库或调用模型。
         return new SampleReflectionAgent();
     }
     /**
@@ -22,6 +27,7 @@ public class SampleFactoryConfiguration {
      */
     @Bean
     public TaskExecutor sampleProductionExecutor() {
+        // 零队列意味着线程池满载时由数据库作为等待队列，避免任务无限堆积在JVM内存。
         var e = new ThreadPoolTaskExecutor();
         e.setCorePoolSize(2);
         e.setMaxPoolSize(2);

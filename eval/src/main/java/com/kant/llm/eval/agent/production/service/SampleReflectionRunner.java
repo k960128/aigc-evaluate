@@ -57,12 +57,14 @@ public class SampleReflectionRunner {
      * @param worker 本次领取的租约主体；事务写入时再次核验租约
      */
     public void advance(AgentSampleRunDO original, String worker) {
+        // 每次循环先从数据库重新读取最新检查点；循环本身不保存业务状态，数据库才是恢复依据。
         while (true) {
             var run = records.authorized(original.getTenantId(), original.getActorId(), original.getRunId());
             if (!worker.equals(run.getWorkerId()) || !Set.of("RUNNING", "BLOCKED").contains(run.getStatus())) return;
             var task = production.authorizedTask(run.getTenantId(), run.getActorId(), run.getTaskId());
             var spec = production.spec(task);
             if (run.getPendingOperationId() == null) {
+                // 没有在途操作时，Agent负责决定当前是生成槽位还是评审候选，外层负责额度与租约门禁。
                 if (!SampleReflectionAgent.VERSION.equals(run.getWorkflowVersion())) {
                     records.end(run.getRunId(), worker, "FAILED", "REFLECTION_UPGRADE_REQUIRED");
                     return;
@@ -98,6 +100,7 @@ public class SampleReflectionRunner {
 
             var op = records.pending(run);
             if ("SUCCEEDED".equals(op.getStatus())) {
+                // 响应已经确认但尚未结算时只执行settle，绝不能因为线程重启再次调用模型。
                 // 响应已落库时只结算；配置变化、原发送者失租或服务重启都不能导致重复付费调用。
                 records.settle(run.getRunId(), worker);
                 continue;
@@ -126,6 +129,7 @@ public class SampleReflectionRunner {
                 return;
             }
             try {
+                // 网络调用发生在数据库事务之外；返回后通过独立短事务把结果写回固定operation。
                 if (records.phase(run) == SampleReflectionAgent.Phase.REFLECT)
                     records.recordReflectionResponse(op.getOperationId(), worker, critic.reflect(command));
                 else

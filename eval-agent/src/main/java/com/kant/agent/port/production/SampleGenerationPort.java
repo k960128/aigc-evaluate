@@ -13,6 +13,11 @@ public interface SampleGenerationPort {
     Result generate(Command command);
 
     /**
+     * 生成端口是D05领域层与具体模型供应商之间的边界。
+     * <p>领域层只依赖这里定义的结构化结果，不关心Ollama、HTTP客户端或Spring AI的具体实现。</p>
+     */
+
+    /**
      * 单一模型角色的只读快照，由Actor和Critic端口分别返回，区别于计划组合身份和被测目标声明。
      * @param profileRef 当前角色配置指纹，角色名与提示词版本也参与摘要；不是计划的组合profileRef
      * @param available 是否显式启用且配置可用，不是模型健康检查结果
@@ -20,6 +25,10 @@ public interface SampleGenerationPort {
      * @param maxOutputTokens 当前角色单次输出上限，用于该阶段调用前Token预留
      */
     record Profile(String profileRef, boolean available, String modelName, int maxOutputTokens) {
+        /**
+         * Profile只表示角色配置身份和可用性，不表示模型已经被探活，也不表示一次调用必然成功。
+         * 生产计划保存的是Actor与Critic组合指纹，操作命令保存的是当前具体角色指纹。
+         */
     }
 
     /**
@@ -30,6 +39,10 @@ public interface SampleGenerationPort {
      * @param userPayloadJson 种子、变异、父候选、反馈或待评审正文等JSON资料，按不可信数据处理
      */
     record Command(String operationId, String profileRef, String systemPrompt, String userPayloadJson) {
+        /**
+         * Command是已经过Agent组装并准备持久化的单步命令。
+         * <p>userPayloadJson中的种子、候选正文和反馈均按不可信业务资料处理，不能覆盖systemPrompt。</p>
+         */
     }
 
     /**
@@ -43,5 +56,9 @@ public interface SampleGenerationPort {
      */
     record Result(String status, String content, String reason, long inputTokens, long outputTokens,
                   String measurement) {
+        /**
+         * Result只保留调用结果分类和计量事实，不保存模型的原始长文本或内部思维链。
+         * 生成成功仍需经过本地规则、Critic和人工审核，不能把GENERATED直接当作正式资产。
+         */
     }
 }

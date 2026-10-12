@@ -31,6 +31,10 @@ import java.util.*;
  */
 @Service
 public class SampleRunRecordService {
+    /**
+     * 该服务是D05的持久化状态机，而不是普通CRUD服务。
+     * 每个公开方法都围绕一个检查点推进：先锁定批次，再校验租约、版本和操作身份，最后原子保存状态。
+     */
     /** 批次状态、检查点与租约。 */
     private final AgentSampleRunMapper runs;
     /** 一次物理生成请求的固定命令、发送状态和响应事实。 */
@@ -66,6 +70,7 @@ public class SampleRunRecordService {
 
     /** 按服务端主体读取批次；外部入口不能自行传入他人的tenant/actor。 */
     public AgentSampleRunDO authorized(String tenant, String actor, String id) {
+        // HTTP查询和人工审核使用主体隔离；Worker内部则由领取时保存的tenant/actor继续校验。
         var r = runs.selectOne(new LambdaQueryWrapper<AgentSampleRunDO>().eq(AgentSampleRunDO::getRunId, id).eq(AgentSampleRunDO::getTenantId, tenant).eq(AgentSampleRunDO::getActorId, actor));
         if (r == null) throw error(SampleFactoryErrorCode.NOT_FOUND);
         return r;
@@ -91,6 +96,7 @@ public class SampleRunRecordService {
 
     /** 最多扫描20个无有效租约的非终态批次；被选中不代表允许重发原模型请求。 */
     public List<AgentSampleRunDO> recoverable() {
+        // QUEUED、租约过期RUNNING和BLOCKED都可以被扫描；是否允许继续推进仍由claim/advance再次判断。
         return runs.selectList(new LambdaQueryWrapper<AgentSampleRunDO>().in(AgentSampleRunDO::getStatus, "QUEUED", "RUNNING", "BLOCKED")
                 .and(q -> q.isNull(AgentSampleRunDO::getLeaseUntil).or().lt(AgentSampleRunDO::getLeaseUntil, now()))
                 .orderByAsc(AgentSampleRunDO::getLeaseUntil).orderByAsc(AgentSampleRunDO::getId).last("LIMIT 20"));
@@ -99,6 +105,7 @@ public class SampleRunRecordService {
     /** 行锁内领取30秒租约；排队批次转RUNNING并递增版本，已被其他Worker占有则返回false。 */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean claim(String id, String worker) {
+        // claim是跨线程、跨实例的执行权竞争；内存active集合只能辅助心跳，不能代替这里的数据库条件更新。
         var r = lock(id);
         if (!Set.of("QUEUED", "RUNNING", "BLOCKED").contains(r.getStatus()) || r.getLeaseUntil() != null && r.getLeaseUntil().isAfter(now()))
             return false;
@@ -111,6 +118,7 @@ public class SampleRunRecordService {
 
     /** 仅为仍持有有效租约的Worker续租30秒；失租或批次已结束时返回false，不能复活执行权。 */
     public boolean heartbeat(String id, String worker) {
+        // 心跳只延长当前有效租约，不能把已失租或已终态的批次重新变成可执行。
         return runs.update(null, new LambdaUpdateWrapper<AgentSampleRunDO>()
                 .eq(AgentSampleRunDO::getRunId, id).eq(AgentSampleRunDO::getWorkerId, worker).gt(AgentSampleRunDO::getLeaseUntil, now())
                 .in(AgentSampleRunDO::getStatus, "RUNNING", "BLOCKED").set(AgentSampleRunDO::getLeaseUntil, now().plusSeconds(30))) == 1;
@@ -118,6 +126,7 @@ public class SampleRunRecordService {
 
     /** 按Worker身份释放执行权；BLOCKED保留30秒冷却，避免后台反复立即领取未知批次。 */
     public void release(String id, String worker) {
+        // 释放执行权后，批次仍由数据库状态决定是否可恢复；释放不删除操作和候选事实。
         var r = runs.selectOne(new LambdaQueryWrapper<AgentSampleRunDO>().eq(AgentSampleRunDO::getRunId, id).eq(AgentSampleRunDO::getWorkerId, worker));
         if (r == null) return;
         runs.update(null, new LambdaUpdateWrapper<AgentSampleRunDO>().eq(AgentSampleRunDO::getId, r.getId()).eq(AgentSampleRunDO::getWorkerId, worker)
@@ -134,6 +143,7 @@ public class SampleRunRecordService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     public boolean prepare(String runId, String worker, SampleGenerationPort.Command command, long reservation) {
+        // prepare只产生ACCEPTED操作并预留额度；只有后续markCalling成功才允许进入实际网络调用。
         var r = owned(runId, worker);
         if (r.getPendingOperationId() != null) return false;
         if (!"RUNNING".equals(r.getStatus())) throw error(SampleFactoryErrorCode.INVALID_REQUEST);
@@ -189,6 +199,7 @@ public class SampleRunRecordService {
     /** 实际调用前再次检查租约、停止、期限及双角色配置；CALLING之后不能因重启再次发送。 */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean markCalling(String runId, String worker) {
+        // markCalling是“即将发送”的最后持久化围栏；进入CALLING后不能由恢复逻辑自动再次发送同一操作。
         var r = owned(runId, worker);
         var op = pending(r);
         if (!"RUNNING".equals(r.getStatus()) || Boolean.TRUE.equals(r.getStopRequested()) || !r.getDeadlineAt().isAfter(now()) || !"ACCEPTED".equals(op.getStatus()))
@@ -204,6 +215,7 @@ public class SampleRunRecordService {
     /** 迟到结果保存到原物理操作事实，不修改批次进度。失租线程也只能追加自己的原操作回执。 */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordResponse(String operationId, String dispatchWorker, SampleGenerationPort.Result result) {
+        // 生成响应确认只更新operation，不直接推进run；推进由settle统一完成，避免部分提交。
         if (result == null || result.status() == null || !Set.of("GENERATED", "REFUSED", "INVALID").contains(result.status()) || result.inputTokens() < 0 || result.outputTokens() < 0
                 || result.measurement() == null || !Set.of("ACTUAL", "ESTIMATED").contains(result.measurement()))
             throw error(SampleFactoryErrorCode.PERSISTENCE_ERROR);
@@ -213,12 +225,14 @@ public class SampleRunRecordService {
     /** 评审是另一笔物理调用，单独确认结果；模型意见经过端口契约验证，不能直接批准候选。 */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordReflectionResponse(String operationId, String dispatchWorker, SampleReflectionPort.Result result) {
+        // Critic响应与Actor响应使用不同operationKind，防止同一候选的评审结果误写进生成字段。
         if (result == null) throw error(SampleFactoryErrorCode.PERSISTENCE_ERROR);
         confirmResponse(operationId, dispatchWorker, "REFLECT", result);
     }
 
     /** 只允许原发送者为匹配角色的未确认操作追加一次响应；失租时也不能修改批次检查点。 */
     private void confirmResponse(String operationId, String dispatchWorker, String kind, Object result) {
+        // 条件更新确保同一物理操作只能被原发送者确认一次；迟到线程不能越权推进其他操作。
         int changed = operations.update(null, new LambdaUpdateWrapper<AgentSampleOperationDO>().eq(AgentSampleOperationDO::getOperationId, operationId)
                 .eq(AgentSampleOperationDO::getOperationKind, kind)
                 .eq(AgentSampleOperationDO::getDispatchWorkerId, dispatchWorker).in(AgentSampleOperationDO::getStatus, "CALLING", "UNKNOWN")
@@ -228,6 +242,7 @@ public class SampleRunRecordService {
 
     /** 原发送者未能确认响应时将CALLING记为UNKNOWN；不删除固定命令、不释放预算、不补发请求。 */
     public void recordUnknown(String operationId, String worker) {
+        // UNKNOWN表示平台无法确认远端是否执行，不是“模型调用失败且可以安全重试”。
         operations.update(null, new LambdaUpdateWrapper<AgentSampleOperationDO>().eq(AgentSampleOperationDO::getOperationId, operationId)
                 .eq(AgentSampleOperationDO::getDispatchWorkerId, worker).eq(AgentSampleOperationDO::getStatus, "CALLING").set(AgentSampleOperationDO::getStatus, "UNKNOWN"));
     }
@@ -235,6 +250,7 @@ public class SampleRunRecordService {
     /** 暂停批次推进并保留在途操作；BLOCKED不是终态，迟到的已确认响应仍可在以后结算。 */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void block(String runId, String worker) {
+        // BLOCKED把风险留在可审计状态；它不释放调用预算，也不自动创建第二个相同请求。
         var r = owned(runId, worker);
         if ("BLOCKED".equals(r.getStatus())) return;
         r.setStatus("BLOCKED");
@@ -245,6 +261,7 @@ public class SampleRunRecordService {
     /** 明确尚未调用时释放预留。已CALLING/UNKNOWN不允许被此入口伪装成零消耗。 */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void cancelAccepted(String runId, String worker, String errorCode) {
+        // 只有明确尚未发送的ACCEPTED操作可以取消并释放预留，CALLING/UNKNOWN必须保留其不确定事实。
         var r = owned(runId, worker);
         var op = pending(r);
         if (!"ACCEPTED".equals(op.getStatus())) throw error(SampleFactoryErrorCode.INVALID_REQUEST);
@@ -266,6 +283,7 @@ public class SampleRunRecordService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     public void settle(String runId, String worker) {
+        // settle是单次物理调用的唯一结算入口：候选、质量报告、Token账本和下一阶段在同一事务中推进。
         var r = owned(runId, worker);
         var op = pending(r);
         if (!"SUCCEEDED".equals(op.getStatus())) throw error(SampleFactoryErrorCode.INVALID_REQUEST);
@@ -310,6 +328,7 @@ public class SampleRunRecordService {
 
     /** 生成响应落成不可变正文候选。硬规则未通过不调用Critic，拒绝/非法生成也保留记录和消耗。 */
     private Settlement settleGeneration(AgentSampleRunDO r, AgentSampleOperationDO op, GenerationSpec spec) {
+        // 生成阶段总是形成一个候选事实，即使结果是拒绝或非法；这样可以完整审计失败原因和实际用量。
         var result = json.read(op.getResultJson(), SampleGenerationPort.Result.class);
         var decision = SampleReflectionAgent.VERSION.equals(r.getWorkflowVersion())
                 ? agent.afterGeneration(spec, r.getRewriteRound(), result) : agent.settleLegacy(spec, result);
@@ -337,6 +356,7 @@ public class SampleRunRecordService {
 
     /** 评审只更新对应生成候选的质量，不覆盖正文；批次行锁和候选状态共同阻止重复结算。 */
     private Settlement settleReflection(AgentSampleRunDO r, AgentSampleOperationDO op, GenerationSpec spec) {
+        // 评审阶段不生成新正文，只更新当前候选的质量报告和控制版本。
         var c = currentCandidate(r);
         var result = json.read(op.getResultJson(), SampleReflectionPort.Result.class);
         var decision = agent.afterReflection(spec, r.getRewriteRound(), c.getContent(), result);
@@ -359,6 +379,7 @@ public class SampleRunRecordService {
 
     /** 跨批次规范精确去重，不冒充语义去重；竞争唯一键失败只查胜者，不重复生成。 */
     private void deduplicate(AgentSampleCandidateDO c) {
+        // 去重只在综合PASS后执行；它是规范化文本的精确匹配，不是语义相似度或风险归类。
         String fingerprint = json.digest(quality.normalized(c.getContent()));
         c.setNormalizedHash(fingerprint);
         var entry = new AgentSampleContentIndexDO();
@@ -384,6 +405,7 @@ public class SampleRunRecordService {
     /** 仅在没有待结算操作时明确结束为FAILED或STOPPED，不能用终态掩盖未知调用账目。 */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void end(String runId, String worker, String status, String reason) {
+        // 没有待结算操作时才能收口失败或停止，避免终态掩盖远端调用结果未知的问题。
         var r = owned(runId, worker);
         if (r.getPendingOperationId() != null || !Set.of("FAILED", "STOPPED").contains(status))
             throw error(SampleFactoryErrorCode.INVALID_REQUEST);
@@ -397,6 +419,7 @@ public class SampleRunRecordService {
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public FactoryResponses.Control stop(String tenant, String actor, String runId, FactoryRequests.Stop request) {
+        // stop只记录“停止新增调用”的意图；已经进入CALLING的供应商请求不承诺可撤回。
         authorized(tenant, actor, runId);
         var r = lock(runId);
         String hash = json.hash(request);
@@ -429,6 +452,7 @@ public class SampleRunRecordService {
 
     /** 严格恢复持久化阶段，不用默认GENERATE掩盖未知或损坏的阶段。 */
     public SampleReflectionAgent.Phase phase(AgentSampleRunDO run) {
+        // 阶段是持久化检查点的一部分；未知阶段直接报持久化错误，不能默认按GENERATE继续。
         if (!SampleReflectionAgent.VERSION.equals(run.getWorkflowVersion()) && !SampleGenerationWorkflow.VERSION.equals(run.getWorkflowVersion()))
             throw error(SampleFactoryErrorCode.PERSISTENCE_ERROR);
         if ("GENERATE".equals(run.getPhase())) return SampleReflectionAgent.Phase.GENERATE;
@@ -439,6 +463,7 @@ public class SampleRunRecordService {
 
     /** 读取同槽位同轮的待评审候选并核对正文、父链和生成响应，不允许借其他候选完成评审。 */
     public AgentSampleCandidateDO currentCandidate(AgentSampleRunDO run) {
+        // REFLECT只能评审当前槽位当前轮次生成的候选，不能按seedId或“最新候选”模糊关联。
         if (phase(run) != SampleReflectionAgent.Phase.REFLECT) throw error(SampleFactoryErrorCode.INVALID_REQUEST);
         String generationId = operationId(run.getRunId(), run.getOrdinal(), run.getRewriteRound(), SampleReflectionAgent.Phase.GENERATE);
         var c = candidates.selectOne(new LambdaQueryWrapper<AgentSampleCandidateDO>()
@@ -459,6 +484,7 @@ public class SampleRunRecordService {
 
     /** 恢复/结算前校验固定操作归属当前检查点，不能借其他批次或轮次的回执推进。 */
     public AgentSampleOperationDO pending(AgentSampleRunDO run) {
+        // pending是检查点关联的固定操作；任何批次、槽位、轮次或角色不一致都视为数据损坏。
         if (run.getPendingOperationId() == null) throw error(SampleFactoryErrorCode.INVALID_REQUEST);
         var op = operation(run.getPendingOperationId());
         if (!run.getRunId().equals(op.getRunId()) || !run.getOrdinal().equals(op.getOrdinal()) || !run.getRewriteRound().equals(op.getRewriteRound())

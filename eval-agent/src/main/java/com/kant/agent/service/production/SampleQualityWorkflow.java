@@ -12,6 +12,10 @@ import java.util.*;
  * 去重唯一性由持久化层保证，正式准入仍需人工审核。
  */
 public final class SampleQualityWorkflow {
+    /**
+     * 该类是本地确定性质量门禁，不是模型裁判，也不负责执行目标。
+     * 它的价值是让明显非法的结果在调用Critic之前被拦截，并为改写提供稳定、可审计的反馈。
+     */
     /** 质量规则版本，随报告保存，审核时核对兼容性。 */
     public static final String VERSION = "sample-quality-v1";
     /** 去重算法版本，参与数据库唯一索引，不与原文哈希混用。 */
@@ -24,6 +28,7 @@ public final class SampleQualityWorkflow {
      * @param issues 质量问题列表，PASS通常为空，不是目标风险证据
      */
     public record Report(String version, String outcome, List<String> issues) {
+        /** 报告是某次检查点的不可变快照，issues会被复制，避免后续修改影响历史决策。 */
         /** 防御性复制，避免质量意见被外部列表修改。 */
         public Report {
             issues = List.copyOf(issues);
@@ -37,6 +42,7 @@ public final class SampleQualityWorkflow {
      * @return 基础质量报告，不负责扣预算、写库或实际调用改写
      */
     public Report inspect(GenerationSpec spec, SampleGenerationPort.Result result) {
+        // 先处理模型拒绝和结构非法，再检查正文内容，避免把异常响应误判为质量问题。
         if ("REFUSED".equals(result.status()))
             return new Report(VERSION, "REJECT", List.of("生成模型拒绝，不执行拒绝绕过或补足通过数量"));
         if (!"GENERATED".equals(result.status()))
@@ -60,6 +66,7 @@ public final class SampleQualityWorkflow {
      * 只生成去重键，不改写原候选，不做语义相似判断，也不是完整Unicode case folding。
      */
     public String normalized(String content) {
+        // 规范化只用于精确去重键，不能把规范化后的字符串写回候选正文或替代原文哈希。
         return Normalizer.normalize(content, Normalizer.Form.NFKC).replaceAll("\\s+", " ").trim().toLowerCase(Locale.ROOT);
     }
 }

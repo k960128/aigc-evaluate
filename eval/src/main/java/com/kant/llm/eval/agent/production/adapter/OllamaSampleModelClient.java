@@ -23,6 +23,10 @@ import java.time.Duration;
 @Component
 public class OllamaSampleModelClient {
     /**
+     * 这是D05唯一的模型网络传输实现。
+     * 通过“单次请求、无工具、无隐藏重试、无对话记忆”的约束，让每一笔物理调用都能对应数据库操作记录。
+     */
+    /**
      * 使用指定角色配置发送一次模型请求，严格核对命令中的角色指纹和固定提示词。
      * @param role 当前阶段的不可变部署配置，包含该角色自己的模型、输出限制和超时
      * @param command 已持久化的命令；profileRef是单角色身份，不是计划组合身份
@@ -31,11 +35,12 @@ public class OllamaSampleModelClient {
      */
     public Response callOnce(SampleFactoryModelConfiguration.Role role, SampleGenerationPort.Command command,
                              String expectedPrompt) {
+        // 调用前校验角色指纹和系统提示词，防止旧检查点被当前错误角色或错误提示词执行。
         var profile = role.profile();
         if (!profile.available() || !profile.profileRef().equals(command.profileRef())
                 || !expectedPrompt.equals(command.systemPrompt()))
             throw new IllegalStateException("模型角色未启用或命令快照已变化");
-        // 客户端超时只约束等待，不能据此认为供应商没有执行。
+        // 客户端超时只约束等待，不能据此认为供应商没有执行；外层会把未确认结果视为UNKNOWN。
         var requestFactory = new JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build());
         requestFactory.setReadTimeout(Duration.ofSeconds(role.requestTimeoutSeconds()));
         var model = OllamaChatModel.builder().ollamaApi(OllamaApi.builder().baseUrl(role.baseUrl())
@@ -48,8 +53,10 @@ public class OllamaSampleModelClient {
                 .user(command.userPayloadJson()).call().chatResponse();
         if (response == null || response.getResult() == null || response.getResult().getOutput() == null)
             throw new IllegalStateException("模型请求未获得可确认响应");
+        // raw仅在内存中短暂存在，交给上层适配器解析；不直接写入日志、数据库或接口响应。
         String raw = response.getResult().getOutput().getText();
         if (raw == null) throw new IllegalStateException("模型响应正文缺失");
+        // 供应商未返回完整用量时使用平台估算，并明确标记ESTIMATED，避免把估算冒充计费事实。
         long input = TokenEstimator.estimate(command.systemPrompt()) + TokenEstimator.estimate(command.userPayloadJson());
         long output = TokenEstimator.estimate(raw);
         String measurement = "ESTIMATED";

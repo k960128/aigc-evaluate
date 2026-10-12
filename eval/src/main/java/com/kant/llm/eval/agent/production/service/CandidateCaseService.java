@@ -28,6 +28,10 @@ import java.util.Set;
  */
 @Service
 public class CandidateCaseService {
+    /**
+     * 该服务提供前端工作台所需的只读投影，不承担模型调用、质量判断或人工审核。
+     * 查询时重新核对候选、生成操作和评审操作的关联，防止“显示成功”掩盖持久化链路不一致。
+     */
     /** 候选状态、原文、来源及父链。 */
     private final AgentSampleCandidateMapper candidates;
     /** 生成响应与用量事实；对外只投影元数据，不暴露commandJson。 */
@@ -51,6 +55,7 @@ public class CandidateCaseService {
 
     /** 升序主键游标，最多100条；status只能使用候选状态，不与批次或质量状态混用。 */
     public FactoryResponses.Page<FactoryResponses.Candidate> list(String runId, String status, long afterId, int limit) {
+        // status过滤的是候选生命周期，不是quality.outcome；两者必须同时展示给前端。
         checkPage(afterId, limit);
         if (status != null && !Set.of("REFLECTING", "PENDING_REVIEW", "QUALITY_REJECTED", "DUPLICATE", "APPROVED", "RETURNED").contains(status)) {
             throw error(SampleFactoryErrorCode.INVALID_REQUEST);
@@ -74,12 +79,14 @@ public class CandidateCaseService {
 
     /** 返回候选元数据、生成计量及质量报告；原文由content接口单独授权读取。 */
     public FactoryResponses.Candidate detail(String candidateId) {
+        // 详情仍只返回索引和质量元数据，正文通过独立接口读取并再次校验摘要。
         var p = principals.currentPrincipal();
         return response(authorized(p.tenantId(), p.actorId(), candidateId));
     }
 
     /** REFUSED/INVALID可能没有正文，返回null，不伪造一个可以投入评测的攻击输入。 */
     public FactoryResponses.Content content(String candidateId) {
+        // 拒绝、非法或空正文候选也可以被审计，但不能被这个接口包装成可执行样本。
         var p = principals.currentPrincipal();
         var row = authorized(p.tenantId(), p.actorId(), candidateId);
         verifyContent(row);
@@ -88,6 +95,7 @@ public class CandidateCaseService {
 
     /** 从根候选到当前候选，最多原始生成+两次改写；父链必须处于同批次同根槽位。 */
     public List<FactoryResponses.Candidate> lineage(String candidateId) {
+        // 血缘展示用于解释有限改写过程；父候选保留，便于人工比较每一轮变化。
         var p = principals.currentPrincipal();
         var current = authorized(p.tenantId(), p.actorId(), candidateId);
         var chain = new ArrayList<FactoryResponses.Candidate>();
@@ -109,6 +117,7 @@ public class CandidateCaseService {
 
     /** 未确认操作通过该索引展示；CALLING/UNKNOWN不提供“自动重发”动作。 */
     public FactoryResponses.Page<FactoryResponses.Operation> operations(String runId, long afterId, int limit) {
+        // 操作列表展示的是生命周期和用量，不展示commandJson，避免泄露种子、候选正文和平台提示词。
         checkPage(afterId, limit);
         var p = principals.currentPrincipal();
         records.authorized(p.tenantId(), p.actorId(), runId);
@@ -141,6 +150,7 @@ public class CandidateCaseService {
 
     /** 组合候选与已确认生成事实，并核对二者属于同一批次；质量状态和人工准入状态分别返回。 */
     private FactoryResponses.Candidate response(AgentSampleCandidateDO row) {
+        // 只有生成操作SUCCEEDED后才能形成可读候选；操作成功本身仍不代表质量PASS。
         var op = records.operation(row.getOperationId());
         if (!row.getRunId().equals(op.getRunId()) || !"SUCCEEDED".equals(op.getStatus()) || !"GENERATE".equals(op.getOperationKind())) {
             throw error(SampleFactoryErrorCode.PERSISTENCE_ERROR);

@@ -12,6 +12,10 @@ import java.util.HexFormat;
 /** 生产配置序列化、内容摘要与UTC数据库时间转换；不把受限正文带入错误。 */
 @Component
 public class FactoryJsonSupport {
+    /**
+     * 该工具统一D05的持久化边界：JSON解析失败必须暴露为事实损坏，不能用默认值继续执行；
+     * 摘要用于幂等、完整性和配置指纹，不能被误当作加密或权限控制。
+     */
     /** 复用应用JSON配置，持久化契约变化应保持历史可读性。 */
     private final ObjectMapper mapper;
     /** 注入序列化器，不在工具内改变全局JSON配置。 */

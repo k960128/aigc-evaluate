@@ -12,6 +12,10 @@ import java.util.List;
  * 字符串长度使用校验注解约束，领域组合约束由嵌套契约构造器校验；不接受目标执行参数。
  */
 public final class FactoryRequests {
+    /**
+     * 请求对象只描述控制面意图，不携带服务端身份，也不允许直接传入模型命令、目标调用参数或数据库主键。
+     * <p>幂等键用于网络重试回放，expectedVersion用于防止前端基于旧页面状态覆盖最新状态。</p>
+     */
     /** 仅作为请求类型命名空间，不创建容器实例。 */
     private FactoryRequests() {
     }
@@ -25,6 +29,7 @@ public final class FactoryRequests {
      */
     public record Seed(@NotBlank @Size(max = 128) String idempotencyKey, @NotBlank @Size(max = 256) String name,
                        @NotBlank @Size(max = 10000) String content, @Size(max = 256) String sourceRef) {
+        /** 种子创建只保存专家资料，不触发Actor、Critic或被测目标调用。 */
     }
 
     /**
@@ -41,6 +46,7 @@ public final class FactoryRequests {
                        @NotBlank @Size(max = 64) String activityId, @NotBlank @Size(max = 128) String authorizationRef,
                        @NotNull @Valid GenerationSpec spec, @NotNull @Valid ProductionBudget budget,
                        @Valid ProductionSchedule schedule) {
+        /** 计划请求中的spec、budget和schedule会被序列化为冻结快照，页面后续修改不会影响已创建计划。 */
     }
 
     /**
@@ -61,6 +67,7 @@ public final class FactoryRequests {
      */
     public record Run(@NotBlank @Size(max = 128) String idempotencyKey, @NotNull @Min(0) Long expectedVersion,
                       Instant plannedFor) {
+        /** plannedFor为空表示立即手动批次；非空时必须是已经到期的原计划槽位。 */
     }
 
     /**
@@ -73,6 +80,7 @@ public final class FactoryRequests {
     public record ScheduleControl(@NotBlank @Size(max = 128) String idempotencyKey,
                                   @NotNull @Min(0) Long expectedVersion,
                                   @NotNull Boolean enabled, @NotBlank @Size(max = 2000) String reason) {
+        /** 启停命令只影响未来定时槽位，不能代替批次停止或撤销已发出的模型请求。 */
     }
 
     /**
@@ -94,6 +102,7 @@ public final class FactoryRequests {
     public record Review(@NotBlank @Size(max = 128) String idempotencyKey, @NotNull @Min(0) Long expectedVersion,
                          @NotNull Decision decision, @NotBlank @Size(max = 2000) String reason,
                          boolean acknowledgeQualityOnly) {
+        /** 审核请求是人工准入动作；它不代表自动验证目标风险，也不修改生成批次的历史结果。 */
         /** APPROVE只批准样本准入；RETURN只保留退回意见，二者均不是目标安全结论。 */
         public enum Decision {APPROVE, RETURN}
     }
@@ -114,5 +123,6 @@ public final class FactoryRequests {
      */
     public record CaseSet(@NotBlank @Size(max = 128) String idempotencyKey, @NotBlank @Size(max = 256) String name,
                           @NotEmpty @Size(max = 500) List<@NotNull @Valid CaseRef> cases) {
+        /** 集合只保存人工选择的正式资产版本引用，不会在创建时自动启动评测。 */
     }
 }

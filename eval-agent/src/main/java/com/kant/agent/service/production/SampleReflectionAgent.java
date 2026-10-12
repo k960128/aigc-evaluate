@@ -16,6 +16,10 @@ import java.util.Map;
  * <p>无Spring、数据库、工具或进程内会话依赖；maxRewrites只在这里决定，Worker不另设改写循环。</p>
  */
 public final class SampleReflectionAgent {
+    /**
+     * 该Agent是无状态决策核心：根据当前检查点构造下一次提示词，并根据已确认结果决定下一步。
+     * 它不保存会话、不访问数据库、不申请预算，也不直接调用模型；这些副作用由eval模块负责。
+     */
     /** 新批次的Agent架构版本；旧批次保留原版本，只允许结算原已确认事实。 */
     public static final String VERSION = "sample-reflection-v1";
     /** 综合质量报告版本；与旧的纯规则报告区别，避免将规则PASS当成模型评审通过。 */
@@ -40,6 +44,7 @@ public final class SampleReflectionAgent {
     /** 一次物理模型调用的角色，同时是数据库检查点的阶段。 */
     public enum Phase {GENERATE, REFLECT}
 
+    /** 领域状态机允许的三种动作；动作本身不代表外层一定有预算执行。 */
     /** Agent给出的有限动作；是否有预算执行下一步仍由外层核对。 */
     public enum Next {REFLECT, REWRITE, NEXT_SLOT}
 
@@ -55,6 +60,10 @@ public final class SampleReflectionAgent {
      */
     public record Context(GenerationSpec spec, String seed, int ordinal, int rewriteRound,
                           String parentContent, SampleQualityWorkflow.Report feedback, String candidateContent) {
+        /**
+         * Context只描述当前检查点的输入，不是长期记忆。
+         * Worker恢复时必须从计划、种子、候选和质量报告重新组装它，不能依赖线程内对象。
+         */
     }
 
     /**
@@ -63,6 +72,9 @@ public final class SampleReflectionAgent {
      * @param payload 本轮JSON业务资料，允许首次生成的父正文/反馈为空，均按不可信资料处理
      */
     public record Prompt(String systemPrompt, Map<String, Object> payload) {
+        /**
+         * Prompt把平台指令与业务资料分离；payload最终会被序列化进操作命令，供重启后重放和审计。
+         */
     }
 
     /**
@@ -71,6 +83,10 @@ public final class SampleReflectionAgent {
      * @param next REFLECT调用评审、REWRITE改写当前槽位、NEXT_SLOT结束当前槽位；外层仍可因预算/停止终止
      */
     public record Decision(SampleQualityWorkflow.Report report, Next next) {
+        /**
+         * Decision是Agent对“质量状态+下一步”的唯一输出。
+         * 预算不足、租约失效、批次停止等工程条件仍由外层覆盖执行，不由模型或Agent绕过。
+         */
     }
 
     /** 硬规则是模型评审前后的共同门禁，不能被模型意见覆盖。 */
@@ -78,6 +94,7 @@ public final class SampleReflectionAgent {
 
     /** 构造生成或评审输入；两种角色复用专家约束，但评审不会调用生成器内部的隐藏循环。 */
     public Prompt prompt(Phase phase, Context context) {
+        // 每次只构造一个物理调用的输入；循环推进由持久化检查点驱动，而不是在本方法内递归调用模型。
         var spec = context.spec();
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("seedId", spec.seedId());
@@ -100,6 +117,7 @@ public final class SampleReflectionAgent {
 
     /** 硬规则先行：拒绝/非法生成直接结束，长度等问题有限改写，规则通过后才付费评审。 */
     public Decision afterGeneration(GenerationSpec spec, int rewriteRound, SampleGenerationPort.Result result) {
+        // 生成结果先经过本地硬规则；只有规则PASS才进入Critic，避免为明显非法内容额外付费。
         var local = rules.inspect(spec, result);
         if ("PASS".equals(local.outcome())) {
             return new Decision(new SampleQualityWorkflow.Report(QUALITY_VERSION, "PENDING", List.of("基础规则通过，等待模型反思评审")), Next.REFLECT);
@@ -109,6 +127,7 @@ public final class SampleReflectionAgent {
 
     /** 模型评审不得覆盖硬规则；非法评审保守拒绝，只有明确PASS才进入后续去重与人工审核。 */
     public Decision afterReflection(GenerationSpec spec, int rewriteRound, String content, SampleReflectionPort.Result result) {
+        // 即使Critic返回PASS，也必须再次确认候选满足本地规则，防止评审意见覆盖硬性约束。
         var local = rules.inspect(spec, new SampleGenerationPort.Result("GENERATED", content, "", 0, 0, "ESTIMATED"));
         if (!"PASS".equals(local.outcome()))
             return decide(spec, rewriteRound, new SampleQualityWorkflow.Report(QUALITY_VERSION, local.outcome(), local.issues()));
@@ -118,11 +137,13 @@ public final class SampleReflectionAgent {
 
     /** 升级兼容：旧批次只能按原规则结算已确认响应，不补做新的模型评审或隐藏升级旧报告。 */
     public Decision settleLegacy(GenerationSpec spec, SampleGenerationPort.Result result) {
+        // 旧批次不补做新版Critic，只按旧版本已经承诺的规则完成兼容结算。
         return new Decision(rules.inspect(spec, result), Next.NEXT_SLOT);
     }
 
     /** 唯一改写轮次判断；达到上限保留拒绝原因，不为了完成槽位而将候选判成PASS。 */
     private Decision decide(GenerationSpec spec, int rewriteRound, SampleQualityWorkflow.Report report) {
+        // REVISE只允许在计划声明的有限次数内改写；达到上限时宁可拒绝，也不为了数量目标放宽准入。
         if (!"REVISE".equals(report.outcome())) return new Decision(report, Next.NEXT_SLOT);
         if (rewriteRound < spec.maxRewrites()) return new Decision(report, Next.REWRITE);
         var issues = new ArrayList<>(report.issues());
@@ -132,6 +153,7 @@ public final class SampleReflectionAgent {
 
     /** 历史规则报告仍可审阅；新报告的PASS表示规则与模型评审均通过，但均不代表目标风险已验证。 */
     public static boolean supportedQualityVersion(String version) {
+        // 读取历史候选时允许旧规则报告继续展示，但不把旧报告伪装成新版Reflection结果。
         return SampleQualityWorkflow.VERSION.equals(version) || QUALITY_VERSION.equals(version);
     }
 }

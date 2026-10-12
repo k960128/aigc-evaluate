@@ -17,6 +17,10 @@ public class ScheduledTaskTrigger {
     private final SampleProductionService production;
     /** 注入调度受理业务，不在构造时创建批次。 */
     public ScheduledTaskTrigger(SampleProductionService production) { this.production=production; }
+    /**
+     * 定时器只负责发现到期计划并提交调度事务，不负责等待批次完成。
+     * 即使调度触发成功，前端仍需通过run接口观察Worker是否真正执行完成。
+     */
     /** 同一轮使用同一个UTC时点；单个计划失败不阻止其他到期计划，日志不含配置或正文。 */
     // @Scheduled(fixedDelayString="${eval.agent.sample-factory.schedule-interval-ms:5000}")
     public void trigger() {

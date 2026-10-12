@@ -63,6 +63,7 @@ public class SampleProductionService {
 
     /** 返回当前主体可见的组合及单角色配置；available要求两个角色均可用，但不是健康检查。 */
     public FactoryResponses.ModelProfile profile() {
+        // 该接口只返回当前后端配置快照；available为false时，前端应阻止新计划和新批次受理。
         principals.currentPrincipal();
         return models.profile();
     }
@@ -75,6 +76,7 @@ public class SampleProductionService {
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public FactoryResponses.Seed createSeed(FactoryRequests.Seed request) {
+        // 种子是专家输入，不是模型生成结果；创建种子本身不会进入Worker或消耗模型额度。
         var p = principals.currentPrincipal();
         String hash = json.hash(request);
         var old = seeds.selectOne(new LambdaQueryWrapper<AgentSampleSeedDO>().eq(AgentSampleSeedDO::getTenantId, p.tenantId())
@@ -106,6 +108,7 @@ public class SampleProductionService {
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public FactoryResponses.Task createTask(FactoryRequests.Task request) {
+        // 计划创建阶段冻结所有影响生成结果的因素，后续执行不会重新读取请求或当前页面状态。
         var p = principals.currentPrincipal();
         String hash = json.hash(request);
         var old = tasks.selectOne(new LambdaQueryWrapper<AgentSampleTaskDO>().eq(AgentSampleTaskDO::getTenantId, p.tenantId())
@@ -154,6 +157,7 @@ public class SampleProductionService {
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public FactoryResponses.Task resetTask(String sourceTaskId, FactoryRequests.ResetTask request) {
+        // reset的语义是“接受最新角色配置后创建新计划”，不是修改旧计划或修复旧批次的历史事实。
         var p = principals.currentPrincipal();
         var source = authorizedTask(p.tenantId(), p.actorId(), sourceTaskId);
         String resetHash = json.hash(new ResetTaskIdentity(sourceTaskId, request.idempotencyKey(), request.name()));
@@ -210,6 +214,7 @@ public class SampleProductionService {
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public FactoryResponses.Run start(String taskId, FactoryRequests.Run request) {
+        // HTTP只负责快速受理并写入QUEUED；真正的模型调用由后台Worker异步完成。
         var p = principals.currentPrincipal();
         authorizedTask(p.tenantId(), p.actorId(), taskId);
         var task = lockTask(taskId);
@@ -244,6 +249,7 @@ public class SampleProductionService {
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public FactoryResponses.Control controlSchedule(String taskId, FactoryRequests.ScheduleControl request) {
+        // 启停只影响未来槽位，不能回滚已经创建的Run，也不能取消已经发送的模型请求。
         var p = principals.currentPrincipal();
         authorizedTask(p.tenantId(), p.actorId(), taskId);
         var task = lockTask(taskId);
@@ -265,6 +271,7 @@ public class SampleProductionService {
 
     /** 调度器只读取持久化到期计划，无认证线程假设；租户/操作者来自原已批准任务。 */
     public List<AgentSampleTaskDO> due(Instant at) {
+        // 这里只做候选计划扫描，不在查询阶段改变游标；游标推进必须发生在triggerScheduled事务内。
         return tasks.selectList(new LambdaQueryWrapper<AgentSampleTaskDO>().eq(AgentSampleTaskDO::getScheduleEnabled, true)
                 .le(AgentSampleTaskDO::getNextFireAt, json.utc(at)).orderByAsc(AgentSampleTaskDO::getNextFireAt).last("LIMIT 20"));
     }
@@ -272,6 +279,7 @@ public class SampleProductionService {
     /** 同一任务行锁 + 批次槽位唯一索引 + 触发审计，保证多个实例不重复生成相同批次。 */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public void triggerScheduled(String taskId, Instant at) {
+        // 调度触发按数据库中的原槽位幂等，允许多实例同时扫描而不重复创建同一槽位批次。
         var task = lockTask(taskId);
         if (!Boolean.TRUE.equals(task.getScheduleEnabled()) || task.getNextFireAt() == null) return;
         Instant planned = json.instant(task.getNextFireAt());
@@ -308,6 +316,7 @@ public class SampleProductionService {
      * 固定期限从受理时刻起算，包含排队时间，Worker恢复不会延长它。
      */
     private AgentSampleRunDO queue(AgentSampleTaskDO task, String key, String hash, String trigger, String kind, Instant planned) {
+        // queue只写入可恢复检查点；它不负责领取租约、提交线程或调用模型。
         var old = runs.selectOne(new LambdaQueryWrapper<AgentSampleRunDO>().eq(AgentSampleRunDO::getTaskId, task.getTaskId()).eq(AgentSampleRunDO::getTriggerKey, trigger));
         if (old != null) return old;
         var row = new AgentSampleRunDO();
@@ -350,12 +359,14 @@ public class SampleProductionService {
 
     /** 查询当前主体的种子元数据，不返回原文。 */
     public FactoryResponses.Seed seed(String id) {
+        // 列表和详情元数据不携带正文，避免普通导航接口扩大受限内容暴露面。
         var p = principals.currentPrincipal();
         return seedResponse(seed(p.tenantId(), p.actorId(), id));
     }
 
     /** 校验主体及原文摘要后单独返回种子正文；调用方应将正文作为不可信纯文本展示。 */
     public FactoryResponses.Content seedContent(String id) {
+        // 正文读取再次校验摘要；返回后仍应作为不可信文本展示，不能直接拼接为HTML。
         var p = principals.currentPrincipal();
         var seed = seed(p.tenantId(), p.actorId(), id);
         return new FactoryResponses.Content(id, seed.getContent(), seed.getContentHash());
@@ -429,6 +440,7 @@ public class SampleProductionService {
 
     /** 转换运行快照；ordinal对外称completedSlots，表示已结束根槽位数而非合格样本数。 */
     public FactoryResponses.Run runResponse(AgentSampleRunDO r) {
+        // 运行响应是当前数据库快照；创建批次接口返回的首次回执不会自动随Worker推进。
         return new FactoryResponses.Run(r.getRunId(), r.getTaskId(), r.getStatus(), r.getVersion(), r.getTriggerKind(),
                 json.instant(r.getPlannedFor()), r.getOrdinal(), r.getRewriteRound(), r.getPendingOperationId(), json.read(r.getUsageJson(), ProductionBudget.Usage.class),
                 Boolean.TRUE.equals(r.getStopRequested()), r.getErrorCode(), json.instant(r.getCreatedAt()), json.instant(r.getDeadlineAt()), json.instant(r.getFinishedAt()),
@@ -462,6 +474,7 @@ public class SampleProductionService {
 
     /** 校验生成与评审角色均可用且组合指纹与计划一致；不进行模型探活，也不替换旧快照。 */
     private void requireProfile(GenerationSpec spec) {
+        // 配置不一致时宁可停止新增调用，也不把新模型混入旧计划的历史链路。
         var profile = models.profile();
         if (!profile.available() || !profile.profileRef().equals(spec.generatorProfileRef()))
             throw error(SampleFactoryErrorCode.GENERATOR_UNAVAILABLE);

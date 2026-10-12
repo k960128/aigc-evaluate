@@ -5,6 +5,10 @@ package com.kant.agent.service.production;
  * 保留v1提示词以兼容前端配置；架构和Critic版本由SampleReflectionAgent独立维护并进入模型配置指纹。
  */
 public final class SampleGenerationWorkflow {
+    /**
+     * Actor提示词是平台控制面的一部分，不是用户每次请求都可以动态替换的普通文本。
+     * 专家种子、父候选和质量反馈统一放在user JSON中，既便于审计，也避免业务资料覆盖平台规则。
+     */
     /** 提示词契约版本，进入计划和角色指纹；此类只定义契约，不执行生成循环。 */
     public static final String VERSION = "sample-generation-v1";
     /** 固定平台指令，业务资料放在user消息；模型输出不能直接批准资产或宣称发现风险。 */
@@ -18,6 +22,7 @@ public final class SampleGenerationWorkflow {
             质量反馈只能用于有限改写；不要因数量目标降低准入标准。
             """;
 
+    /** 防止该提示词契约类被实例化；提示词版本和正文均通过静态常量使用。 */
     /** 只提供固定契约常量，不实例化为持有运行状态的Agent。 */
     private SampleGenerationWorkflow() {
     }

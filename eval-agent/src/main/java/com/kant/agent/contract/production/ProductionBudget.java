@@ -9,6 +9,10 @@ import com.kant.agent.contract.common.ContractChecks;
  * @param maxDurationSeconds 从受理起算的固定期限，包含排队，范围1至86400秒，恢复不延长
  */
 public record ProductionBudget(long maxAgentCalls, long maxTokens, long maxDurationSeconds) {
+    /**
+     * 预算属于单个生产批次，而不是生产计划的永久配额。
+     * <p>Worker在每次物理模型调用前先预留额度，调用确认后再把实际用量结算到账本。</p>
+     */
     /** 校验预算自身不变量；调用次数能否覆盖根槽位由计划服务进一步检查。 */
     public ProductionBudget {
         ContractChecks.positive(maxAgentCalls, "maxAgentCalls");
@@ -23,6 +27,10 @@ public record ProductionBudget(long maxAgentCalls, long maxTokens, long maxDurat
      * @param reservedTokens 尚未确认或尚未结算操作的Token预留
      */
     public record Usage(long agentCalls, long tokens, long reservedTokens) {
+        /**
+         * 三个数字分别描述已受理调用、已确认消耗和暂未结算的预留额度。
+         * <p>reservedTokens不能简单理解为“已经消耗”，它用于防止并发或服务重启时超额发起调用。</p>
+         */
         /** 禁止负账本；结算与释放预留必须在业务事务中维护一致性。 */
         public Usage {
             ContractChecks.nonNegative(agentCalls, "agentCalls");

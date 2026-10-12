@@ -30,6 +30,10 @@ import java.util.UUID;
  */
 @Service
 public class AssetReviewService {
+    /**
+     * 该服务把“自动质量通过的候选”转换为“人工批准的正式资产”。
+     * 两者之间保留明确的人审边界：Critic只能给质量意见，APPROVE才创建正式case，且不会自动启动旧评测流水线。
+     */
     /** 候选行锁及版本化准入状态更新。 */
     private final AgentSampleCandidateMapper candidateMapper;
     /** 人工意见、审批依据及首次审核回执。 */
@@ -69,6 +73,7 @@ public class AssetReviewService {
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public FactoryResponses.Review review(String candidateId, FactoryRequests.Review request) {
+        // 审核前重新读取候选和评审事实，不能只相信前端缓存的PENDING_REVIEW状态。
         var p = principals.currentPrincipal();
         candidates.authorized(p.tenantId(), p.actorId(), candidateId);
         var row = candidateMapper.selectOne(new LambdaQueryWrapper<AgentSampleCandidateDO>()
@@ -180,6 +185,7 @@ public class AssetReviewService {
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public FactoryResponses.CaseSet createCaseSet(FactoryRequests.CaseSet request) {
+        // 集合创建只冻结人工选择结果；它是D05输出的组织形式，不是D01-D04的自动触发器。
         var p = principals.currentPrincipal();
         String hash = json.hash(request);
         var old = caseSets.selectOne(new LambdaQueryWrapper<AgentSampleCaseSetDO>()

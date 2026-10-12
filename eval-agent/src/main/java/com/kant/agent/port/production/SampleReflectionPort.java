@@ -17,6 +17,11 @@ public interface SampleReflectionPort {
     Result reflect(SampleGenerationPort.Command command);
 
     /**
+     * Critic端口只返回“质量意见”，不返回是否已经发现目标风险的结论。
+     * 它与Actor可以使用同一个物理模型，但在领域上必须保持独立的角色、提示词、操作ID和用量记录。
+     */
+
+    /**
      * 已确认的模型评审结果。只保留短反馈，不保存模型内部思维链或非法原始响应。
      * @param outcome PASS通过、REVISE建议修改、REJECT不应继续、INVALID响应结构非法
      * @param issues 最多5条、每条最多500字符的修改意见；PASS必须为空，其他结果必须有原因
@@ -25,6 +30,10 @@ public interface SampleReflectionPort {
      * @param measurement ACTUAL供应商实报，ESTIMATED平台估算
      */
     record Result(String outcome, List<String> issues, long inputTokens, long outputTokens, String measurement) {
+        /**
+         * 评审结果在构造时完成最小结构校验，防止非法结果绕过外层状态机。
+         * PASS与issues为空、其他结果与issues非空是当前D05的结构约束。
+         */
         public Result {
             ContractChecks.require(outcome != null && Set.of("PASS", "REVISE", "REJECT", "INVALID").contains(outcome), "反思结果类型不合法");
             issues = List.copyOf(issues);

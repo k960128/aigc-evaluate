@@ -20,6 +20,10 @@ import java.util.TreeMap;
  */
 @Component
 public class SampleFactoryModelConfiguration {
+    /**
+     * 该配置对象在应用启动时冻结两套角色配置。
+     * 计划保存的是组合指纹，具体操作保存的是当前阶段角色指纹；两层校验共同防止运行中的隐式换模。
+     */
     /** 独立Actor配置，不与Critic共享可变对象。 */
     private final Role generator;
     /** 独立Critic配置，物理模型允许暂时与Actor相同。 */
@@ -59,11 +63,13 @@ public class SampleFactoryModelConfiguration {
 
     /** 对外保留旧Profile顶层字段，并附加两个角色的独立快照；不触发模型调用。 */
     public FactoryResponses.ModelProfile profile() {
+        // 只返回可对外展示的快照；Ollama地址、温度和超时留在后端角色配置中。
         return profile;
     }
 
     /** 根据执行阶段选择角色，评审不得误用生成角色的输出上限、地址或超时。 */
     public Role role(SampleReflectionAgent.Phase phase) {
+        // GENERATE使用Actor，REFLECT使用Critic；即使两个角色物理模型相同，也不能混用角色身份。
         return switch (phase) {
             case GENERATE -> generator;
             case REFLECT -> critic;
@@ -72,12 +78,14 @@ public class SampleFactoryModelConfiguration {
 
     /** 只有两个角色都启用且组合指纹完全相同，才允许为冻结计划新增模型调用。 */
     public boolean matches(String profileRef) {
+        // 计划快照不匹配时停止新增调用，让调用方通过重置计划显式接受新配置。
         return profile.available() && profile.profileRef().equals(profileRef);
     }
 
     /** 构建角色快照；角色名进入摘要，即使同模型同参数，生成与评审身份也不混用。 */
     private Role role(String name, boolean enabled, String baseUrl, String model, int outputLimit,
                       double temperature, int timeout, String promptVersion, FactoryJsonSupport json) {
+        // 空模型名可以在配置层保留为不可用状态，但地址、数值范围等结构性错误直接拒绝启动。
         if (baseUrl == null || baseUrl.isBlank() || model == null)
             throw new IllegalArgumentException(name + "模型地址或名称配置不合法");
         if (outputLimit < 64 || outputLimit > 4096 || !Double.isFinite(temperature) || temperature < 0 || temperature > 2)

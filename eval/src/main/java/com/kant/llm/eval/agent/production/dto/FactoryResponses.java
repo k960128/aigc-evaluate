@@ -11,6 +11,10 @@ import java.util.List;
 
 /** 默认只返回配置/证据索引，受限种子与候选正文走独立认证接口。 */
 public final class FactoryResponses {
+    /**
+     * D05响应按“元数据与受限正文分离”设计：列表接口返回索引、状态和摘要，正文通过单独接口读取。
+     * 这样既便于前端轮询和分页，也避免在普通列表、日志或错误处理中扩散种子与候选正文。
+     */
     /** 仅作为响应类型命名空间；各记录用于Result.data，不单独创建容器。 */
     private FactoryResponses() {
     }
@@ -127,6 +131,7 @@ public final class FactoryResponses {
                             String contentHash, String duplicateOfCandidateId, Generation generation,
                             SampleQualityWorkflow.Report quality, String status, long version, Instant createdAt,
                             Reflection reflection) {
+        /** 候选响应不直接带正文；前端需要根据candidateId调用受限内容接口。 */
     }
 
     /**
@@ -150,6 +155,7 @@ public final class FactoryResponses {
      * @param measurement ACTUAL表示供应商实报，ESTIMATED表示平台估算
      */
     public record Generation(String status, String reason, long inputTokens, long outputTokens, String measurement) {
+        /** 生成元数据只反映Actor调用事实，不代表候选已经通过质量评审或人工审核。 */
     }
 
     /**
@@ -259,5 +265,6 @@ public final class FactoryResponses {
      * @param <T> 具体元数据响应类型
      */
     public record Page<T>(List<T> items, long nextCursor, boolean hasMore) {
+        /** 游标分页是增量读取模型，不是固定页码；新数据插入时客户端应以nextCursor继续读取。 */
     }
 }

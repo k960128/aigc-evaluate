@@ -10,6 +10,10 @@ import java.time.LocalDateTime;
  */
 @Getter @Setter @TableName("agent_sample_asset")
 public class AgentSampleAssetDO {
+    /**
+     * 正式资产是人工审核后的稳定输出，只引用候选正文并冻结其摘要和专家约束。
+     * 它不是目标执行结果，也不等同于“已经发现漏洞”。
+     */
     /** 数据库主键。 */ @TableId(type=IdType.AUTO) private Long id;
     /** 审核启用的正式单消息用例。 */ private String caseId;
     /** 不可变版本，首版1。 */ private Long caseVersion;

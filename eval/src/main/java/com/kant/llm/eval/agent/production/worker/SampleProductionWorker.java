@@ -45,6 +45,7 @@ public class SampleProductionWorker {
     /** 周期扫描可领取批次；投递失败时释放租约，保留数据库任务供以后恢复。 */
     @Scheduled(fixedDelayString = "${eval.agent.sample-factory.recovery-interval-ms:5000}")
     public void dispatch() {
+        // 扫描结果只是候选任务；claim成功后才获得数据库执行权，线程池满载则把任务留给下一轮扫描。
         for (var run : records.recoverable()) {
             String worker = "spworker_" + UUID.randomUUID().toString().replace("-", "");
             if (!records.claim(run.getRunId(), worker)) continue;
@@ -62,6 +63,7 @@ public class SampleProductionWorker {
     /** 每5秒续租；续租失败不等于远端请求被取消，失去执行权的线程不能继续推进批次。 */
     @Scheduled(fixedDelay = 5000L)
     public void heartbeat() {
+        // 心跳与执行线程解耦；active丢失只影响本进程续租，不会删除数据库中的批次和操作事实。
         active.forEach((worker, run) -> {
             try {
                 if (!records.heartbeat(run.getRunId(), worker)) active.remove(worker);
@@ -73,6 +75,7 @@ public class SampleProductionWorker {
 
     /** 按是否存在在途操作收口异常，最终总是尝试移除心跳索引和释放租约。 */
     private void execute(AgentSampleRunDO original, String worker) {
+        // Runner异常时根据是否存在pending operation决定BLOCKED或FAILED，避免把未知调用错误当成普通失败。
         try {
             runner.advance(original, worker);
         } catch (RuntimeException ex) {

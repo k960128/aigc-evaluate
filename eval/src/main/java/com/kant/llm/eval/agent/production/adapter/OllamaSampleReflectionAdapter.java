@@ -19,6 +19,10 @@ import java.util.Set;
  */
 @Component
 public class OllamaSampleReflectionAdapter implements SampleReflectionPort {
+    /**
+     * Critic适配器不负责生成新正文，也不负责根据REVISE再次调用模型。
+     * 它只把一次评审响应收敛为有限的结构化意见，下一次改写由Reflection Agent重新决定。
+     */
     /** 当前Critic配置，后续换模型只需修改critic配置区。 */
     private final SampleFactoryModelConfiguration.Role role;
     /** 仅复用网络实现，不复用Actor的模型参数或对话记忆。 */
@@ -42,6 +46,7 @@ public class OllamaSampleReflectionAdapter implements SampleReflectionPort {
     /** 一次独立Critic请求；严格解析结果，不修补JSON，不在失败时调用第二次模型。 */
     @Override
     public SampleReflectionPort.Result reflect(SampleGenerationPort.Command command) {
+        // 评审响应必须是单一JSON对象；任何多余文本或结构不符都按INVALID保守处理。
         var response = client.callOnce(role, command, SampleReflectionAgent.CRITIC_PROMPT);
         try {
             if (response.text().length() > 100000) return invalidReflection(response);
@@ -68,6 +73,7 @@ public class OllamaSampleReflectionAdapter implements SampleReflectionPort {
 
     /** 非法评审也是已确认响应，保留消耗并保守拒绝，不能伪装成通过或零消耗。 */
     private SampleReflectionPort.Result invalidReflection(OllamaSampleModelClient.Response response) {
+        // 即使结构非法，也要保留本次调用已发生的计量，不能返回零消耗或伪造PASS。
         return new SampleReflectionPort.Result("INVALID", List.of("模型评审未返回合法的结构化质量结论"),
                 response.inputTokens(), response.outputTokens(), response.measurement());
     }

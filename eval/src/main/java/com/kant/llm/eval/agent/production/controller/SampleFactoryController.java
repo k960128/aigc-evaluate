@@ -22,6 +22,10 @@ import static com.kant.llm.eval.agent.production.support.SampleFactoryApiSupport
 @RestController
 @RequestMapping("/agent/sample-factory")
 public class SampleFactoryController {
+    /**
+     * Controller按“控制面”和“查询面”提供D05接口：控制面只快速受理，查询面负责读取后台推进后的事实。
+     * 因此POST创建批次返回QUEUED并不表示模型已经生成样本，前端必须继续轮询Run和Candidate接口。
+     */
     /** 种子、计划、重置、批次受理与调度控制。 */
     private final SampleProductionService production;
     /** 批次身份校验及停止控制。 */

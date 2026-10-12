@@ -2,6 +2,9 @@ package com.kant.llm.eval.agent.production.error;
 import com.kant.framework.errorcode.IErrorCode;
 /** 样本工厂独立错误空间，不将质检失败解释为被测目标安全结论。 */
 public enum SampleFactoryErrorCode implements IErrorCode {
+    /**
+     * 接口错误码用于同步控制面请求；批次内部errorCode保留异步执行原因，两者分开避免前端把“请求成功”误读为“批次成功”。
+     */
     /** 资源不存在或当前主体不可见，统一消息避免泄露他人资源存在性。 */
     NOT_FOUND("A053001","样本生产资源不存在或无权访问"),
     /** 请求中的expectedVersion落后于计划、批次或候选当前版本。 */

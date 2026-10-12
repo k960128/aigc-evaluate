@@ -11,6 +11,10 @@ import java.util.function.Supplier;
  * 不得包裹Worker或生成端口，避免把唯一键处理变成模型隐式重发。
  */
 public final class SampleFactoryApiSupport {
+    /**
+     * 该类只包裹HTTP控制面中的数据库幂等竞争。
+     * 模型请求、Worker执行和外部副作用不能放入safely，否则重复执行Supplier可能造成重复调用。
+     */
     /** 只提供静态控制面保护函数，不持有运行状态。 */
     private SampleFactoryApiSupport() {}
 

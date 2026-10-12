@@ -18,6 +18,12 @@ public record ProductionSchedule(String zoneId, LocalTime dailyAt, LocalDate sta
     /** SKIP丢弃超宽限槽位；FIRE_LATEST只补最新到期槽位，其余遗漏由服务记录审计。 */
     public enum MisfirePolicy {SKIP, FIRE_LATEST}
 
+    /**
+     * 计划只描述“原计划槽位”如何计算，不负责创建批次或调用模型。
+     * 调度器必须依据这里生成的Instant推进nextFireAt，不能用实际处理时间作为下一次计划时间，
+     * 否则会在停机、延迟或夏令时场景中产生漂移。
+     */
+
     /** 校验有效时区、有界日期和分钟精度，不执行调度，也不读取服务器默认时区。 */
     public ProductionSchedule {
         ZoneId.of(ContractChecks.notBlank(zoneId, "zoneId"));
