@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class AgentSampleFactoryContractTest {
 
     /** 本组契约用例使用的固定提示词版本；不是运行时生成角色指纹。 */
-    private static final String PROMPT_VERSION = "sample-generation-v1";
+    private static final String PROMPT_VERSION = "sample-generation-v2";
 
     // ---------- 不可变生成配置：正常构造、边界拒绝与防御性复制 ----------
 
@@ -81,8 +81,12 @@ class AgentSampleFactoryContractTest {
     }
 
     @Test
-    @DisplayName("提示词版本只接受 sample-generation-v1")
+    @DisplayName("提示词版本兼容v1历史配置和v2，其他版本被拒绝")
     void rejectsUnknownPromptVersion() {
+        // 历史JSON恢复时必须保留v1原值；这里不经过新计划受理层，也不能自动升级历史事实。
+        GenerationSpec legacy = spec("seed-1", 1, "gen-profile-1", SampleGenerationWorkflow.LEGACY_VERSION, "risk-1", "rules-v1",
+                3, List.of("保留虚构场景"), List.of("主题"), 4, 100, 1, "仅授权虚构场景", "验证文本机制");
+        assertEquals(SampleGenerationWorkflow.LEGACY_VERSION, legacy.promptVersion());
         assertThrows(IllegalArgumentException.class,
                 () -> spec("seed-1", 1, "gen-profile-1", "other-version", "risk-1", "rules-v1",
                         3, List.of("保留虚构场景"), List.of("主题"), 4, 100, 1, "仅授权虚构场景", "验证文本机制"));

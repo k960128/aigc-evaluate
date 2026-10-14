@@ -111,7 +111,7 @@ class AgentProductionWorkflowTest {
 
     /** 创建单槽位虚构配置，仅将改写次数作为变量，主题和长度用于区分PASS/REVISE。 */
     private GenerationSpec spec(int rewrites) {
-        return new GenerationSpec("seed-test", 1, "generator-test", "sample-generation-v1",
+        return new GenerationSpec("seed-test", 1, "generator-test", "sample-generation-v2",
                 "fictional-risk", "rules-v1", 1, List.of("保留虚构场景，改变表达"), List.of("主题"),
                 4, 100, rewrites, "仅用于授权的虚构场景", "只验证文本机制，不声明漏洞");
     }

@@ -23,7 +23,7 @@ public class OllamaSampleGenerationAdapter implements SampleGenerationPort {
     private final SampleFactoryModelConfiguration.Role role;
     /** 无状态的单次网络传输，不在此处添加隐藏反思循环。 */
     private final OllamaSampleModelClient client;
-    /** 严格解析生成结果，不保存非法原始响应。 */
+    /** 严格解析生成结果；非法原文仅写有界诊断日志，不写业务数据库。 */
     private final ObjectMapper json;
 
     /** 只装配依赖，不探活或调用模型。 */
@@ -48,27 +48,34 @@ public class OllamaSampleGenerationAdapter implements SampleGenerationPort {
     @Override
     public SampleGenerationPort.Result generate(Command command) {
         // 生成端口只允许一次物理调用；结构非法时分类为INVALID并保留已确认的Token计量。
-        var response = client.callOnce(role, command, SampleGenerationWorkflow.SYSTEM_PROMPT);
+        var response = client.callOnce(role, command, SampleGenerationWorkflow.SYSTEM_PROMPT, SampleReflectionAgent.Phase.GENERATE);
         String raw = response.text();
         long input = response.inputTokens();
         long output = response.outputTokens();
         String measurement = response.measurement();
-        // 非法结构仍按已收到响应结算，只保存分类和计量，不保存原始响应。
+        // 非法结构仍按已收到响应结算，业务结果只保存分类和计量，原文通过单次调用诊断日志排查。
         try {
-            if (raw.length() > 100000) return new SampleGenerationPort.Result("INVALID", null, "结构化响应过大", input, output, measurement);
+            if (raw.length() > 100000) return invalidGeneration(command, response, "结构化响应过大", null);
             JsonNode tree = json.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(raw);
             if (tree == null || !tree.isObject())
-                return new SampleGenerationPort.Result("INVALID", null, "未返回单一JSON对象", input, output, measurement);
+                return invalidGeneration(command, response, "未返回单一JSON对象", null);
             String status = tree.path("status").asText();
             if ("REFUSED".equals(status))
                 return new SampleGenerationPort.Result("REFUSED", null, "生成模型拒绝该请求", input, output, measurement);
             var content = tree.path("content");
             if (!"GENERATED".equals(status) || !content.isTextual() || content.asText().length() > 10000)
-                return new SampleGenerationPort.Result("INVALID", null, "状态、正文类型或长度不满足契约", input, output, measurement);
+                return invalidGeneration(command, response, "状态、正文类型或长度不满足契约", null);
             return new SampleGenerationPort.Result("GENERATED", content.asText(), "", input, output, measurement);
         } catch (java.io.IOException ex) {
-            return new SampleGenerationPort.Result("INVALID", null, "结构化响应解析失败", input, output, measurement);
+            return invalidGeneration(command, response, "结构化响应解析失败", ex);
         }
+    }
+
+    /** 各类非法生成统一记录失败分类及有界原文；返回值保持原有INVALID契约和本次真实计量。 */
+    private SampleGenerationPort.Result invalidGeneration(Command command, OllamaSampleModelClient.Response response,
+                                                          String reason, java.io.IOException error) {
+        client.logInvalidResponse(SampleReflectionAgent.Phase.GENERATE, command, response, reason, error);
+        return new SampleGenerationPort.Result("INVALID", null, reason, response.inputTokens(), response.outputTokens(), response.measurement());
     }
 
 }

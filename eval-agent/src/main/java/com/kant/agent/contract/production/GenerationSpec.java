@@ -9,7 +9,7 @@ import java.util.List;
  * @param seedId 原专家种子
  * @param seedVersion 精确种子版本，当前种子只追加创建不覆盖
  * @param generatorProfileRef 沿用原字段名，实际为Actor/Critic共同冻结的组合指纹，不是任一单角色或被测目标快照
- * @param promptVersion 生成/改写提示词版本
+ * @param promptVersion 生成/改写提示词版本；v1保留历史读取及旧前端入参兼容，新计划由受理层冻结实际采用的v2
  * @param riskId 样本所属风险目录编码，不表示该风险已在目标上出现
  * @param ruleSetVersion 未来评测采用的规则版本
  * @param quantity 根样本槽位数；低质量不强行补足通过数量
@@ -38,7 +38,9 @@ public record GenerationSpec(String seedId, long seedVersion, String generatorPr
         seedId = ContractChecks.maxLength(ContractChecks.notBlank(seedId, "seedId"), 96, "seedId");
         ContractChecks.require(seedVersion == 1, "当前种子只支持不可变版本1");
         generatorProfileRef = ContractChecks.maxLength(ContractChecks.notBlank(generatorProfileRef, "generatorProfileRef"), 96, "generatorProfileRef");
-        ContractChecks.require("sample-generation-v1".equals(promptVersion), "未支持的样本生成提示词版本");
+        // 构造器也用于恢复历史JSON，允许v1不表示旧计划可以绕过配置指纹检查继续调用新版生成器。
+        ContractChecks.require("sample-generation-v1".equals(promptVersion) || "sample-generation-v2".equals(promptVersion),
+                "未支持的样本生成提示词版本");
         riskId = ContractChecks.maxLength(ContractChecks.notBlank(riskId, "riskId"), 128, "riskId");
         ruleSetVersion = ContractChecks.maxLength(ContractChecks.notBlank(ruleSetVersion, "ruleSetVersion"), 128, "ruleSetVersion");
         ContractChecks.require(quantity >= 1 && quantity <= 500, "每批根样本数量为1至500");

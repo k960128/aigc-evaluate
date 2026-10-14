@@ -3,6 +3,7 @@ package com.kant.llm.eval.agent.production.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.kant.agent.contract.production.*;
+import com.kant.agent.service.production.SampleGenerationWorkflow;
 import com.kant.agent.service.production.SampleReflectionAgent;
 import com.kant.framework.exception.ClientException;
 import com.kant.llm.eval.agent.probe.application.ProbePrincipalProvider;
@@ -101,7 +102,8 @@ public class SampleProductionService {
     }
 
     /**
-     * 创建冻结生产计划：校验种子归属及完整性、双角色组合快照与最低调用次数预算。
+     * 创建冻结生产计划：校验种子归属及完整性、双角色组合快照与最低调用次数预算，保存当前Actor提示词版本。
+     * 接收旧前端的v1提示词入参，但仅在当前组合快照校验通过后为新计划记录实际执行的v2，不改写历史计划。
      * 仅保存计划定义，不创建批次，不调用模型，也不自动开启定时任务。
      * @param request 专家选定的种子、生成约束、单批预算及可选每日计划
      * @return 新计划，或幂等命中计划的当前控制状态
@@ -132,7 +134,8 @@ public class SampleProductionService {
         row.setName(request.name());
         row.setActivityId(request.activityId());
         row.setAuthorizationRef(request.authorizationRef());
-        row.setSpecJson(json.write(request.spec()));
+        // 请求摘要保留原入参用于幂等冲突检查；冻结配置记录实际执行版本，响应也返回这份配置。
+        row.setSpecJson(json.write(currentSpec(request.spec(), request.spec().generatorProfileRef())));
         row.setBudgetJson(json.write(request.budget()));
         row.setScheduleJson(request.schedule() == null ? null : json.write(request.schedule()));
         row.setScheduleEnabled(false);
@@ -147,7 +150,7 @@ public class SampleProductionService {
      * 重置生产计划不是覆盖旧计划，而是创建一个新的冻结计划。
      *
      * 旧计划可能引用变更前的模型角色快照；重置时保留原种子、变异、风险、预算和调度定义，
-     * 重新读取生成与评审角色的组合身份并写入generatorProfileRef。新计划默认不启用定时任务，避免重置动作
+     * 重新读取生成与评审角色的组合身份并写入generatorProfileRef，同时冻结当前Actor提示词版本。新计划默认不启用定时任务，避免重置动作
      * 意外补发旧计划的调度槽位；原计划和原批次仍可继续审计。
      * <p>不修改旧计划的调度开关，不停止旧批次；旧预算也原样复制，不能用重置解决预算不足。
      * 新计划保留原日期范围，随后人工启用时仍按原漏触发策略处理。</p>
@@ -176,10 +179,7 @@ public class SampleProductionService {
         if (!profile.available()) throw error(SampleFactoryErrorCode.GENERATOR_UNAVAILABLE);
 
         var sourceSpec = spec(source);
-        var resetSpec = new GenerationSpec(sourceSpec.seedId(), sourceSpec.seedVersion(), profile.profileRef(),
-                sourceSpec.promptVersion(), sourceSpec.riskId(), sourceSpec.ruleSetVersion(), sourceSpec.quantity(),
-                sourceSpec.mutations(), sourceSpec.topicTerms(), sourceSpec.minLength(), sourceSpec.maxLength(),
-                sourceSpec.maxRewrites(), sourceSpec.preconditions(), sourceSpec.assertionDescription());
+        var resetSpec = currentSpec(sourceSpec, profile.profileRef());
         var sourceBudget = budget(source);
         var sourceSchedule = schedule(source);
         seed(p.tenantId(), p.actorId(), resetSpec.seedId());
@@ -470,6 +470,16 @@ public class SampleProductionService {
         var t = tasks.selectOne(new LambdaQueryWrapper<AgentSampleTaskDO>().eq(AgentSampleTaskDO::getTaskId, id).last("LIMIT 1 FOR UPDATE"));
         if (t == null) throw error(SampleFactoryErrorCode.NOT_FOUND);
         return t;
+    }
+
+    /**
+     * 新建或显式重置时冻结当前Actor版本，只替换模型指纹和提示词版本，专家约束保持原值。
+     * 不用于查询或执行历史计划，避免部署升级后静默修改存量事实。
+     */
+    private GenerationSpec currentSpec(GenerationSpec source, String profileRef) {
+        return new GenerationSpec(source.seedId(), source.seedVersion(), profileRef, SampleGenerationWorkflow.VERSION,
+                source.riskId(), source.ruleSetVersion(), source.quantity(), source.mutations(), source.topicTerms(),
+                source.minLength(), source.maxLength(), source.maxRewrites(), source.preconditions(), source.assertionDescription());
     }
 
     /** 校验生成与评审角色均可用且组合指纹与计划一致；不进行模型探活，也不替换旧快照。 */

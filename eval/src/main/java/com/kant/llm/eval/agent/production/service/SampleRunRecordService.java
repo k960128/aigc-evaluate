@@ -453,7 +453,8 @@ public class SampleRunRecordService {
     /** 严格恢复持久化阶段，不用默认GENERATE掩盖未知或损坏的阶段。 */
     public SampleReflectionAgent.Phase phase(AgentSampleRunDO run) {
         // 阶段是持久化检查点的一部分；未知阶段直接报持久化错误，不能默认按GENERATE继续。
-        if (!SampleReflectionAgent.VERSION.equals(run.getWorkflowVersion()) && !SampleGenerationWorkflow.VERSION.equals(run.getWorkflowVersion()))
+        // workflowVersion描述架构，不是Actor提示词版本；v2提示词升级不能使v1历史批次失去恢复资格。
+        if (!SampleReflectionAgent.VERSION.equals(run.getWorkflowVersion()) && !SampleGenerationWorkflow.LEGACY_VERSION.equals(run.getWorkflowVersion()))
             throw error(SampleFactoryErrorCode.PERSISTENCE_ERROR);
         if ("GENERATE".equals(run.getPhase())) return SampleReflectionAgent.Phase.GENERATE;
         if ("REFLECT".equals(run.getPhase()) && SampleReflectionAgent.VERSION.equals(run.getWorkflowVersion()))

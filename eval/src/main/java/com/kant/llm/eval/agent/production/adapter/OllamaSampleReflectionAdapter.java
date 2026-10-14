@@ -27,7 +27,7 @@ public class OllamaSampleReflectionAdapter implements SampleReflectionPort {
     private final SampleFactoryModelConfiguration.Role role;
     /** 仅复用网络实现，不复用Actor的模型参数或对话记忆。 */
     private final OllamaSampleModelClient client;
-    /** 严格解析模型评审意见，不修补JSON、不记录原始响应。 */
+    /** 严格解析模型评审意见，不修补JSON；非法原文仅写有界诊断日志，不写业务数据库。 */
     private final ObjectMapper json;
 
     /** 只装配依赖，不因创建Bean触发评审。 */
@@ -47,33 +47,35 @@ public class OllamaSampleReflectionAdapter implements SampleReflectionPort {
     @Override
     public SampleReflectionPort.Result reflect(SampleGenerationPort.Command command) {
         // 评审响应必须是单一JSON对象；任何多余文本或结构不符都按INVALID保守处理。
-        var response = client.callOnce(role, command, SampleReflectionAgent.CRITIC_PROMPT);
+        var response = client.callOnce(role, command, SampleReflectionAgent.CRITIC_PROMPT, SampleReflectionAgent.Phase.REFLECT);
         try {
-            if (response.text().length() > 100000) return invalidReflection(response);
+            if (response.text().length() > 100000) return invalidReflection(command, response, "结构化响应过大", null);
             JsonNode tree = json.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(response.text());
             if (tree == null || !tree.isObject() || !tree.path("outcome").isTextual() || !tree.path("issues").isArray())
-                return invalidReflection(response);
+                return invalidReflection(command, response, "未返回单一JSON对象，或outcome/issues字段类型不满足契约", null);
             String outcome = tree.path("outcome").asText();
             var issuesNode = tree.path("issues");
             if (!Set.of("PASS", "REVISE", "REJECT").contains(outcome) || issuesNode.size() > 5)
-                return invalidReflection(response);
+                return invalidReflection(command, response, "评审结论不在允许范围，或问题条数超过5条", null);
             List<String> issues = new ArrayList<>();
             for (JsonNode item : issuesNode) {
                 if (!item.isTextual() || item.asText().isBlank() || item.asText().length() > 500
                         || item.asText().codePoints().anyMatch(c -> Character.isISOControl(c) && c != '\n' && c != '\r' && c != '\t'))
-                    return invalidReflection(response);
+                    return invalidReflection(command, response, "评审问题类型、长度、空白或控制字符不满足契约", null);
                 issues.add(item.asText());
             }
-            if ("PASS".equals(outcome) != issues.isEmpty()) return invalidReflection(response);
+            if ("PASS".equals(outcome) != issues.isEmpty()) return invalidReflection(command, response, "PASS与空问题列表的对应关系不满足契约", null);
             return new SampleReflectionPort.Result(outcome, issues, response.inputTokens(), response.outputTokens(), response.measurement());
         } catch (java.io.IOException ex) {
-            return invalidReflection(response);
+            return invalidReflection(command, response, "结构化响应解析失败", ex);
         }
     }
 
     /** 非法评审也是已确认响应，保留消耗并保守拒绝，不能伪装成通过或零消耗。 */
-    private SampleReflectionPort.Result invalidReflection(OllamaSampleModelClient.Response response) {
+    private SampleReflectionPort.Result invalidReflection(SampleGenerationPort.Command command, OllamaSampleModelClient.Response response,
+                                                          String reason, java.io.IOException error) {
         // 即使结构非法，也要保留本次调用已发生的计量，不能返回零消耗或伪造PASS。
+        client.logInvalidResponse(SampleReflectionAgent.Phase.REFLECT, command, response, reason, error);
         return new SampleReflectionPort.Result("INVALID", List.of("模型评审未返回合法的结构化质量结论"),
                 response.inputTokens(), response.outputTokens(), response.measurement());
     }
