@@ -5,6 +5,7 @@ import com.kant.framework.web.Results;
 import com.kant.llm.eval.agent.probe.application.ProbePrincipalProvider;
 import com.kant.llm.eval.agent.production.dto.FactoryRequests;
 import com.kant.llm.eval.agent.production.dto.FactoryResponses;
+import com.kant.llm.eval.sample.dto.SeedCreateTask;
 import com.kant.llm.eval.agent.production.service.*;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
@@ -229,4 +230,18 @@ public class SampleFactoryController {
     public Result<FactoryResponses.CaseSet> caseSet(@PathVariable String caseSetId, @PathVariable long version) {
         return Results.success(safely(() -> review.caseSet(caseSetId, version)));
     }
+
+
+    // ========================================= V2 版本接口
+
+    /**
+     * 创建种子扩充任务V2版本
+     * @param request 种子创建任务请求
+     * @return 种子创建任务响应
+     */
+    @PostMapping("/tasks")
+    public Result<Boolean> createProfileTask(@Valid @RequestBody SeedCreateTask request) {
+       return Results.success(true);
+    }
+
 }
