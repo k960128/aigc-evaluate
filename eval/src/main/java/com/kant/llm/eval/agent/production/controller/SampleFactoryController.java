@@ -230,18 +230,4 @@ public class SampleFactoryController {
     public Result<FactoryResponses.CaseSet> caseSet(@PathVariable String caseSetId, @PathVariable long version) {
         return Results.success(safely(() -> review.caseSet(caseSetId, version)));
     }
-
-
-    // ========================================= V2 版本接口
-
-    /**
-     * 创建种子扩充任务V2版本
-     * @param request 种子创建任务请求
-     * @return 种子创建任务响应
-     */
-    @PostMapping("/tasks")
-    public Result<Boolean> createProfileTask(@Valid @RequestBody SeedCreateTask request) {
-       return Results.success(true);
-    }
-
 }

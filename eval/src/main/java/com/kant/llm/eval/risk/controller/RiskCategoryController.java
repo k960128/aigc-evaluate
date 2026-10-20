@@ -6,6 +6,7 @@ import com.kant.framework.convention.Result;
 import com.kant.framework.web.Results;
 import com.kant.llm.eval.risk.dao.entity.RiskCategoryDO;
 import com.kant.llm.eval.risk.dao.entity.RiskDetailsDO;
+import com.kant.llm.eval.risk.dto.resp.RiskCategoryTreeVO;
 import com.kant.llm.eval.risk.dto.resp.RiskCategoryVO;
 import com.kant.llm.eval.risk.dto.resp.RiskDetailsVO;
 import com.kant.llm.eval.risk.service.RiskCategoryService;
@@ -16,6 +17,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -73,6 +75,47 @@ public class RiskCategoryController {
                 .map(this::convertToCategoryVO)
                 .collect(Collectors.toList());
         return Results.success(voList);
+    }
+
+    /**
+     * 查询风险大类并挂载所属风险小类（不分页）
+     *
+     * @param status 可选状态，同时筛选风险大类和风险小类
+     * @return 风险分类树，无小类的大类返回空 children
+     */
+    @GetMapping("/tree")
+    public Result<List<RiskCategoryTreeVO>> tree(
+            @RequestParam(required = false) Integer status) {
+        LambdaQueryWrapper<RiskCategoryDO> categoryQuery = new LambdaQueryWrapper<>();
+        categoryQuery.eq(status != null, RiskCategoryDO::getStatus, status)
+                .orderByAsc(RiskCategoryDO::getSortOrder)
+                .orderByAsc(RiskCategoryDO::getId);
+        List<RiskCategoryDO> categories = riskCategoryService.list(categoryQuery);
+        if (categories.isEmpty()) {
+            return Results.success(List.of());
+        }
+
+        List<Long> categoryIds = categories.stream()
+                .map(RiskCategoryDO::getId)
+                .toList();
+        LambdaQueryWrapper<RiskDetailsDO> detailsQuery = new LambdaQueryWrapper<>();
+        detailsQuery.in(RiskDetailsDO::getCategoryId, categoryIds)
+                .eq(status != null, RiskDetailsDO::getStatus, status)
+                .orderByAsc(RiskDetailsDO::getSortOrder)
+                .orderByAsc(RiskDetailsDO::getId);
+        Map<Long, List<RiskDetailsVO>> detailsByCategoryId = riskDetailsService.list(detailsQuery).stream()
+                .map(this::convertToDetailsVO)
+                .collect(Collectors.groupingBy(RiskDetailsVO::getCategoryId));
+
+        List<RiskCategoryTreeVO> tree = categories.stream()
+                .map(category -> {
+                    RiskCategoryTreeVO node = new RiskCategoryTreeVO();
+                    BeanUtils.copyProperties(category, node);
+                    node.setChildren(detailsByCategoryId.getOrDefault(category.getId(), List.of()));
+                    return node;
+                })
+                .toList();
+        return Results.success(tree);
     }
 
     /**
