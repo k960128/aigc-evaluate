@@ -1,67 +1,114 @@
 package com.kant.llm.eval.sample.dto;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 
 import java.util.List;
 
+/**
+ * 创建样本扩充任务请求。
+ *
+ * @param baseTarget 安全基线与风险靶点
+ * @param mutationTactics 变异战术列表
+ * @param engineParams 单批迭代引擎参数
+ */
 public record SeedCreateTask(
+        @NotNull(message = "安全基线与风险靶点不能为空")
+        @Valid
         @JsonPropertyDescription("安全基线与风险靶点")
         BaseTarget baseTarget,
+        @NotEmpty(message = "变异战术列表不能为空")
         @JsonPropertyDescription("变异策略")
-        List<MutationTactics> mutationTactics,
+        List<@NotNull(message = "变异战术不能为空") @Valid MutationTactics> mutationTactics,
+        @NotNull(message = "引擎参数不能为空")
+        @Valid
         @JsonPropertyDescription("引擎参数")
         EngineParams engineParams
 ) {
-}
 
-/**
- * 安全基线与风险靶点
- * @param taskName 任务名称
- * @param riskId 风险ID
- * @param riskName 风险名称
- * @param coreIntent 核心恶意意图
- * @param seed 种子
- */
-record BaseTarget(@JsonPropertyDescription("任务名称")
-                  String taskName,
-                  @JsonPropertyDescription("风险ID")
-                  Long riskId,
-                  @JsonPropertyDescription("风险名称")
-                  String riskName,
-                  @JsonPropertyDescription("核心恶意意图")
-                  String coreIntent,
-                  @JsonPropertyDescription("种子")
-                  String seed) {
-}
+    /**
+     * 安全基线与风险靶点。
+     *
+     * @param taskName 任务名称
+     * @param riskId 风险ID
+     * @param riskName 风险名称
+     * @param coreIntent 核心恶意意图
+     * @param seed 种子内容
+     */
+    public record BaseTarget(
+            @NotBlank(message = "任务名称不能为空")
+            @JsonPropertyDescription("任务名称")
+            String taskName,
+            @NotNull(message = "风险ID不能为空")
+            @Positive(message = "风险ID必须大于0")
+            @JsonPropertyDescription("风险ID")
+            Long riskId,
+            @NotBlank(message = "风险名称不能为空")
+            @JsonPropertyDescription("风险名称")
+            String riskName,
+            @NotBlank(message = "核心恶意意图不能为空")
+            @JsonPropertyDescription("核心恶意意图")
+            String coreIntent,
+            @NotBlank(message = "种子内容不能为空")
+            @JsonPropertyDescription("种子")
+            String seed
+    ) {
+    }
 
-/**
- * 变异战术
- * @param mutationTacticsCode 变异战术编码
- * @param mutationTacticsName 变异战术名称
- */
-record MutationTactics(
-        @JsonPropertyDescription("变异战术ID")
-        Long mutationTacticsId,
-        @JsonPropertyDescription("变异战术编码")
-        String mutationTacticsCode,
-        @JsonPropertyDescription("变异战术名称")
-        String mutationTacticsName
-) {
-}
+    /**
+     * 变异战术。
+     *
+     * @param mutationTacticsId 变异战术ID
+     * @param mutationTacticsCode 变异战术编码
+     * @param mutationTacticsName 变异战术名称
+     */
+    public record MutationTactics(
+            @NotNull(message = "变异战术ID不能为空")
+            @Positive(message = "变异战术ID必须大于0")
+            @JsonPropertyDescription("变异战术ID")
+            Long mutationTacticsId,
+            @NotBlank(message = "变异战术编码不能为空")
+            @JsonPropertyDescription("变异战术编码")
+            String mutationTacticsCode,
+            @NotBlank(message = "变异战术名称不能为空")
+            @JsonPropertyDescription("变异战术名称")
+            String mutationTacticsName
+    ) {
+    }
 
-/**
- * 种子创建任务参数
- * @param maxReflectionCount 反思最大次数
- * @param maxGenerationCount 生成数量
- * @param maxTokenCount 最大token数
- * @param temperature 模型温度
- */
-record EngineParams(@JsonPropertyDescription("反思最大次数")
-                    int maxReflectionCount,
-                    @JsonPropertyDescription("生成数量")
-                    int maxGenerationCount,
-                    @JsonPropertyDescription("最大token数")
-                    int maxTokenCount,
-                    @JsonPropertyDescription("模型温度")
-                    double temperature) {
+    /**
+     * 单批迭代引擎参数。
+     *
+     * @param maxReflectionCount 反思最大次数，允许为0
+     * @param maxGenerationCount 生成数量，必须大于0
+     * @param maxTokenCount 最大Token数，必须大于0
+     * @param temperature 模型温度，范围为0到2，包含边界值
+     */
+    public record EngineParams(
+            @NotNull(message = "反思最大次数不能为空")
+            @Min(value = 0, message = "反思最大次数不能小于0")
+            @JsonPropertyDescription("反思最大次数")
+            Integer maxReflectionCount,
+            @NotNull(message = "生成数量不能为空")
+            @Positive(message = "生成数量必须大于0")
+            @JsonPropertyDescription("生成数量")
+            Integer maxGenerationCount,
+            @NotNull(message = "最大Token数不能为空")
+            @Positive(message = "最大Token数必须大于0")
+            @JsonPropertyDescription("最大token数")
+            Integer maxTokenCount,
+            @NotNull(message = "模型温度不能为空")
+            @DecimalMin(value = "0.0", message = "模型温度不能小于0")
+            @DecimalMax(value = "2.0", message = "模型温度不能大于2")
+            @JsonPropertyDescription("模型温度")
+            Double temperature
+    ) {
+    }
 }
