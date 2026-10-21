@@ -15,37 +15,36 @@ import java.util.List;
 /**
  * 创建样本扩充任务请求。
  *
- * @param baseTarget 安全基线与风险靶点
- * @param mutationTactics 变异战术列表
- * @param engineParams 单批迭代引擎参数
+ * @param baseTargetConf 安全基线与风险靶点配置
+ * @param mutationTacticsConf 变异战术列表配置
+ * @param engineParamsConf 单批迭代引擎参数配置
  */
 public record SeedCreateTask(
+        @NotBlank(message = "任务名称不能为空")
+        @JsonPropertyDescription("任务名称")
+        String taskName,
         @NotNull(message = "安全基线与风险靶点不能为空")
         @Valid
         @JsonPropertyDescription("安全基线与风险靶点")
-        BaseTarget baseTarget,
+        BaseTargetConf baseTargetConf,
         @NotEmpty(message = "变异战术列表不能为空")
         @JsonPropertyDescription("变异策略")
-        List<@NotNull(message = "变异战术不能为空") @Valid MutationTactics> mutationTactics,
+        List<@NotNull(message = "变异战术不能为空") @Valid MutationTacticsConf> mutationTacticsConf,
         @NotNull(message = "引擎参数不能为空")
         @Valid
         @JsonPropertyDescription("引擎参数")
-        EngineParams engineParams
+        EngineParamsConf engineParamsConf
 ) {
 
     /**
-     * 安全基线与风险靶点。
+     * 安全基线与风险靶点配置。
      *
-     * @param taskName 任务名称
      * @param riskId 风险ID
      * @param riskName 风险名称
      * @param coreIntent 核心恶意意图
      * @param seed 种子内容
      */
-    public record BaseTarget(
-            @NotBlank(message = "任务名称不能为空")
-            @JsonPropertyDescription("任务名称")
-            String taskName,
+    public record BaseTargetConf(
             @NotNull(message = "风险ID不能为空")
             @Positive(message = "风险ID必须大于0")
             @JsonPropertyDescription("风险ID")
@@ -63,13 +62,13 @@ public record SeedCreateTask(
     }
 
     /**
-     * 变异战术。
+     * 变异战术配置。
      *
      * @param mutationTacticsId 变异战术ID
      * @param mutationTacticsCode 变异战术编码
      * @param mutationTacticsName 变异战术名称
      */
-    public record MutationTactics(
+    public record MutationTacticsConf(
             @NotNull(message = "变异战术ID不能为空")
             @Positive(message = "变异战术ID必须大于0")
             @JsonPropertyDescription("变异战术ID")
@@ -84,14 +83,14 @@ public record SeedCreateTask(
     }
 
     /**
-     * 单批迭代引擎参数。
+     * 单批迭代引擎参数配置。
      *
      * @param maxReflectionCount 反思最大次数，允许为0
      * @param maxGenerationCount 生成数量，必须大于0
      * @param maxTokenCount 最大Token数，必须大于0
      * @param temperature 模型温度，范围为0到2，包含边界值
      */
-    public record EngineParams(
+    public record EngineParamsConf(
             @NotNull(message = "反思最大次数不能为空")
             @Min(value = 0, message = "反思最大次数不能小于0")
             @JsonPropertyDescription("反思最大次数")
@@ -106,7 +105,7 @@ public record SeedCreateTask(
             Integer maxTokenCount,
             @NotNull(message = "模型温度不能为空")
             @DecimalMin(value = "0.0", message = "模型温度不能小于0")
-            @DecimalMax(value = "2.0", message = "模型温度不能大于2")
+            @DecimalMax(value = "1.0", message = "模型温度不能大于1")
             @JsonPropertyDescription("模型温度")
             Double temperature
     ) {

@@ -25,10 +25,16 @@ public class AgentSampleFactoryTaskDO {
     /** 样本生产任务ID */
     private String taskId;
 
-    /** 变异战术矩阵参数，JSON 字符串 */
+    /** 任务名称 */
+    private String taskName;
+
+    /** 安全基线与风险靶点配置，JSON 字符串 */
+    private String baseTargetConf;
+
+    /** 变异战术矩阵配置，JSON 字符串 */
     private String mutationTacticsConf;
 
-    /** 单批迭代引擎参数，JSON 字符串 */
+    /** 单批迭代引擎参数配置，JSON 字符串 */
     private String engineParamsConf;
 
     /** 状态: 0-停用, 1-启用 */

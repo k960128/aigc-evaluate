@@ -58,7 +58,7 @@ public class SampleFactoryV2Controller {
      */
     @PostMapping("/tasks")
     public Result<Boolean> createSampleFactoryTask(@Valid @RequestBody SeedCreateTask request) {
-        return Results.success(true);
+        return Results.success(agentSampleFactoryTaskService.createSampleFactoryTask(request));
     }
 
     /**

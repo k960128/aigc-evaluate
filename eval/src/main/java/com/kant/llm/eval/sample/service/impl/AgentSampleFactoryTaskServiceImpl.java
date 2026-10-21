@@ -1,22 +1,56 @@
 package com.kant.llm.eval.sample.service.impl;
 
+import cn.dev33.satoken.stp.StpUtil;
+import cn.hutool.core.util.IdUtil;
+import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.kant.framework.exception.ServiceException;
 import com.kant.llm.eval.sample.dao.entity.AgentSampleFactoryTaskDO;
 import com.kant.llm.eval.sample.dao.mapper.AgentSampleFactoryTaskMapper;
 import com.kant.llm.eval.sample.dto.SampleFactoryTaskPageRequest;
 import com.kant.llm.eval.sample.dto.SampleFactoryTaskVO;
+import com.kant.llm.eval.sample.dto.SeedCreateTask;
 import com.kant.llm.eval.sample.service.AgentSampleFactoryTaskService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Slf4j
 @Service
 public class AgentSampleFactoryTaskServiceImpl extends ServiceImpl<AgentSampleFactoryTaskMapper, AgentSampleFactoryTaskDO> implements AgentSampleFactoryTaskService {
+
+    @Override
+    public boolean createSampleFactoryTask(SeedCreateTask request) {
+        if (request == null) {
+            throw new ServiceException("样本扩充任务请求不能为空");
+        }
+
+        AgentSampleFactoryTaskDO task = new AgentSampleFactoryTaskDO();
+        task.setTaskId(IdUtil.fastSimpleUUID());
+        task.setTaskName(request.taskName());
+        task.setBaseTargetConf(JSON.toJSONString(request.baseTargetConf()));
+        task.setMutationTacticsConf(JSON.toJSONString(request.mutationTacticsConf()));
+        task.setEngineParamsConf(JSON.toJSONString(request.engineParamsConf()));
+        task.setStatus(1);
+        task.setDeleted(false);
+
+        LocalDateTime now = LocalDateTime.now();
+        task.setCreateTime(now);
+        task.setUpdateTime(now);
+        Object loginId = StpUtil.getLoginIdDefaultNull();
+        if (loginId != null) {
+            String operator = loginId.toString();
+            task.setCreator(operator);
+            task.setUpdater(operator);
+        }
+
+        return save(task);
+    }
 
     @Override
     public List<SampleFactoryTaskVO> listSampleFactoryTasks() {
