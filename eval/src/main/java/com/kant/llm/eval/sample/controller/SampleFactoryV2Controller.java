@@ -107,4 +107,15 @@ public class SampleFactoryV2Controller {
         return Results.success(agentSampleFactoryTaskExecutionDetailService
                 .pageSampleFactoryTaskExecutionDetails(request));
     }
+
+    /**
+     * 启动样本扩充任务
+     *
+     * @param taskId 任务ID
+     * @return 是否启动成功
+     */
+    @PostMapping("/tasks/{taskId}/start")
+    public Result<Boolean> start(@PathVariable("taskId") String taskId) {
+        return Results.success(agentSampleFactoryTaskService.start(taskId));
+    }
 }

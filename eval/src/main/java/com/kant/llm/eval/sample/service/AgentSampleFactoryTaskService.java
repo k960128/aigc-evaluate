@@ -33,4 +33,12 @@ public interface AgentSampleFactoryTaskService extends IService<AgentSampleFacto
      * @return 任务分页结果
      */
     Page<SampleFactoryTaskVO> pageSampleFactoryTasks(SampleFactoryTaskPageRequest request);
+
+    /**
+     * 启动样本扩充任务，将状态从停用改为启用。
+     *
+     * @param taskId 任务ID
+     * @return 是否启动成功
+     */
+    Boolean start(String taskId);
 }

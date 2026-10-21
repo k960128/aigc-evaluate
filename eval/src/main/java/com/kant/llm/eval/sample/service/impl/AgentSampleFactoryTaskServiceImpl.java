@@ -6,6 +6,8 @@ import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.kant.agent.simple.SimpleOrchestrator;
+import com.kant.agent.simple.model.SampleTaskTicket;
 import com.kant.framework.exception.ServiceException;
 import com.kant.llm.eval.sample.dao.entity.AgentSampleFactoryTaskDO;
 import com.kant.llm.eval.sample.dao.mapper.AgentSampleFactoryTaskMapper;
@@ -19,6 +21,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -78,6 +81,31 @@ public class AgentSampleFactoryTaskServiceImpl extends ServiceImpl<AgentSampleFa
                 .map(this::convertToVO)
                 .toList());
         return voPage;
+    }
+
+    @Override
+    public Boolean start(String taskId) {
+        AgentSampleFactoryTaskDO task = getById(taskId);
+        if (task == null) {
+            throw new ServiceException("样本扩充任务不存在");
+        }
+        // 解析基础目标配置
+        SeedCreateTask.BaseTargetConf baseTargetConf = JSON.parseObject(task.getBaseTargetConf(), SeedCreateTask.BaseTargetConf.class);
+        // 解析变异战术矩阵配置
+        List<SeedCreateTask.MutationTacticsConf> mutationTacticsConf = JSON.parseArray(task.getMutationTacticsConf(), SeedCreateTask.MutationTacticsConf.class);
+        // 解析单批迭代引擎参数配置
+        SeedCreateTask.EngineParamsConf engineParamsConf = JSON.parseObject(task.getEngineParamsConf(), SeedCreateTask.EngineParamsConf.class);
+
+        SimpleOrchestrator orchestrator = new SimpleOrchestrator();
+        orchestrator.runReflectionLoop(
+                new SampleTaskTicket.TaskTicket(
+                        baseTargetConf.coreIntent(),
+                        baseTargetConf.seed(),
+                        mutationTacticsConf.stream().map(SeedCreateTask.MutationTacticsConf::mutationTacticsName).toList()),
+                engineParamsConf.maxReflectionCount(),
+                engineParamsConf.temperature());
+        log.info("=======================运行完成========================");
+        return true;
     }
 
     private SampleFactoryTaskVO convertToVO(AgentSampleFactoryTaskDO task) {
