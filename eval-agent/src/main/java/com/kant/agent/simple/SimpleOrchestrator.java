@@ -2,7 +2,6 @@ package com.kant.agent.simple;
 
 import com.kant.agent.simple.model.SampleTaskTicket;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 
 /**
  * 样本工厂Orchestrator，用于协调多个agent的执行。
@@ -13,7 +12,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class SimpleOrchestrator {
 
-    public String runReflectionLoop(SampleTaskTicket.TaskTicket ticket, int maxIterations, double temperature) {
+    public void runReflectionLoop(SampleTaskTicket.TaskTicket ticket, int maxIterations, double temperature) {
         log.info("=======================初始化Agent========================");
         SimpleJudgeAgent judgeAgent = new SimpleJudgeAgent();
         SimpleGenerateAgent generatorAgent = new SimpleGenerateAgent();
@@ -37,7 +36,7 @@ public class SimpleOrchestrator {
             // 3. 结果判定
             if (feedback.isPass()) {
                 log.info("🎉 样本及格！提前终止循环。");
-                return currentPrompt; // 成功，入库
+                return; // 成功，入库
             } else {
                 log.warn("❌ 样本不合格。缺陷: {} | 建议: {}", feedback.critique(), feedback.advice());
                 // 将 Judge 的建议传给下一轮的 Actor
@@ -46,6 +45,5 @@ public class SimpleOrchestrator {
         }
 
         log.error("达到最大迭代轮数 ({})，生成失败，丢弃废料。", maxIterations);
-        return null; // 失败，丢弃
     }
 }

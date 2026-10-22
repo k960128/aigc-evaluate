@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -89,13 +90,13 @@ public class AgentSampleFactoryTaskServiceImpl extends ServiceImpl<AgentSampleFa
         if (task == null) {
             throw new ServiceException("样本扩充任务不存在");
         }
+        // 提交到异步虚拟线程
         // 解析基础目标配置
         SeedCreateTask.BaseTargetConf baseTargetConf = JSON.parseObject(task.getBaseTargetConf(), SeedCreateTask.BaseTargetConf.class);
         // 解析变异战术矩阵配置
         List<SeedCreateTask.MutationTacticsConf> mutationTacticsConf = JSON.parseArray(task.getMutationTacticsConf(), SeedCreateTask.MutationTacticsConf.class);
         // 解析单批迭代引擎参数配置
         SeedCreateTask.EngineParamsConf engineParamsConf = JSON.parseObject(task.getEngineParamsConf(), SeedCreateTask.EngineParamsConf.class);
-
         SimpleOrchestrator orchestrator = new SimpleOrchestrator();
         orchestrator.runReflectionLoop(
                 new SampleTaskTicket.TaskTicket(
@@ -104,7 +105,6 @@ public class AgentSampleFactoryTaskServiceImpl extends ServiceImpl<AgentSampleFa
                         mutationTacticsConf.stream().map(SeedCreateTask.MutationTacticsConf::mutationTacticsName).toList()),
                 engineParamsConf.maxReflectionCount(),
                 engineParamsConf.temperature());
-        log.info("=======================运行完成========================");
         return true;
     }
 

@@ -34,6 +34,9 @@ public class AgentSampleFactoryTaskExecutionDetailDO {
     /** 已进行的执行/尝试次数 */
     private Integer attemptCount;
 
+    /** 异常信息 */
+    private String errorMsg;
+
     /** 创建时间 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField(fill = FieldFill.INSERT)
