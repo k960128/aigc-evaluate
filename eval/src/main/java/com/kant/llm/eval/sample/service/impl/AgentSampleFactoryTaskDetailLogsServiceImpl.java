@@ -5,11 +5,14 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.kant.framework.exception.ServiceException;
 import com.kant.llm.eval.sample.dao.entity.AgentSampleFactoryTaskDetailLogsDO;
 import com.kant.llm.eval.sample.dao.mapper.AgentSampleFactoryTaskDetailLogsMapper;
+import com.kant.llm.eval.sample.dto.SampleFactoryTaskDetailLogsVO;
 import com.kant.llm.eval.sample.service.AgentSampleFactoryTaskDetailLogsService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 样本扩充-任务详情执行批次详情日志 Service 实现
@@ -17,6 +20,17 @@ import java.time.LocalDateTime;
 @Slf4j
 @Service
 public class AgentSampleFactoryTaskDetailLogsServiceImpl extends ServiceImpl<AgentSampleFactoryTaskDetailLogsMapper, AgentSampleFactoryTaskDetailLogsDO> implements AgentSampleFactoryTaskDetailLogsService {
+
+    @Override
+    public List<SampleFactoryTaskDetailLogsVO> listSampleFactoryTaskDetailLogs(Long taskDetailId) {
+        return list(Wrappers.<AgentSampleFactoryTaskDetailLogsDO>lambdaQuery()
+                .eq(AgentSampleFactoryTaskDetailLogsDO::getTaskDetailId, taskDetailId)
+                .orderByAsc(AgentSampleFactoryTaskDetailLogsDO::getCreateTime)
+                .orderByAsc(AgentSampleFactoryTaskDetailLogsDO::getId))
+                .stream()
+                .map(this::convertToVO)
+                .toList();
+    }
 
     @Override
     public void startExecution(String taskId, Long taskDetailId, String messageId, String type, String promptContent) {
@@ -53,5 +67,11 @@ public class AgentSampleFactoryTaskDetailLogsServiceImpl extends ServiceImpl<Age
         if (!updateById(executionLog)) {
             throw new ServiceException("更新Agent执行日志失败，日志可能已被修改");
         }
+    }
+
+    private SampleFactoryTaskDetailLogsVO convertToVO(AgentSampleFactoryTaskDetailLogsDO log) {
+        SampleFactoryTaskDetailLogsVO vo = new SampleFactoryTaskDetailLogsVO();
+        BeanUtils.copyProperties(log, vo);
+        return vo;
     }
 }

@@ -4,12 +4,14 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.kant.framework.convention.Result;
 import com.kant.framework.web.Results;
 import com.kant.llm.eval.sample.dto.MutationTacticsTreeVO;
+import com.kant.llm.eval.sample.dto.SampleFactoryTaskDetailLogsVO;
 import com.kant.llm.eval.sample.dto.SampleFactoryTaskExecutionDetailPageRequest;
 import com.kant.llm.eval.sample.dto.SampleFactoryTaskExecutionDetailVO;
 import com.kant.llm.eval.sample.dto.SampleFactoryTaskPageRequest;
 import com.kant.llm.eval.sample.dto.SampleFactoryTaskVO;
 import com.kant.llm.eval.sample.dto.SeedCreateTask;
 import com.kant.llm.eval.sample.service.AgentSampleFactoryTaskExecutionDetailService;
+import com.kant.llm.eval.sample.service.AgentSampleFactoryTaskDetailLogsService;
 import com.kant.llm.eval.sample.service.AgentSampleFactoryTaskService;
 import com.kant.llm.eval.sample.service.AgentSampleMutationTacticsService;
 import jakarta.validation.Valid;
@@ -39,6 +41,7 @@ public class SampleFactoryV2Controller {
     private final AgentSampleMutationTacticsService mutationTacticsService;
     private final AgentSampleFactoryTaskService agentSampleFactoryTaskService;
     private final AgentSampleFactoryTaskExecutionDetailService agentSampleFactoryTaskExecutionDetailService;
+    private final AgentSampleFactoryTaskDetailLogsService agentSampleFactoryTaskDetailLogsService;
 
     /**
      * 获取变异战术矩阵树
@@ -106,6 +109,19 @@ public class SampleFactoryV2Controller {
             @Valid @RequestBody SampleFactoryTaskExecutionDetailPageRequest request) {
         return Results.success(agentSampleFactoryTaskExecutionDetailService
                 .pageSampleFactoryTaskExecutionDetails(request));
+    }
+
+    /**
+     * 根据执行批次ID查询Agent执行日志。
+     *
+     * @param taskDetailId 样本生产批次任务ID
+     * @return 按创建时间和ID正序排列的Agent执行日志列表
+     */
+    @GetMapping("/tasks/details/{taskDetailId}/logs")
+    public Result<List<SampleFactoryTaskDetailLogsVO>> listSampleFactoryTaskDetailLogs(
+            @PathVariable("taskDetailId") Long taskDetailId) {
+        return Results.success(agentSampleFactoryTaskDetailLogsService
+                .listSampleFactoryTaskDetailLogs(taskDetailId));
     }
 
     /**
