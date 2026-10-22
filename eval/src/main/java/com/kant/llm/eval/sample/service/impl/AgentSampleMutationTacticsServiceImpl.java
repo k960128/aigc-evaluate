@@ -6,6 +6,7 @@ import com.kant.llm.eval.sample.dao.entity.AgentSampleMutationTacticsDO;
 import com.kant.llm.eval.sample.dao.mapper.AgentSampleMutationTacticsMapper;
 import com.kant.llm.eval.sample.dto.MutationTacticsTreeVO;
 import com.kant.llm.eval.sample.service.AgentSampleMutationTacticsService;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;

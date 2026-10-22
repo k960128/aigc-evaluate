@@ -15,9 +15,9 @@ import org.springframework.web.client.RestClient;
 
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * 简单生成agent，用于生成样本。
@@ -73,7 +73,7 @@ public class SimpleGenerateAgent {
         String prompt = template.render(Map.of(
                 "coreIntent", ticket.coreIntent(),
                 "seed", ticket.seed(),
-                "tacticsList", ticket.tactics().stream().map(String::formatted).collect(Collectors.joining("\n")),
+                "tacticsList", generateTacticsList(ticket.tactics()),
                 "reflectionContext", reflectionContext
         ));
 
@@ -105,5 +105,26 @@ public class SimpleGenerateAgent {
                 // 一条执行日志对应一次调用，失败后立即交给外层记录并结束批次。
                 .retryTemplate(RetryTemplate.builder().maxAttempts(1).build())
                 .observationRegistry(ObservationRegistry.NOOP).build();
+    }
+
+    /**
+     * 生成战术列表。
+     * @param tacticsList 变异战术列表
+     * @return 变异战术列表字符串
+     */
+    private String generateTacticsList(List<SampleTaskTicket.TacticsContent> tacticsList) {
+        StringBuilder stringBuilder = new StringBuilder("【变异战术列表】\n");
+        String tacticTemplate = " %s.%s\n" +
+                " \t原理解释：%s\n" +
+                " \t变异示例：%s\n";
+        for (int i = 0; i < tacticsList.size(); i++) {
+            SampleTaskTicket.TacticsContent tactic = tacticsList.get(i);
+            stringBuilder.append(String.format(
+                    tacticTemplate, i + 1,
+                    tactic.tacticName(),
+                    tactic.explain(),
+                    tactic.example()));
+        }
+        return stringBuilder.toString();
     }
 }

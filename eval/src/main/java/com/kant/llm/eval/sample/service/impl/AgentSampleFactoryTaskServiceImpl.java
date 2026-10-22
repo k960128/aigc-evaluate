@@ -12,13 +12,16 @@ import com.kant.agent.simple.model.SampleTaskTicket;
 import com.kant.framework.exception.ServiceException;
 import com.kant.llm.eval.sample.dao.entity.AgentSampleFactoryTaskDO;
 import com.kant.llm.eval.sample.dao.entity.AgentSampleFactoryTaskExecutionDetailDO;
+import com.kant.llm.eval.sample.dao.entity.AgentSampleMutationTacticsDO;
 import com.kant.llm.eval.sample.dao.mapper.AgentSampleFactoryTaskMapper;
+import com.kant.llm.eval.sample.dao.mapper.AgentSampleMutationTacticsMapper;
 import com.kant.llm.eval.sample.dto.SampleFactoryTaskPageRequest;
 import com.kant.llm.eval.sample.dto.SampleFactoryTaskVO;
 import com.kant.llm.eval.sample.dto.SeedCreateTask;
 import com.kant.llm.eval.sample.service.AgentSampleFactoryTaskDetailLogsService;
 import com.kant.llm.eval.sample.service.AgentSampleFactoryTaskExecutionDetailService;
 import com.kant.llm.eval.sample.service.AgentSampleFactoryTaskService;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -26,6 +29,8 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
@@ -34,6 +39,16 @@ public class AgentSampleFactoryTaskServiceImpl extends ServiceImpl<AgentSampleFa
 
     private final AgentSampleFactoryTaskExecutionDetailService executionDetailService;
     private final AgentSampleFactoryTaskDetailLogsService detailLogsService;
+    private final AgentSampleMutationTacticsMapper mutationTacticsMapper;
+
+    private final Map<Long, AgentSampleMutationTacticsDO> mutationTacticsMap = new ConcurrentHashMap<>();
+
+    @PostConstruct
+    public void init(){
+        for (AgentSampleMutationTacticsDO agentSampleMutationTacticsDO : mutationTacticsMapper.selectList(null)) {
+            mutationTacticsMap.put(agentSampleMutationTacticsDO.getMutationTacticsId(), agentSampleMutationTacticsDO);
+        }
+    }
 
     @Override
     public boolean createSampleFactoryTask(SeedCreateTask request) {
@@ -106,7 +121,12 @@ public class AgentSampleFactoryTaskServiceImpl extends ServiceImpl<AgentSampleFa
         SampleTaskTicket.TaskTicket ticket = new SampleTaskTicket.TaskTicket(
                 baseTargetConf.coreIntent(),
                 baseTargetConf.seed(),
-                mutationTacticsConf.stream().map(SeedCreateTask.MutationTacticsConf::mutationTacticsName).toList());
+                mutationTacticsConf.stream().map(mutation-> new SampleTaskTicket.TacticsContent(
+                        mutationTacticsMap.get(mutation.mutationTacticsId()).getMutationTacticsName(),
+                        mutationTacticsMap.get(mutation.mutationTacticsId()).getExplain(),
+                        mutationTacticsMap.get(mutation.mutationTacticsId()).getExample()
+                        )).toList()
+                );
 
         // 每次启动创建独立执行批次，日志关联业务 task_id 和当前批次主键。
         AgentSampleFactoryTaskExecutionDetailDO detail = new AgentSampleFactoryTaskExecutionDetailDO();

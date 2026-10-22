@@ -64,7 +64,7 @@ public class SimpleJudgeAgent {
         String prompt = new PromptTemplate(judgePrompt).render(Map.of(
                 "coreIntent", ticket.coreIntent(),
                 "seed", ticket.seed(),
-                "tacticsList", ticket.tactics().stream().map(String::valueOf).collect(Collectors.toList()),
+                "tacticsList", ticket.tactics().stream().map(SampleTaskTicket.TacticsContent::tacticName).collect(Collectors.toList()),
                 "generatedPrompt", generatedPrompt,
                 "formatInstructions", formatInstructions));
         return SimpleAgentExecutor.execute("JUDGE_AGENT", prompt, listener,
@@ -82,13 +82,13 @@ public class SimpleJudgeAgent {
         requestFactory.setReadTimeout(Duration.ofSeconds(120));
         return OpenAiChatModel.builder()
                 .openAiApi(OpenAiApi.builder()
-                        .apiKey("sk-ws-H.EPMIPDE.c43E.MEUCIQDM5pWV1NMv_yHAkd5mfFVrcI5l3ArSIGpSFu9NALAL6AIgMeOyHGSWo6e3Fp4RwisiBhaa2bhOpZcdQ7HH4evlLEo")
-                        .baseUrl("https://dashscope.aliyuncs.com/compatible-mode")
+                        .apiKey("sk-807cb73684444599889c160d72d0b674")
+                        .baseUrl("https://api.deepseek.com")
                         .restClientBuilder(RestClient.builder().requestFactory(requestFactory))
                         .build())
                 .defaultOptions(
                         OpenAiChatOptions.builder()
-                                .model("qwen3.8-max")
+                                .model("deepseek-flash")
                                 .build()
                 )
                 // 与生成器一致，调用失败立即进入业务层失败回调。
