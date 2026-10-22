@@ -4,14 +4,19 @@ import com.kant.agent.simple.model.SampleTaskTicket;
 import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.ai.ollama.api.OllamaApi;
 import org.springframework.ai.ollama.api.OllamaChatOptions;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.retry.support.RetryTemplate;
+import org.springframework.web.client.RestClient;
 
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -44,6 +49,14 @@ public class SimpleGenerateAgent {
                                  String previousPrompt,
                                  String advice,
                                  double temperature) {
+        return generatePrompt(ticket, previousPrompt, advice, temperature, AgentExecutionListener.NOOP);
+    }
+
+    public String generatePrompt(SampleTaskTicket.TaskTicket ticket,
+                                 String previousPrompt,
+                                 String advice,
+                                 double temperature,
+                                 AgentExecutionListener listener) {
         String reflectionContext = "";
 
         // 如果存在历史反馈，则注入反思上下文 (Reflection Injection)
@@ -65,17 +78,23 @@ public class SimpleGenerateAgent {
         ));
 
         // 调用 LLM
-        ChatClient chatClient = ChatClient.builder(buildChatModel(temperature)).build();
-        return chatClient.prompt()
-                .user(prompt)
-                .call()
-                .content();
+        return SimpleAgentExecutor.execute("GENERATOR_AGENT", prompt, listener,
+                () -> ChatClient.builder(buildChatModel(temperature)).build()
+                        .prompt()
+                        .user(prompt)
+                        .call()
+                        .chatResponse(),
+                Function.identity());
     }
 
     private static ChatModel buildChatModel(double temperature) {
+        var requestFactory = new JdkClientHttpRequestFactory(
+                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build());
+        requestFactory.setReadTimeout(Duration.ofSeconds(120));
         return OllamaChatModel.builder()
                 .ollamaApi(OllamaApi.builder()
                         .baseUrl("http://localhost:11434")
+                        .restClientBuilder(RestClient.builder().requestFactory(requestFactory))
                         .build())
                 .defaultOptions(
                         OllamaChatOptions
@@ -83,6 +102,8 @@ public class SimpleGenerateAgent {
                                 .model("qwen2.5-7b-base")
                                 .temperature(temperature)
                                 .build())
+                // 一条执行日志对应一次调用，失败后立即交给外层记录并结束批次。
+                .retryTemplate(RetryTemplate.builder().maxAttempts(1).build())
                 .observationRegistry(ObservationRegistry.NOOP).build();
     }
 }

@@ -28,7 +28,7 @@ public class AgentSampleFactoryTaskExecutionDetailDO {
     /** 幂等号 */
     private String idempotencyKey;
 
-    /** 执行状态，具体取值待定 */
+    /** 执行状态：RUNNING-执行中，SUCCESS-评审通过，FAILED-评审未通过或执行异常 */
     private String status;
 
     /** 已进行的执行/尝试次数 */

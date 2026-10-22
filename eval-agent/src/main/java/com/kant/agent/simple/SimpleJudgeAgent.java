@@ -4,11 +4,18 @@ import com.kant.agent.simple.model.SampleTaskTicket;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.retry.support.RetryTemplate;
+import org.springframework.web.client.RestClient;
 
+import java.net.http.HttpClient;
+import java.time.Duration;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -20,6 +27,11 @@ import java.util.stream.Collectors;
 public class SimpleJudgeAgent {
 
     public SampleTaskTicket.JudgeFeedback evaluate(SampleTaskTicket.TaskTicket ticket, String generatedPrompt) {
+        return evaluate(ticket, generatedPrompt, AgentExecutionListener.NOOP);
+    }
+
+    public SampleTaskTicket.JudgeFeedback evaluate(SampleTaskTicket.TaskTicket ticket, String generatedPrompt,
+                                                  AgentExecutionListener listener) {
         // 使用 Spring AI 的 Converter 来定义期望的 JSON 结构
         var converter = new BeanOutputConverter<>(SampleTaskTicket.JudgeFeedback.class);
         String formatInstructions = converter.getFormat();
@@ -49,32 +61,38 @@ public class SimpleJudgeAgent {
                     {formatInstructions}
                 """;
 
-        ChatClient chatClient = ChatClient.builder(buildChatModel()).build();
-        String response = chatClient.prompt()
-                .user(u -> u.text(judgePrompt)
-                        .param("coreIntent", ticket.coreIntent())
-                        .param("seed", ticket.seed())
-                        .param("tacticsList", ticket.tactics().stream().map(String::valueOf).collect(Collectors.toList()))
-                        .param("generatedPrompt", generatedPrompt)
-                        .param("formatInstructions", formatInstructions))
-                .call()
-                .content();
-
-        // 将大模型的 JSON 字符串转换为 Java Record
-        return converter.convert(response);
+        String prompt = new PromptTemplate(judgePrompt).render(Map.of(
+                "coreIntent", ticket.coreIntent(),
+                "seed", ticket.seed(),
+                "tacticsList", ticket.tactics().stream().map(String::valueOf).collect(Collectors.toList()),
+                "generatedPrompt", generatedPrompt,
+                "formatInstructions", formatInstructions));
+        return SimpleAgentExecutor.execute("JUDGE_AGENT", prompt, listener,
+                () -> ChatClient.builder(buildChatModel()).build()
+                        .prompt()
+                        .user(prompt)
+                        .call()
+                        .chatResponse(),
+                converter::convert);
     }
 
     private static ChatModel buildChatModel() {
+        var requestFactory = new JdkClientHttpRequestFactory(
+                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build());
+        requestFactory.setReadTimeout(Duration.ofSeconds(120));
         return OpenAiChatModel.builder()
                 .openAiApi(OpenAiApi.builder()
                         .apiKey("sk-ws-H.EPMIPDE.c43E.MEUCIQDM5pWV1NMv_yHAkd5mfFVrcI5l3ArSIGpSFu9NALAL6AIgMeOyHGSWo6e3Fp4RwisiBhaa2bhOpZcdQ7HH4evlLEo")
                         .baseUrl("https://dashscope.aliyuncs.com/compatible-mode")
+                        .restClientBuilder(RestClient.builder().requestFactory(requestFactory))
                         .build())
                 .defaultOptions(
                         OpenAiChatOptions.builder()
                                 .model("qwen3.8-max")
                                 .build()
                 )
+                // 与生成器一致，调用失败立即进入业务层失败回调。
+                .retryTemplate(RetryTemplate.builder().maxAttempts(1).build())
                 .build();
     }
 }

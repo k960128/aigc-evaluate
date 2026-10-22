@@ -41,7 +41,7 @@ public class AgentSampleFactoryTaskDetailLogsDO {
     /** 返回消息内容 */
     private String contentResponse;
 
-    /** 执行状态 */
+    /** 执行状态：RUNNING-执行中，SUCCESS-成功，FAILED-失败 */
     private String status;
 
     /** Token数量 */
