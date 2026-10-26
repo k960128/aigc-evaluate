@@ -101,7 +101,7 @@ public class SimpleGenerateAgent {
                 .defaultOptions(
                         OllamaChatOptions
                                 .builder()
-                                .model("qwen2.5-7b-base")
+                                .model("qwen2.5-7B-abliterated")
                                 .temperature(temperature)
                                 .build())
                 // 一条执行日志对应一次调用，失败后立即交给外层记录并结束批次。
