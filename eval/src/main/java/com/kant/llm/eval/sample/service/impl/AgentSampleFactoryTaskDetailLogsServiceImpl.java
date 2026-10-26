@@ -33,11 +33,12 @@ public class AgentSampleFactoryTaskDetailLogsServiceImpl extends ServiceImpl<Age
     }
 
     @Override
-    public void startExecution(String taskId, Long taskDetailId, String messageId, String type, String promptContent) {
+    public void startExecution(String taskId, Long taskDetailId, int currentRound, String messageId, String type, String promptContent) {
         AgentSampleFactoryTaskDetailLogsDO executionLog = new AgentSampleFactoryTaskDetailLogsDO();
         executionLog.setTaskId(taskId);
         executionLog.setTaskDetailId(taskDetailId);
         executionLog.setMessageId(messageId);
+        executionLog.setCurrentRound(currentRound);
         executionLog.setType(type);
         executionLog.setPromptContent(promptContent);
         executionLog.setStatus("RUNNING");

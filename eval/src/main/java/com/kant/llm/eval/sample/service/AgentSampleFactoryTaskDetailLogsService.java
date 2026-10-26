@@ -21,8 +21,10 @@ public interface AgentSampleFactoryTaskDetailLogsService extends IService<AgentS
 
     /**
      * 在模型调用前创建 RUNNING 状态的执行日志。
+     *
+     * @param currentRound 当前迭代轮次，从1开始，同一轮的生成和评审日志使用相同轮次
      */
-    void startExecution(String taskId, Long taskDetailId, String messageId, String type, String promptContent);
+    void startExecution(String taskId, Long taskDetailId, int currentRound, String messageId, String type, String promptContent);
 
     /**
      * 更新响应原文、Token 用量、耗时及 SUCCESS/FAILED 状态。

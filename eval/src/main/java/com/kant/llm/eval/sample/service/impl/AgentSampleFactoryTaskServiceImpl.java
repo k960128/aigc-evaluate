@@ -178,7 +178,9 @@ public class AgentSampleFactoryTaskServiceImpl extends ServiceImpl<AgentSampleFa
 
             @Override
             public void onStarted(String messageId, String type, String promptContent) {
-                detailLogsService.startExecution(detail.getTaskId(), detail.getId(), messageId, type, promptContent);
+                // onIterationStarted 已在本轮调用前更新轮次，生成和评审日志共用该轮次。
+                detailLogsService.startExecution(detail.getTaskId(), detail.getId(), detail.getAttemptCount(),
+                        messageId, type, promptContent);
             }
 
             @Override

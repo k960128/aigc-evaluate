@@ -32,6 +32,9 @@ public class AgentSampleFactoryTaskDetailLogsDO {
     /** 消息唯一标识 */
     private String messageId;
 
+    /** 当前迭代轮次 */
+    private Integer currentRound;
+
     /** 角色：GENERATOR_AGENT/JUDGE_AGENT */
     private String type;
 
