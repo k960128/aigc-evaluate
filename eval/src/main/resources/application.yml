@@ -68,6 +68,7 @@ app:
 
 # RocketMQ 配置
 rocketmq:
+  enabled: true
   name-server: 47.103.193.177:9876
   producer:
     group: aigc-eval-producer-group
