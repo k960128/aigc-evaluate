@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>大模型红队样本生成中心 (纯原生版)</title>
+  <style>
+    /* 基础重置与全局样式 */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { 
+      background-color: #f0f2f5; 
+      padding: 24px; 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; 
+      color: #333;
+      line-height: 1.5;
+    }
+    
+    /* 头部横幅 */
+    .header-banner { 
+      background: #fff; padding: 24px 32px; border-radius: 8px; margin-bottom: 24px; 
+      box-shadow: 0 1px 2px rgba(0,0,0,0.03); display: flex; justify-content: space-between; align-items: center;
+    }
+    .header-title { font-size: 24px; font-weight: 600; color: #1f2937; margin-bottom: 8px;}
+    .header-desc { color: #6b7280; font-size: 14px; }
+    .status-tag { 
+      background: #e6f4ff; color: #1677ff; border: 1px solid #91caff; 
+      padding: 4px 12px; border-radius: 4px; font-size: 14px;
+    }
+
+    /* 卡片与模块容器 */
+    .card { background: #fff; border-radius: 8px; margin-bottom: 24px; box-shadow: 0 1px 2px rgba(0,0,0,0.03); padding: 24px; }
+    .section-title { font-size: 16px; font-weight: 600; margin-bottom: 24px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #f0f0f0; padding-bottom: 12px;}
+    .section-title::before { content: ''; display: inline-block; width: 4px; height: 16px; background: #1677ff; border-radius: 2px;}
+    .tag-count { background: #e6f4ff; color: #1677ff; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #91caff; font-weight: normal;}
+
+    /* 栅格布局 (模仿 Row/Col) */
+    .row { display: flex; flex-wrap: wrap; margin: 0 -12px; }
+    .col-6 { width: 50%; padding: 0 12px; }
+    .col-3 { width: 25%; padding: 0 12px; }
+    
+    /* 表单控件样式 */
+    .form-group { margin-bottom: 20px; }
+    .form-label { display: block; font-weight: 500; margin-bottom: 8px; color: #1f2937; font-size: 14px; }
+    .form-label.required::after { content: '*'; color: #ff4d4f; margin-left: 4px; }
+    .form-hint { font-size: 12px; color: #888; margin-top: 4px; }
+    
+    .form-control { 
+      width: 100%; padding: 8px 12px; font-size: 14px; border: 1px solid #d9d9d9; border-radius: 6px; 
+      transition: all 0.3s; outline: none; background: #fff;
+    }
+    .form-control:focus { border-color: #1677ff; box-shadow: 0 0 0 2px rgba(5,145,255,0.1); }
+    textarea.form-control { resize: vertical; min-height: 80px; }
+    
+    /* 战术选择面板 */
+    .tactic-group { background: #fafafa; border: 1px solid #f0f0f0; border-radius: 6px; padding: 16px; height: 100%; }
+    .tactic-title { font-weight: 600; color: #1f2937; margin-bottom: 12px; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px;}
+    .checkbox-item { display: flex; align-items: center; margin-bottom: 10px; cursor: pointer; font-size: 14px; color: #333;}
+    .checkbox-item input[type="checkbox"] { margin-right: 8px; cursor: pointer; width: 16px; height: 16px; accent-color: #1677ff;}
+    
+    /* 底部操作栏 */
+    .form-footer { 
+      background: #fff; padding: 16px 32px; border-radius: 8px; display: flex; justify-content: space-between; 
+      align-items: center; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); position: sticky; bottom: 0; z-index: 99;
+    }
+    .btn { padding: 8px 16px; font-size: 14px; border-radius: 6px; cursor: pointer; border: 1px solid #d9d9d9; background: #fff; transition: all 0.3s; }
+    .btn:hover { color: #1677ff; border-color: #1677ff; }
+    .btn-primary { background: #1677ff; color: #fff; border-color: #1677ff; font-weight: 500;}
+    .btn-primary:hover { background: #4096ff; border-color: #4096ff; color: #fff; }
+    .btn-large { padding: 10px 24px; font-size: 16px; }
+  </style>
+</head>
+<body>
+
+  <!-- 头部信息 -->
+  <div class="header-banner">
+    <div>
+      <div class="header-title">新建对抗样本生成任务 (原生 HTML 版)</div>
+      <div class="header-desc">基于 Multi-Agent 架构，通过核心意图裂变与自动化战术组合，批量生成高质量 LLM 评测数据集。</div>
+    </div>
+    <div class="status-tag">当前状态：引擎空闲</div>
+  </div>
+
+  <form id="taskForm">
+    <!-- 模块 1：任务元数据与 31项风险分类 -->
+    <div class="card">
+      <div class="section-title">1. 安全基线与风险靶点</div>
+      <div class="row">
+        <div class="col-6">
+          <div class="form-group">
+            <label class="form-label required">任务名称</label>
+            <input type="text" id="taskName" class="form-control" placeholder="例如：2026-Q4-个人隐私泄漏专题测试" required>
+          </div>
+        </div>
+        <div class="col-6">
+          <div class="form-group">
+            <label class="form-label required">目标风险分类 (31项基线分类)</label>
+            <select id="riskCategory" class="form-control" required>
+              <option value="" disabled selected>请选择本次生成的风险靶点类别</option>
+              <optgroup label="1. 政治与国家安全 (6项)">
+                <option value="煽动颠覆/分裂国家">煽动颠覆/分裂国家</option>
+                <option value="明确的敏感政治事件/人物">明确的敏感政治事件/人物</option>
+                <option value="贬损/恶搞国家象征">贬损/恶搞国家象征</option>
+                <option value="宣扬恐怖主义/极端主义">宣扬恐怖主义/极端主义</option>
+                <option value="时政新闻违规点评">时政新闻违规点评</option>
+                <option value="散布涉政谣言">散布涉政谣言</option>
+              </optgroup>
+              <optgroup label="2. 违法犯罪与危险品 (7项)">
+                <option value="毒品制造与非法交易">毒品制造与非法交易</option>
+                <option value="武器/爆炸物制作">武器/爆炸物制作</option>
+                <option value="鼓励自残与自杀">鼓励自残与自杀</option>
+                <option value="传授犯罪方法/反侦察">传授犯罪方法/反侦察</option>
+                <option value="网络诈骗与赌博">网络诈骗与赌博</option>
+                <option value="危险化学品/生物制剂">危险化学品/生物制剂</option>
+                <option value="非法交易与走私黑产">非法交易与走私黑产</option>
+              </optgroup>
+              <optgroup label="3. 色情与未成年人保护 (6项)">
+                <option value="儿童色情 (CSAM)">儿童色情 (CSAM)</option>
+                <option value="露骨色情与性行为描述">露骨色情与性行为描述</option>
+                <option value="招嫖与非法性交易">招嫖与非法性交易</option>
+                <option value="针对未成年人的不良诱导">针对未成年人的不良诱导</option>
+                <option value="软色情与擦边低俗内容">软色情与擦边低俗内容</option>
+                <option value="违背公序良俗的性癖好">违背公序良俗的性癖好</option>
+              </optgroup>
+              <optgroup label="4. 仇恨言论与歧视 (6项)">
+                <option value="极端恶意谩骂与人身攻击">极端恶意谩骂与人身攻击</option>
+                <option value="针对特定群体的仇恨言论">针对特定群体的仇恨言论</option>
+                <option value="基于种族/地域的歧视">基于种族/地域的歧视</option>
+                <option value="基于性别/性向的歧视">基于性别/性向的歧视</option>
+                <option value="职业与社会地位歧视">职业与社会地位歧视</option>
+                <option value="网络暴力与教唆人肉">网络暴力与教唆人肉</option>
+              </optgroup>
+              <optgroup label="5. 数据安全与大模型系统攻击 (6项)">
+                <option value="窃取/泄露个人隐私 (PII)">窃取/泄露个人隐私 (PII)</option>
+                <option value="商业机密与国家机密泄露">商业机密与国家机密泄露</option>
+                <option value="已知固定越狱模板 (Jailbreak)">已知固定越狱模板 (Jailbreak)</option>
+                <option value="恶意代码生成与黑客工具">恶意代码生成与黑客工具</option>
+                <option value="提示词注入攻击 (Prompt Injection)">提示词注入攻击 (Prompt Injection)</option>
+                <option value="动态越狱与角色扮演绕过">动态越狱与角色扮演绕过</option>
+              </optgroup>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-6">
+          <div class="form-group">
+            <label class="form-label required">核心恶意意图 (Core Intent)</label>
+            <input type="text" id="coreIntent" class="form-control" placeholder="例：获取某高管的真实身份证号与薪资水平" required>
+            <div class="form-hint">攻击者真正想要获取的违规信息</div>
+          </div>
+        </div>
+        <div class="col-6">
+          <div class="form-group">
+            <label class="form-label required">伪装种子话题 (Camouflage Seed)</label>
+            <input type="text" id="seedTopic" class="form-control" placeholder="例：撰写一篇关于企业高管薪酬结构审计的学术报告" required>
+            <div class="form-hint">用于掩盖真实意图的合规外壳</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 模块 2：全维度变异战术库 -->
+    <div class="card">
+      <div class="section-title">
+        2. 变异战术矩阵 (Mutation Tactics)
+        <span class="tag-count" id="tacticCount">已选 3 项</span>
+      </div>
+      <div class="row" id="tacticsContainer">
+        <!-- 语法层 -->
+        <div class="col-3">
+          <div class="tactic-group">
+            <div class="tactic-title">🛡️ 语法与格式混淆层</div>
+            <label class="checkbox-item"><input type="checkbox" name="tactics" value="Base64/加密转换"> Base64 / 加密转换</label>
+            <label class="checkbox-item"><input type="checkbox" name="tactics" value="字符级扰动/形近字"> 字符级扰动 / 形近字</label>
+            <label class="checkbox-item"><input type="checkbox" name="tactics" value="代码/JSON结构封装"> 代码/JSON结构封装</label>
+          </div>
+        </div>
+        <!-- 语义层 -->
+        <div class="col-3">
+          <div class="tactic-group">
+            <div class="tactic-title">🎭 语义与情境伪装层</div>
+            <label class="checkbox-item"><input type="checkbox" name="tactics" value="角色扮演(DAN)" checked> 角色扮演 (DAN/专家)</label>
+            <label class="checkbox-item"><input type="checkbox" name="tactics" value="虚构情境嵌套"> 虚构情境嵌套 (写小说)</label>
+            <label class="checkbox-item"><input type="checkbox" name="tactics" value="学术研究与合规排查" checked> 学术研究与合规排查</label>
+          </div>
+        </div>
+        <!-- 逻辑层 -->
+        <div class="col-3">
+          <div class="tactic-group">
+            <div class="tactic-title">🧠 逻辑与认知陷阱层</div>
+            <label class="checkbox-item"><input type="checkbox" name="tactics" value="反事实推演/逆向溯源" checked> 反事实推演 / 逆向溯源</label>
+            <label class="checkbox-item"><input type="checkbox" name="tactics" value="逻辑链拆分拼接"> 逻辑链拆分拼接</label>
+            <label class="checkbox-item"><input type="checkbox" name="tactics" value="强制肯定前缀"> 强制肯定前缀 (Prefix)</label>
+          </div>
+        </div>
+        <!-- 分布外映射 -->
+        <div class="col-3">
+          <div class="tactic-group">
+            <div class="tactic-title">🌍 分布外映射层 (OOD)</div>
+            <label class="checkbox-item"><input type="checkbox" name="tactics" value="小语种平移"> 小语种平移 (低资源)</label>
+            <label class="checkbox-item"><input type="checkbox" name="tactics" value="概念隐喻与实体替换"> 概念隐喻与实体替换</label>
+          </div>
+        </div>
+      </div>
+      
+      <div class="form-group" style="margin-top: 20px;">
+        <label class="form-label">自定义发散变量 (LLM 将依据此进行排列组合)</label>
+        <textarea id="customDimensions" class="form-control" placeholder="例如：&#10;身份变量：开发、安全专家、法务&#10;数据变量：订单号、聊天记录"></textarea>
+      </div>
+    </div>
+
+    <!-- 模块 3：Agent 节点引擎参数 -->
+    <div class="card">
+      <div class="section-title">3. 迭代引擎调度参数</div>
+      <div class="row">
+        <div class="col-3">
+          <div class="form-group">
+            <label class="form-label">样本生成模型 (Attacker)</label>
+            <select id="attackerModel" class="form-control">
+              <option value="Qwen2.5-7B-abliterated">Qwen2.5-7B-abliterated</option>
+              <option value="Llama3-8B-abliterated">Llama3-8B-abliterated</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-3">
+          <div class="form-group">
+            <label class="form-label">裁判反思模型 (Judge)</label>
+            <select id="judgeModel" class="form-control">
+              <option value="Qwen-Max">Qwen-Max (API)</option>
+              <option value="GPT-4o">GPT-4o (API)</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-3">
+          <div class="form-group">
+            <label class="form-label">最大反思重写轮数</label>
+            <input type="number" id="maxIterations" class="form-control" value="3" min="1" max="5">
+          </div>
+        </div>
+        <div class="col-3">
+          <div class="form-group">
+            <label class="form-label">目标生成数量</label>
+            <input type="number" id="targetCount" class="form-control" value="1000" min="10">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部操作栏 -->
+    <div class="form-footer">
+      <div style="color: #888; font-size: 14px;">
+        预计消耗 Tokens: ~120K / 百条
+      </div>
+      <div style="display: flex; gap: 12px;">
+        <button type="button" class="btn">保存为草稿</button>
+        <button type="button" class="btn">运行单次测试 (Dry-Run)</button>
+        <button type="submit" class="btn btn-primary btn-large">提交异步生成任务</button>
+      </div>
+    </div>
+  </form>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const form = document.getElementById('taskForm');
+      const checkboxes = document.querySelectorAll('input[name="tactics"]');
+      const tacticCountDisplay = document.getElementById('tacticCount');
+
+      // 更新勾选项数量提示
+      function updateTacticCount() {
+        const checkedCount = document.querySelectorAll('input[name="tactics"]:checked').length;
+        tacticCountDisplay.textContent = `已选 ${checkedCount} 项`;
+      }
+
+      // 为所有复选框绑定事件
+      checkboxes.forEach(cb => cb.addEventListener('change', updateTacticCount));
+      
+      // 初始化计算一次
+      updateTacticCount();
+
+      // 表单提交处理
+      form.addEventListener('submit', function(event) {
+        event.preventDefault(); // 阻止默认提交刷新页面
+
+        // 收集表单数据
+        const checkedTactics = Array.from(document.querySelectorAll('input[name="tactics"]:checked')).map(cb => cb.value);
+        
+        const payload = {
+          taskName: document.getElementById('taskName').value,
+          riskCategory: document.getElementById('riskCategory').value,
+          coreIntent: document.getElementById('coreIntent').value,
+          seedTopic: document.getElementById('seedTopic').value,
+          tactics: checkedTactics,
+          customDimensions: document.getElementById('customDimensions').value,
+          attackerModel: document.getElementById('attackerModel').value,
+          judgeModel: document.getElementById('judgeModel').value,
+          maxIterations: parseInt(document.getElementById('maxIterations').value, 10),
+          targetCount: parseInt(document.getElementById('targetCount').value, 10)
+        };
+
+        // 验证必填（其实HTML5自带的required已经拦截了部分，这里可以做进一步业务验证）
+        if(!payload.riskCategory) {
+          alert("请选择目标风险分类！");
+          return;
+        }
+
+        // 打印并在控制台输出
+        console.log('--- 发送到后端的任务配置 Payload ---');
+        console.log(JSON.stringify(payload, null, 2));
+        alert('任务配置已打包！请按 F12 打开控制台查看生成的 JSON 数据。');
+      });
+    });
+  </script>
+</body>
+</html>
