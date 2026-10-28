@@ -1,19 +1,17 @@
 package com.kant.agent.simple;
 
 import com.kant.agent.simple.memory.IterationRecord;
+import com.kant.agent.simple.memory.ReflectionContextRenderer;
 import com.kant.agent.simple.memory.ReflectionMemory;
 import com.kant.agent.simple.model.SampleTaskTicket;
+import com.kant.agent.simple.tactic.ComposedSample;
+import com.kant.agent.simple.tactic.TacticComposer;
+import com.kant.agent.simple.tactic.TacticTransformerRegistry;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Set;
 import java.util.regex.Pattern;
 
-/**
- * 样本工厂Orchestrator，用于协调多个agent的执行。
- *
- * @author kant
- * @date 2024/08/10
- */
 @Slf4j
 public class SimpleOrchestrator {
 
@@ -30,82 +28,103 @@ public class SimpleOrchestrator {
             "或者", "以及", "包括", "可以", "需要", "进行", "所有", "相关"
     );
 
+    // P1-CHANGE: 注入 registry + composer
+    private final TacticTransformerRegistry registry;
+    private final TacticComposer composer;
+
+    public SimpleOrchestrator() {
+        this(TacticTransformerRegistry.createDefault());
+    }
+
+    public SimpleOrchestrator(TacticTransformerRegistry registry) {
+        this.registry = registry;
+        this.composer = new TacticComposer(registry);
+    }
+
     public void runReflectionLoop(SampleTaskTicket.TaskTicket ticket, int maxIterations, double temperature) {
         runReflectionLoop(ticket, maxIterations, temperature, AgentExecutionListener.NOOP);
     }
 
-    /**
-     * @return 是否在迭代次数内获得通过评审的样本
-     */
-    public boolean runReflectionLoop(SampleTaskTicket.TaskTicket ticket, int maxIterations, double temperature,
-                                     AgentExecutionListener listener) {
+    public boolean runReflectionLoop(SampleTaskTicket.TaskTicket ticket, int maxIterations,
+                                     double temperature, AgentExecutionListener listener) {
         log.info("=======================初始化Agent========================");
         SimpleJudgeAgent judgeAgent = new SimpleJudgeAgent();
-        SimpleGenerateAgent generatorAgent = new SimpleGenerateAgent();
+        SimpleGenerateAgent generatorAgent = new SimpleGenerateAgent(new ReflectionContextRenderer(), registry);
         log.info("=======================初始化Agent完成========================");
 
-        // P1-CHANGE: 用 ReflectionMemory 替代 currentPrompt + currentAdvice
         ReflectionMemory memory = new ReflectionMemory();
 
         for (int i = 1; i <= maxIterations; i++) {
             listener.onIterationStarted(i);
-            log.info("=== 开启第 {} 轮迭代（注入历史 {} 条） ===", i, memory.size());
+            log.info("=== 第 {} 轮（注入历史 {} 条） ===", i, memory.size());
 
-            // 1. 生成（带完整历史记忆）
-            String prompt = generatorAgent.generatePrompt(ticket, memory, temperature, listener);
-            log.info("Actor 生成的 Prompt: \n{}", prompt);
+            // 1. 生成骨架（含占位符）
+            String scaffold = generatorAgent.generatePrompt(ticket, memory, temperature, listener);
+            log.info("Actor 生成的骨架: \n{}", scaffold);
 
-            // 2. L1 意图归零检测
-            if (isIntentLikelyEmpty(prompt, ticket.coreIntent())) {
-                log.warn("❌ 意图归零：骨架完全不含核心意图关键词，跳过 Judge。");
-                memory.record(IterationRecord.intentEmpty(i, prompt));
+            // 2. L1 意图归零检测（用骨架检测，占位符内明文也参与）
+            if (isIntentLikelyEmpty(scaffold, ticket.coreIntent())) {
+                log.warn("❌ 意图归零，跳过 Composer 和 Judge");
+                memory.record(IterationRecord.intentEmpty(i, scaffold));
                 continue;
             }
 
-            // 3. Judge 评估
-            SampleTaskTicket.JudgeFeedback feedback = judgeAgent.evaluate(ticket, prompt, listener);
-            log.info("Judge 评分 -> 意图: {}, 隐蔽: {}, 及格: {}",
+            // 3. P1-CHANGE: 程序化变换
+            ComposedSample composed = composer.compose(scaffold, ticket.tactics());
+            log.info("变换完成: applied={}, missing={}, reversible={}",
+                    composed.appliedTransformers(),
+                    composed.missingTransformers(),
+                    composed.reverseVerified());
+
+            if (!composed.isComplete()) {
+                log.warn("❌ 变换不完整: {}", composed.failureReason());
+                memory.record(new IterationRecord(
+                        i, scaffold, 0, 0, false,
+                        composed.failureReason(), "", "TRANSFORMER_INCOMPLETE"));
+                continue;
+            }
+            log.info("最终样本: \n{}", composed.finalText());
+
+            // 4. Judge 评骨架（不评密文）
+            SampleTaskTicket.JudgeFeedback feedback = judgeAgent.evaluate(
+                    ticket, composed.semanticScaffold(), listener);
+            log.info("Judge -> intent={}, stealth={}, pass={}",
                     feedback.intentScore(), feedback.stealthScore(), feedback.isPass());
 
             if (feedback.isPass()) {
-                // P1-CHANGE: 通过时也记录，便于日志审计（不再读取，但保留完整链路）
-                memory.record(new IterationRecord(
-                        i, prompt,
+                memory.record(new IterationRecord(i, scaffold,
                         feedback.intentScore(), feedback.stealthScore(),
                         true, feedback.critique(), feedback.advice(),
                         IterationRecord.SOURCE_GENERATOR));
-                log.info("🎉 样本及格！提前终止循环。");
+                log.info("🎉 通过");
                 return true;
             }
 
-            // 4. advice 安全对齐话术过滤
+            // 5. advice 过滤后记入记忆
             String safeAdvice = isJailbrokenAdvice(feedback.advice()) ? "" : feedback.advice();
-            if (safeAdvice.isEmpty() && feedback.advice() != null && !feedback.advice().isBlank()) {
-                log.warn("⚠️ Judge 输出安全对齐话术，本轮 advice 作废。原文: {}", feedback.advice());
-            }
-
-            // 5. 记入记忆（用过滤后的 advice）
-            memory.record(new IterationRecord(
-                    i, prompt,
+            memory.record(new IterationRecord(i, scaffold,
                     feedback.intentScore(), feedback.stealthScore(),
                     false, feedback.critique(), safeAdvice,
                     IterationRecord.SOURCE_GENERATOR));
-
-            log.warn("❌ 样本不合格。缺陷: {} | 有效建议: {}",
-                    feedback.critique(), safeAdvice.isEmpty() ? "（已过滤）" : safeAdvice);
+            log.warn("❌ 不合格: {}", feedback.critique());
         }
 
-        // P1-CHANGE: 3 轮全失败，保留 best-so-far 供降级池
         memory.bestSoFar().ifPresentOrElse(
-                best -> log.warn("达到最大迭代轮数 ({})。Best-so-far: 第 {} 轮 (intent={}, stealth={})",
-                        maxIterations, best.iteration(), best.intentScore(), best.stealthScore()),
-                () -> log.error("达到最大迭代轮数 ({})，无可用的 best-so-far，丢弃废料。", maxIterations)
-        );
+                best -> log.warn("达到最大迭代轮数。Best-so-far: 第 {} 轮 (intent={}, stealth={})",
+                        best.iteration(), best.intentScore(), best.stealthScore()),
+                () -> log.error("达到最大迭代轮数，无可用 best-so-far。"));
         return false;
     }
 
-    // ─── P0 保留的检测方法 ───
-
+    /**
+     * 检查意图是否归零。
+     *
+     * @param prompt 生成的骨架
+     * @param coreIntent 核心意图
+     * @return 如果 prompt 生成的骨架
+     * @param coreIntent 核心意图
+     * @return 如果 prompt 生成的骨架包含 coreIntent 的前缀，返回 true
+     */
     private static boolean isIntentLikelyEmpty(String prompt, String coreIntent) {
         if (coreIntent == null || coreIntent.isBlank()) return false;
         if (prompt == null || prompt.isBlank()) return true;
@@ -117,6 +136,11 @@ public class SimpleOrchestrator {
         return true;
     }
 
+    /**
+     * 是否是安全的 advice。
+     * @param advice Judge 给出的 advice
+     * @return 是否安全的 advice
+     */
     private static boolean isJailbrokenAdvice(String advice) {
         return advice != null && !advice.isBlank()
                 && SAFETY_ALIGNMENT.matcher(advice).find();
