@@ -97,7 +97,7 @@ public class SimpleJudgeAgent {
                 "generatedPrompt", generatedPrompt,
                 "formatInstructions", formatInstructions));
 
-        return SimpleAgentExecutor.execute("样本扩充-评审智能体", prompt, listener,
+        return SimpleAgentExecutor.execute("JUDGE_AGENT", prompt, listener,
                 () -> ChatClient.builder(buildChatModel()).build()
                         .prompt()
                         .user(prompt)
