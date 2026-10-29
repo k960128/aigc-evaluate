@@ -94,17 +94,26 @@ logging:
   level:
     org.springframework.ai.chat.client.advisor: DEBUG
 
-# Actuator
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
-
+        include: health,info,metrics,prometheus
   endpoint:
     health:
-      show-details: always
-
+      show-details: when_authorized
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  metrics:
+    tags:
+      application: agent-sample-factory
+    distribution:
+      percentiles-histogram:
+        ai.ticket.duration: true
+        ai.judge.intent_score: true
+        ai.judge.stealth_score: true
 
 eval:
   agent:

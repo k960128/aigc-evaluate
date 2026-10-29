@@ -3,6 +3,7 @@ package com.kant.agent.simple;
 import com.kant.agent.simple.memory.IterationRecord;
 import com.kant.agent.simple.memory.ReflectionContextRenderer;
 import com.kant.agent.simple.memory.ReflectionMemory;
+import com.kant.agent.simple.metrics.TicketMetricsCollector;
 import com.kant.agent.simple.model.SampleTaskTicket;
 import com.kant.agent.simple.tactic.ComposedSample;
 import com.kant.agent.simple.tactic.TacticComposer;
@@ -31,15 +32,19 @@ public class SimpleOrchestrator {
     // P1-CHANGE: 注入 registry + composer
     private final TacticTransformerRegistry registry;
     private final TacticComposer composer;
+    private final TicketMetricsCollector metricsCollector;
 
     public SimpleOrchestrator() {
-        this(TacticTransformerRegistry.createDefault());
+        this(TacticTransformerRegistry.createDefault(), null);
     }
 
-    public SimpleOrchestrator(TacticTransformerRegistry registry) {
+    public SimpleOrchestrator(TacticTransformerRegistry registry,
+                              TicketMetricsCollector metricsCollector) {
         this.registry = registry;
         this.composer = new TacticComposer(registry);
+        this.metricsCollector = metricsCollector;
     }
+
 
     public void runReflectionLoop(SampleTaskTicket.TaskTicket ticket, int maxIterations, double temperature) {
         runReflectionLoop(ticket, maxIterations, temperature, AgentExecutionListener.NOOP);
@@ -47,9 +52,12 @@ public class SimpleOrchestrator {
 
     public boolean runReflectionLoop(SampleTaskTicket.TaskTicket ticket, int maxIterations,
                                      double temperature, AgentExecutionListener listener) {
+        // L2-A: 记录开始时间
+        long startedAt = System.currentTimeMillis();
+
         log.info("=======================初始化Agent========================");
-        SimpleJudgeAgent judgeAgent = new SimpleJudgeAgent();
         SimpleGenerateAgent generatorAgent = new SimpleGenerateAgent(new ReflectionContextRenderer(), registry);
+        SimpleJudgeAgent judgeAgent = new SimpleJudgeAgent();
         log.info("=======================初始化Agent完成========================");
 
         ReflectionMemory memory = new ReflectionMemory();
@@ -109,6 +117,10 @@ public class SimpleOrchestrator {
             log.warn("❌ 不合格: {}", feedback.critique());
         }
 
+        // L2-A: 失败出口埋点
+        if (metricsCollector != null) {
+            metricsCollector.collect(memory, false, System.currentTimeMillis() - startedAt);
+        }
         memory.bestSoFar().ifPresentOrElse(
                 best -> log.warn("达到最大迭代轮数。Best-so-far: 第 {} 轮 (intent={}, stealth={})",
                         best.iteration(), best.intentScore(), best.stealthScore()),
