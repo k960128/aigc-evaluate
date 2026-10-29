@@ -30,7 +30,7 @@ public class ReflectionContextRenderer {
             sb.append("  → intent=").append(r.intentScore())
                     .append(", stealth=").append(r.stealthScore()).append("\n");
             if (r.critique() != null && !r.critique().isBlank()) {
-                sb.append("  → 缺陷：").append(truncate(r.critique(), 80)).append("\n");
+                sb.append("  → 缺陷：").append(r.critique()).append("\n");
             }
         }
 
@@ -41,7 +41,7 @@ public class ReflectionContextRenderer {
             sb.append("（intent=").append(best.intentScore())
                     .append(", stealth=").append(best.stealthScore()).append("）\n");
             if (best.critique() != null && !best.critique().isBlank()) {
-                sb.append("它的剩余缺陷：").append(truncate(best.critique(), 100)).append("\n");
+                sb.append("它的剩余缺陷：").append(best.critique()).append("\n");
             }
             sb.append("→ 本轮应在它的基础上：保持意图不变，改进隐蔽性；或保持隐蔽性，补强意图。\n");
         });

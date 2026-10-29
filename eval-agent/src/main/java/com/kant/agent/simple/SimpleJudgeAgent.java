@@ -8,6 +8,9 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.converter.BeanOutputConverter;
+import org.springframework.ai.ollama.OllamaChatModel;
+import org.springframework.ai.ollama.api.OllamaApi;
+import org.springframework.ai.ollama.api.OllamaChatOptions;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
@@ -119,27 +122,46 @@ public class SimpleJudgeAgent {
         return sb.toString();
     }
 
+//    private static ChatClient buildChatClient() {
+//        ObservationRegistry observationRegistry = BeanUtil.getBean(ObservationRegistry.class);
+//        var requestFactory = new JdkClientHttpRequestFactory(
+//                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build());
+//        requestFactory.setReadTimeout(Duration.ofSeconds(120));
+//        OpenAiChatModel chatModel = OpenAiChatModel.builder()
+//                .openAiApi(OpenAiApi.builder()
+//                        .apiKey(System.getenv().getOrDefault("DEEPSEEK_API_KEY",
+//                                "sk-807cb73684444599889c160d72d0b674"))
+//                        .baseUrl("https://api.deepseek.com")
+//                        .restClientBuilder(RestClient.builder().requestFactory(requestFactory))
+//                        .build())
+//                .defaultOptions(
+//                        OpenAiChatOptions.builder()
+//                                .model("deepseek-flash")
+//                                .build()
+//                )
+//                .retryTemplate(RetryTemplate.builder().maxAttempts(1).build())
+//                .observationRegistry(observationRegistry)
+//                .build();
+//
+//        return ChatClient.create(chatModel, observationRegistry);
+//    }
+
+
     private static ChatClient buildChatClient() {
         ObservationRegistry observationRegistry = BeanUtil.getBean(ObservationRegistry.class);
         var requestFactory = new JdkClientHttpRequestFactory(
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build());
         requestFactory.setReadTimeout(Duration.ofSeconds(120));
-        OpenAiChatModel chatModel = OpenAiChatModel.builder()
-                .openAiApi(OpenAiApi.builder()
-                        .apiKey(System.getenv().getOrDefault("DEEPSEEK_API_KEY",
-                                "sk-807cb73684444599889c160d72d0b674"))
-                        .baseUrl("https://api.deepseek.com")
+        OllamaChatModel chatModel = OllamaChatModel.builder()
+                .ollamaApi(OllamaApi.builder()
+                        .baseUrl("http://localhost:11434")
                         .restClientBuilder(RestClient.builder().requestFactory(requestFactory))
                         .build())
-                .defaultOptions(
-                        OpenAiChatOptions.builder()
-                                .model("deepseek-flash")
-                                .build()
-                )
+                .defaultOptions(OllamaChatOptions.builder()
+                        .model("qwen2.5-7B-abliterated")
+                        .build())
                 .retryTemplate(RetryTemplate.builder().maxAttempts(1).build())
-                .observationRegistry(observationRegistry)
-                .build();
-
+                .observationRegistry(observationRegistry).build();
         return ChatClient.create(chatModel, observationRegistry);
     }
 }

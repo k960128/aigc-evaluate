@@ -46,10 +46,14 @@ public class SimpleOrchestrator {
     }
 
 
-    public void runReflectionLoop(SampleTaskTicket.TaskTicket ticket, int maxIterations, double temperature) {
-        runReflectionLoop(ticket, maxIterations, temperature, AgentExecutionListener.NOOP);
-    }
-
+    /**
+     * 运行反射循环
+     * @param ticket
+     * @param maxIterations
+     * @param temperature
+     * @param listener
+     * @return 是否通过
+     */
     public boolean runReflectionLoop(SampleTaskTicket.TaskTicket ticket, int maxIterations,
                                      double temperature, AgentExecutionListener listener) {
         // L2-A: 记录开始时间
