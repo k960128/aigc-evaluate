@@ -142,9 +142,10 @@ public class SimpleGenerateAgent {
                 "reflectionContext", reflectionContext
         ));
 
+        ChatClient chatClient = buildChatClient(temperature);
+
         return SimpleAgentExecutor.execute("GENERATOR_AGENT", prompt, listener,
-                () -> ChatClient.builder(buildChatModel(temperature)).build()
-                        .prompt().user(prompt).call().chatResponse(),
+                () -> chatClient.prompt().user(prompt).call().chatResponse(),
                 resp -> {
                     GeneratedScaffold scaffold = parseScaffold(resp);
                     if (scaffold == null || scaffold.adversarial_prompt() == null
@@ -309,12 +310,13 @@ public class SimpleGenerateAgent {
                 .collect(Collectors.joining("\n"));
     }
 
-    private static ChatModel buildChatModel(double temperature) {
+    private static ChatClient buildChatClient(double temperature) {
         ObservationRegistry observationRegistry = BeanUtil.getBean(ObservationRegistry.class);
         var requestFactory = new JdkClientHttpRequestFactory(
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build());
         requestFactory.setReadTimeout(Duration.ofSeconds(120));
-        return OllamaChatModel.builder()
+
+        OllamaChatModel chatModel = OllamaChatModel.builder()
                 .ollamaApi(OllamaApi.builder()
                         .baseUrl("http://localhost:11434")
                         .restClientBuilder(RestClient.builder().requestFactory(requestFactory))
@@ -325,5 +327,6 @@ public class SimpleGenerateAgent {
                         .build())
                 .retryTemplate(RetryTemplate.builder().maxAttempts(1).build())
                 .observationRegistry(observationRegistry).build();
+        return ChatClient.create(chatModel, observationRegistry);
     }
 }

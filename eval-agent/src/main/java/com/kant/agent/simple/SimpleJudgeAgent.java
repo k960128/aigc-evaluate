@@ -99,8 +99,10 @@ public class SimpleJudgeAgent {
                 "generatedPrompt", generatedPrompt,
                 "formatInstructions", formatInstructions));
 
+        ChatClient chatClient = buildChatClient();
+
         return SimpleAgentExecutor.execute("JUDGE_AGENT", prompt, listener,
-                () -> ChatClient.builder(buildChatModel()).build()
+                () -> chatClient
                         .prompt()
                         .user(prompt)
                         .call()
@@ -117,12 +119,12 @@ public class SimpleJudgeAgent {
         return sb.toString();
     }
 
-    private static ChatModel buildChatModel() {
+    private static ChatClient buildChatClient() {
         ObservationRegistry observationRegistry = BeanUtil.getBean(ObservationRegistry.class);
         var requestFactory = new JdkClientHttpRequestFactory(
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build());
         requestFactory.setReadTimeout(Duration.ofSeconds(120));
-        return OpenAiChatModel.builder()
+        OpenAiChatModel chatModel = OpenAiChatModel.builder()
                 .openAiApi(OpenAiApi.builder()
                         .apiKey(System.getenv().getOrDefault("DEEPSEEK_API_KEY",
                                 "sk-807cb73684444599889c160d72d0b674"))
@@ -137,5 +139,7 @@ public class SimpleJudgeAgent {
                 .retryTemplate(RetryTemplate.builder().maxAttempts(1).build())
                 .observationRegistry(observationRegistry)
                 .build();
+
+        return ChatClient.create(chatModel, observationRegistry);
     }
 }
