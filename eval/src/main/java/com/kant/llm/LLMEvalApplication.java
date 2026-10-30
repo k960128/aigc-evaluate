@@ -15,7 +15,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 @SpringBootApplication(scanBasePackages = {
         "com.kant.llm",
-        "com.kant.springai.agent"})
+        "com.kant.springai.agent",
+        "com.kant.agent"
+})
 @MapperScan(basePackages = {
         "com.kant.*.*.*.dao.mapper",
         "com.kant.llm.eval.agent.probe.dao.mapper",
