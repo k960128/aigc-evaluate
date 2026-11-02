@@ -16,7 +16,7 @@ spring:
     type: com.zaxxer.hikari.HikariDataSource
     username: root
     password: G3a5tB7nD9f1
-    url: jdbc:mysql://47.103.193.177:3305/data_free_eval_dev?client_encoding=UTF8
+    url: jdbc:mysql://47.103.193.177:3305/data_agent?client_encoding=UTF8
     hikari:
       connection-timeout: 5000
       idle-timeout: 600000
@@ -63,5 +63,6 @@ management:
     health:
       show-details: always
 
+# RocketMQ 配置
 rocketmq:
-  enable: false
+  enable: false  # 开关闭RocketMQ功能

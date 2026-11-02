@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户管理 · 豆豆智能助手</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
+    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="css/users.css">
+    <!-- Inter 字体 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Vue 3 CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- 图标库 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        (function () {
+            var t = localStorage.getItem('da-theme') === 'dark' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', t);
+        })();
+    </script>
+</head>
+<body>
+    <div id="da-users-app">
+        <!-- 顶栏：由 common.js 的 renderHeader 渲染 -->
+        <div id="da-header-host"></div>
+
+        <!-- 主区 -->
+        <main class="da-users-main">
+            <div class="da-users-page">
+                <!-- 页面头部 -->
+                <div class="da-page-header">
+                    <h2><i class="fas fa-users"></i> 用户管理</h2>
+                    <button class="da-btn-primary" @click="openCreate()">
+                        <i class="fas fa-plus"></i><span>新增用户</span>
+                    </button>
+                </div>
+
+                <!-- 搜索栏 -->
+                <div class="da-users-search">
+                    <div class="da-users-search-input">
+                        <i class="fas fa-search"></i>
+                        <input v-model="searchKeyword" type="text"
+                               placeholder="搜索用户名 / 昵称"
+                               @input="onSearchInput"
+                               @keydown.enter="onSearch" />
+                    </div>
+                    <button class="da-btn-primary" @click="onSearch">搜索</button>
+                    <button class="da-btn-ghost" @click="onReset">重置</button>
+                </div>
+
+                <!-- 用户表格 -->
+                <div class="da-users-table-wrap">
+                    <table class="da-users-table">
+                        <thead>
+                            <tr>
+                                <th>用户名</th>
+                                <th>姓名</th>
+                                <th>昵称</th>
+                                <th>状态</th>
+                                <th>角色</th>
+                                <th>部门</th>
+                                <th>创建时间</th>
+                                <th class="da-col-actions">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="loading">
+                                <td colspan="8" class="da-table-empty">
+                                    <i class="fas fa-spinner fa-spin"></i> 加载中…
+                                </td>
+                            </tr>
+                            <tr v-else-if="users.length === 0">
+                                <td colspan="8" class="da-table-empty">
+                                    <i class="fas fa-inbox"></i>
+                                    <span>暂无用户</span>
+                                </td>
+                            </tr>
+                            <tr v-for="u in users" :key="u.id">
+                                <td class="da-col-username">{{ u.username }}</td>
+                                <td>{{ (u.profile && u.profile.realName) || '—' }}</td>
+                                <td>{{ u.nickname || '—' }}</td>
+                                <td>
+                                    <span class="da-tag" :class="u.status === 'ACTIVE' ? 'success' : 'muted'">
+                                        {{ u.status === 'ACTIVE' ? '正常' : '禁用' }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="da-cell-tags">
+                                        <span v-for="r in u.roles" :key="r.id" class="da-tag primary">
+                                            {{ r.name }}
+                                        </span>
+                                        <span v-if="!u.roles || u.roles.length === 0" class="da-muted">—</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="da-cell-tags">
+                                        <span v-for="d in u.depts" :key="d.id" class="da-tag info">
+                                            {{ d.name }}
+                                        </span>
+                                        <span v-if="!u.depts || u.depts.length === 0" class="da-muted">—</span>
+                                    </div>
+                                </td>
+                                <td class="da-col-time">{{ formatTime(u.createdAt) }}</td>
+                                <td class="da-col-actions">
+                                    <button class="da-action-btn" @click="openEdit(u)" title="编辑">
+                                        <i class="fas fa-pen"></i>
+                                    </button>
+                                    <button class="da-action-btn" @click="openResetPassword(u)" title="重置密码">
+                                        <i class="fas fa-key"></i>
+                                    </button>
+                                    <button v-if="u.username !== 'admin'"
+                                            class="da-action-btn"
+                                            :class="u.status === 'ACTIVE' ? 'warn' : 'success'"
+                                            @click="onToggleStatus(u)"
+                                            :title="u.status === 'ACTIVE' ? '禁用' : '启用'">
+                                        <i :class="u.status === 'ACTIVE' ? 'fas fa-ban' : 'fas fa-circle-check'"></i>
+                                    </button>
+                                    <button v-if="u.username !== 'admin'"
+                                            class="da-action-btn danger" @click="onDelete(u)" title="删除">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                    <span v-else class="da-tag muted" title="内置超级管理员禁止删除/禁用">
+                                        <i class="fas fa-lock"></i> 受保护
+                                    </span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 分页 -->
+                <div class="da-pagination" v-if="total > 0">
+                    <span class="da-pagination-info">
+                        共 {{ total }} 条 · 第 {{ page }} / {{ totalPages }} 页
+                    </span>
+                    <div class="da-pagination-actions">
+                        <button class="da-btn-ghost" :disabled="page <= 1" @click="changePage(page - 1)">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <span class="da-pagination-current">{{ page }}</span>
+                        <button class="da-btn-ghost" :disabled="page >= totalPages" @click="changePage(page + 1)">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- ==================== 用户编辑/新增弹窗 ==================== -->
+        <div v-if="formVisible" class="da-modal-mask"
+             @mousedown.self="onFormMaskMouseDown"
+             @click.self="onFormMaskClick">
+            <div class="da-modal da-user-modal">
+                <div class="da-modal-header">
+                    <h3>{{ editingUser ? '编辑用户' : '新增用户' }}</h3>
+                    <button class="da-modal-close" @click="closeForm">
+                        <i class="fas fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="da-modal-body">
+                    <!-- 浏览器自动填充陷阱：藏在表单最前面的假输入，吸收 admin/admin123 自动填充 -->
+                    <input type="text" name="da-trap-user" tabindex="-1" autocomplete="username"
+                           style="width:0;height:0;padding:0;border:0;opacity:0;position:absolute;left:-9999px" />
+                    <input type="password" name="da-trap-pwd" tabindex="-1" autocomplete="current-password"
+                           style="width:0;height:0;padding:0;border:0;opacity:0;position:absolute;left:-9999px" />
+
+                    <div class="da-form-row">
+                        <label>用户名 <span v-if="!editingUser" class="da-required">*</span></label>
+                        <input v-model="form.username" type="text"
+                               name="da-new-username"
+                               :disabled="!!editingUser"
+                               autocomplete="off" autocapitalize="off" spellcheck="false"
+                               placeholder="登录用户名（创建后不可修改）" />
+                    </div>
+                    <div class="da-form-row">
+                        <label>
+                            密码
+                            <span class="da-required">*</span>
+                        </label>
+                        <div class="da-pwd-wrap">
+                            <input v-model="form.password"
+                                   name="da-new-password"
+                                   :type="showFormPassword ? 'text' : 'password'"
+                                   autocomplete="new-password" autocapitalize="off" spellcheck="false"
+                                   :placeholder="editingUser ? '请输入新密码' : '请输入密码'" />
+                            <button type="button" class="da-pwd-toggle"
+                                    @click="showFormPassword = !showFormPassword"
+                                    :title="showFormPassword ? '隐藏密码' : '显示密码'">
+                                <i :class="showFormPassword ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="da-form-row">
+                        <label>昵称</label>
+                        <input v-model="form.nickname" type="text"
+                               name="da-new-nickname" autocomplete="off"
+                               placeholder="显示名称" />
+                    </div>
+                    <div class="da-form-row">
+                        <label>
+                            角色
+                            <span class="da-hint">（数据范围决定用户能看哪些数据）</span>
+                        </label>
+                        <div class="da-check-group">
+                            <label v-for="r in allRoles" :key="r.id" class="da-check-item">
+                                <input type="checkbox" :value="r.id" v-model="form.roleIds" />
+                                <div class="da-check-text">
+                                    <div class="da-check-title">
+                                        {{ r.name }}
+                                        <span class="da-role-code">{{ r.code }}</span>
+                                    </div>
+                                    <small class="da-check-hint">
+                                        <i class="fas fa-shield-halved"></i>
+                                        {{ dataScopeLabel(r.dataScope) }}
+                                        <span class="da-check-hint-detail">· {{ dataScopeHint(r.dataScope) }}</span>
+                                    </small>
+                                </div>
+                            </label>
+                            <span v-if="allRoles.length === 0" class="da-muted">无可选角色</span>
+                        </div>
+                    </div>
+                    <div class="da-form-row">
+                        <label>部门</label>
+                        <div class="da-check-group da-dept-tree">
+                            <dept-node v-for="d in allDepts" :key="d.id" :dept="d"
+                                       :selected-ids="form.deptIds"></dept-node>
+                            <span v-if="allDepts.length === 0" class="da-muted">无可选部门</span>
+                        </div>
+                    </div>
+
+                    <!-- 个人档案（user_profile） -->
+                    <div class="da-form-section-title">
+                        <i class="fas fa-id-card"></i><span>个人档案</span>
+                    </div>
+                    <div class="da-form-row">
+                        <label>真实姓名</label>
+                        <input v-model="form.profile.realName" type="text"
+                               name="da-profile-realname" autocomplete="off"
+                               placeholder="身份证姓名" />
+                    </div>
+                    <div class="da-form-row">
+                        <label>身份证号</label>
+                        <input v-model="form.profile.idCard" type="text"
+                               name="da-profile-idcard" autocomplete="off"
+                               maxlength="18" spellcheck="false"
+                               placeholder="18 位身份证号" />
+                    </div>
+                    <div class="da-profile-grid-2">
+                        <div class="da-form-row">
+                            <label>年龄</label>
+                            <input v-model="form.profile.age" type="number" min="0" max="150"
+                                   name="da-profile-age" autocomplete="off"
+                                   placeholder="年龄" />
+                        </div>
+                        <div class="da-form-row">
+                            <label>学历</label>
+                            <select v-model="form.profile.education" name="da-profile-education">
+                                <option value="">— 请选择 —</option>
+                                <option value="博士">博士</option>
+                                <option value="硕士">硕士</option>
+                                <option value="本科">本科</option>
+                                <option value="大专">大专</option>
+                                <option value="高中">高中</option>
+                                <option value="其他">其他</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="da-form-row">
+                        <label>家庭住址</label>
+                        <input v-model="form.profile.homeAddress" type="text"
+                               name="da-profile-address" autocomplete="off"
+                               placeholder="家庭住址" />
+                    </div>
+                </div>
+                <div class="da-modal-footer">
+                    <button class="da-btn-ghost" @click="closeForm">取消</button>
+                    <button class="da-btn-primary" :disabled="formSaving" @click="onSubmitForm">
+                        <span v-if="formSaving"><i class="fas fa-spinner fa-spin"></i> 保存中…</span>
+                        <span v-else>保存</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== 重置密码弹窗 ==================== -->
+        <div v-if="resetVisible" class="da-modal-mask"
+             @mousedown.self="onResetMaskMouseDown"
+             @click.self="onResetMaskClick">
+            <div class="da-modal da-reset-modal">
+                <div class="da-modal-header">
+                    <h3>重置密码 · {{ resetTarget && resetTarget.username }}</h3>
+                    <button class="da-modal-close" @click="closeReset">
+                        <i class="fas fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="da-modal-body">
+                    <!-- 自动填充陷阱 -->
+                    <input type="password" name="da-trap-pwd2" tabindex="-1" autocomplete="current-password"
+                           style="width:0;height:0;padding:0;border:0;opacity:0;position:absolute;left:-9999px" />
+
+                    <div class="da-form-row">
+                        <label>新密码 <span class="da-required">*</span></label>
+                        <div class="da-pwd-wrap">
+                            <input v-model="resetForm.newPassword"
+                                   name="da-reset-new"
+                                   :type="showResetNew ? 'text' : 'password'"
+                                   autocomplete="new-password" autocapitalize="off" spellcheck="false"
+                                   placeholder="请输入新密码" />
+                            <button type="button" class="da-pwd-toggle"
+                                    @click="showResetNew = !showResetNew"
+                                    :title="showResetNew ? '隐藏密码' : '显示密码'">
+                                <i :class="showResetNew ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="da-form-row">
+                        <label>确认密码 <span class="da-required">*</span></label>
+                        <div class="da-pwd-wrap">
+                            <input v-model="resetForm.confirmPassword"
+                                   name="da-reset-confirm"
+                                   :type="showResetConfirm ? 'text' : 'password'"
+                                   autocomplete="new-password" autocapitalize="off" spellcheck="false"
+                                   placeholder="请再次输入新密码" />
+                            <button type="button" class="da-pwd-toggle"
+                                    @click="showResetConfirm = !showResetConfirm"
+                                    :title="showResetConfirm ? '隐藏密码' : '显示密码'">
+                                <i :class="showResetConfirm ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="da-modal-footer">
+                    <button class="da-btn-ghost" @click="closeReset">取消</button>
+                    <button class="da-btn-primary" :disabled="resetSaving" @click="onSubmitReset">
+                        <span v-if="resetSaving"><i class="fas fa-spinner fa-spin"></i> 保存中…</span>
+                        <span v-else>确认重置</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== 通用确认弹窗 ==================== -->
+        <div v-if="confirmVisible" class="da-modal-mask"
+             @mousedown.self="onConfirmMaskMouseDown"
+             @click.self="onConfirmMaskClick">
+            <div class="da-modal da-confirm-modal">
+                <div class="da-modal-body">
+                    <div class="da-confirm-icon" :class="confirmState.tone">
+                        <i :class="confirmState.icon"></i>
+                    </div>
+                    <h3 class="da-confirm-title">{{ confirmState.title }}</h3>
+                    <p v-if="confirmState.body" class="da-confirm-body">{{ confirmState.body }}</p>
+                    <p v-if="confirmState.hint" class="da-confirm-hint">{{ confirmState.hint }}</p>
+                </div>
+                <div class="da-modal-footer">
+                    <button class="da-btn-ghost" @click="onConfirmCancel">取消</button>
+                    <button v-if="confirmState.tone === 'danger'"
+                            class="da-btn-danger" @click="onConfirmOk">
+                        {{ confirmState.okText }}
+                    </button>
+                    <button v-else-if="confirmState.tone === 'warn'"
+                            class="da-btn-warn" @click="onConfirmOk">
+                        {{ confirmState.okText }}
+                    </button>
+                    <button v-else class="da-btn-primary" @click="onConfirmOk">
+                        {{ confirmState.okText }}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 共享工具层 -->
+    <script src="js/common.js"></script>
+    <!-- 用户管理逻辑 -->
+    <script src="js/users.js"></script>
+</body>
+</html>
