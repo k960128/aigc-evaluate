@@ -111,8 +111,8 @@ public class BaselineController {
      * @return 快照列表，无数据时为空列表
      */
     @GetMapping("/list")
-    public List<BaselineSnapshot> list() {
-        return baselineRepository.findAll();
+    public Result<List<BaselineSnapshot>> list() {
+        return Results.success(baselineRepository.findAll());
     }
 
     /**
@@ -122,8 +122,8 @@ public class BaselineController {
      * @return 最新快照；不存在时返回 null
      */
     @GetMapping("/latest")
-    public BaselineSnapshot latest(@RequestParam String label) {
-        return baselineRepository.latestByLabel(label).orElse(null);
+    public Result<BaselineSnapshot> latest(@RequestParam String label) {
+        return Results.success(baselineRepository.latestByLabel(label).orElse(null));
     }
 
     // ═══════════════════════════════════════════════════════════
