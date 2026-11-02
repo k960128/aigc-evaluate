@@ -46,6 +46,13 @@
             <artifactId>mysql-connector-java</artifactId>
             <version>8.0.31</version>
         </dependency>
+
+        <dependency>
+            <groupId>com.agentx.ai</groupId>
+            <artifactId>spring-ai-agentx-core</artifactId>
+            <version>1.0.0-M2</version>
+        </dependency>
+
     </dependencies>
 
     <build>
