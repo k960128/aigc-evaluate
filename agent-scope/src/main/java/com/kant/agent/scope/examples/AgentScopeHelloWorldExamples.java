@@ -18,7 +18,7 @@ public class AgentScopeHelloWorldExamples {
                 .name("Jarvis")
                 .sysPrompt("你是一个名为 Jarvis 的助手")
                 .model(DashScopeChatModel.builder()
-                        .apiKey("sk-ws-H.EPMIPDE.c43E.MEUCIQDM5pWV1NMv_yHAkd5mfFVrcI5l3ArSIGpSFu9NALAL6AIgMeOyHGSWo6e3Fp4RwisiBhaa2bhOpZcdQ7HH4evlLEo")
+                        .apiKey("sk-ws-*****************************************")
                         .modelName("qwen3-max")
                         .build())
                 .toolkit(toolkit)

@@ -42,7 +42,7 @@ public class ExamplesStructuredController {
      public void init() {
 //          OpenAiChatModel chatModel = OpenAiChatModel.builder()
 //                  .openAiApi(OpenAiApi.builder()
-//                          .apiKey("sk-3398a71a31f04728a19922dcbb8af1f9")
+//                          .apiKey("sk-ws-*****************************************")
 //                          .baseUrl("https://llm-3f6gkg8761t4jfw1.cn-beijing.maas.aliyuncs.com/compatible-mode")
 //                          .build())
 //                  .defaultOptions(OpenAiChatOptions.builder()
@@ -57,7 +57,7 @@ public class ExamplesStructuredController {
 //                  .build();
 
           ZhiPuAiChatModel chatModel = new ZhiPuAiChatModel(ZhiPuAiApi.builder()
-                  .apiKey("bae3e679181f4b659fe87ad698ff89d2.HlZWH3hYAesVxxwk")
+                  .apiKey("sk-ws-*****************************************")
                   .build(),
                   ZhiPuAiChatOptions.builder()
                           .model("GLM-4.7-Flash")

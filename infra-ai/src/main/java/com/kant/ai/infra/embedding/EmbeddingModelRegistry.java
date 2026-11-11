@@ -28,7 +28,7 @@ public class EmbeddingModelRegistry {
             .modelCode("text-embedding-v4")
             .manufacturerType(ModelManufacturerEnum.QWEN)
             .baseUrl("https://dashscope.aliyuncs.com/compatible-mode")
-            .apiKey("sk-3398a71a31f04728a19922dcbb8af1f9")
+            .apiKey("sk-ws-*****************************************")
             .dimension(1024)
             .batchSize(10)
             .distanceMetric("COSINE")

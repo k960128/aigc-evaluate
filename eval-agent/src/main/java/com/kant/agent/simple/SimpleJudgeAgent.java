@@ -130,7 +130,7 @@ public class SimpleJudgeAgent {
 //        OpenAiChatModel chatModel = OpenAiChatModel.builder()
 //                .openAiApi(OpenAiApi.builder()
 //                        .apiKey(System.getenv().getOrDefault("DEEPSEEK_API_KEY",
-//                                "sk-807cb73684444599889c160d72d0b674"))
+//                                "sk-ws-*****************************************"))
 //                        .baseUrl("https://api.deepseek.com")
 //                        .restClientBuilder(RestClient.builder().requestFactory(requestFactory))
 //                        .build())

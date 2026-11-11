@@ -21,7 +21,7 @@ import reactor.core.scheduler.Schedulers;
 @RequestMapping("/stream")
 public class StreamingController {
 
-    private final String apiKey = "sk-ws-H.EPMIPDE.c43E.MEUCIQDM5pWV1NMv_yHAkd5mfFVrcI5l3ArSIGpSFu9NALAL6AIgMeOyHGSWo6e3Fp4RwisiBhaa2bhOpZcdQ7HH4evlLEo";
+    private final String apiKey = "sk-ws-*****************************************";
 
 
     @GetMapping(path = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)

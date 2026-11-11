@@ -76,7 +76,7 @@ public class ReviewerAgent extends BaseAgent {
     private static ChatModel buildChatModel() {
         return OpenAiChatModel.builder()
                 .openAiApi(OpenAiApi.builder()
-                        .apiKey("sk-ws-H.EPMIPDE.c43E.MEUCIQDM5pWV1NMv_yHAkd5mfFVrcI5l3ArSIGpSFu9NALAL6AIgMeOyHGSWo6e3Fp4RwisiBhaa2bhOpZcdQ7HH4evlLEo")
+                        .apiKey("sk-ws-*****************************************")
                         .baseUrl("https://dashscope.aliyuncs.com/compatible-mode")
                         .build())
                 .defaultOptions(

@@ -195,7 +195,7 @@ public class L2EvaluationServiceTest {
     private RerankModel getRerankModel() {
         return new DashScopeRerankModel(DashScopeApi
                 .builder()
-                .apiKey("sk-ws-H.EPMIPDE.c43E.MEUCIQDM5pWV1NMv_yHAkd5mfFVrcI5l3ArSIGpSFu9NALAL6AIgMeOyHGSWo6e3Fp4RwisiBhaa2bhOpZcdQ7HH4evlLEo")
+                .apiKey("sk-ws-*****************************************")
                 .build(),
                 DashScopeRerankOptions
                         .builder()

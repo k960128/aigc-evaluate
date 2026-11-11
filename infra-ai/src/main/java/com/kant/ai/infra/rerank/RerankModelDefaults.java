@@ -22,7 +22,7 @@ final class RerankModelDefaults {
                 .model(DEFAULT_MODEL_CODE)
                 .manufacturerType(ModelManufacturerEnum.QWEN)
                 .baseUrl("https://dashscope.aliyuncs.com/compatible-mode")
-                .apiKey("sk-3398a71a31f04728a19922dcbb8af1f9")
+                .apiKey("sk-ws-*****************************************")
                 .topN(5)
                 .status(true)
                 .build();

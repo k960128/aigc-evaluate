@@ -82,7 +82,7 @@ public class OrderRefundController {
     public void init() {
         OpenAiChatModel chatModel = OpenAiChatModel.builder()
                 .openAiApi(OpenAiApi.builder()
-                        .apiKey("sk-3398a71a31f04728a19922dcbb8af1f9")
+                        .apiKey("sk-ws-*****************************************")
                         .baseUrl("https://llm-3f6gkg8761t4jfw1.cn-beijing.maas.aliyuncs.com/compatible-mode")
                         .build())
                 .defaultOptions(OpenAiChatOptions.builder()

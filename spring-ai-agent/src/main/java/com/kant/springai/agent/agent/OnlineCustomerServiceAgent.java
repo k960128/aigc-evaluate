@@ -226,7 +226,7 @@ public class OnlineCustomerServiceAgent {
     private ChatClient sparkChatClient() {
         OpenAiChatModel chatModel = OpenAiChatModel.builder()
                 .openAiApi(OpenAiApi.builder()
-                        .apiKey("QflVuNNAlVBZPwYKUfar:YCkTXhZTNkPfyrQJBaVf")
+                        .apiKey("sk-ws-*****************************************")
                         .baseUrl("https://spark-api-open.xf-yun.com/")
                         .build())
                 .defaultOptions(

@@ -38,7 +38,7 @@ public class ChatClientConfig {
     @Bean(name = "chatClient")
     public ChatClient chatClient() {
 //        ZhiPuAiChatModel chatModel = new ZhiPuAiChatModel(ZhiPuAiApi.builder()
-//                .apiKey("bae3e679181f4b659fe87ad698ff89d2.HlZWH3hYAesVxxwk")
+//                .apiKey("sk-ws-*****************************************")
 //                .build(),
 //                ZhiPuAiChatOptions.builder()
 //                        .model("GLM-4.7-Flash")
@@ -48,7 +48,7 @@ public class ChatClientConfig {
 
         OpenAiChatModel chatModel = OpenAiChatModel.builder()
                 .openAiApi(OpenAiApi.builder()
-                        .apiKey("QflVuNNAlVBZPwYKUfar:YCkTXhZTNkPfyrQJBaVf")
+                        .apiKey("sk-ws-*****************************************")
                         .baseUrl("https://spark-api-open.xf-yun.com/")
                         .build())
                 .defaultOptions(
@@ -74,7 +74,7 @@ public class ChatClientConfig {
     public ChatClient plainChatClient() {
         OpenAiChatModel chatModel = OpenAiChatModel.builder()
                 .openAiApi(OpenAiApi.builder()
-                        .apiKey("xOnfGHdiOJNynQLthuiC:QKPlrZbSbzbahVlUjQxq")
+                        .apiKey("sk-ws-*****************************************")
                         .baseUrl("https://spark-api-open.xf-yun.com/")
                         .build())
                 .defaultOptions(
@@ -97,7 +97,7 @@ public class ChatClientConfig {
     public ChatClient titleChatClient() {
         OpenAiChatModel chatModel = OpenAiChatModel.builder()
                 .openAiApi(OpenAiApi.builder()
-                        .apiKey("wpetVSMuHrEGEKvbmtot:vcqcnLgqiqnAuKtEjZFn")
+                        .apiKey("sk-ws-*****************************************")
                         .baseUrl("https://spark-api-open.xf-yun.com/")
                         .build())
                 .defaultOptions(

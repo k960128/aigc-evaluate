@@ -15,8 +15,8 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     type: com.zaxxer.hikari.HikariDataSource
     username: root
-    password: G3a5tB7nD9f1
-    url: jdbc:mysql://47.103.193.177:3305/data_free_eval_dev?client_encoding=UTF8
+    password: root
+    url: jdbc:mysql://127.0.0.1:3305/data_free_eval_dev?client_encoding=UTF8
     hikari:
       connection-timeout: 5000
       idle-timeout: 600000
@@ -27,16 +27,16 @@ spring:
 
 # Elasticsearch 配置
   elasticsearch:
-    uris: http://47.103.193.177:9200
+    uris: http://127.0.0.1:9200
     username: elastic
-    password: G3a5tB7nD9f1
+    password: elastic
 
 # Redis 配置
   data:
     redis:
-      host: 47.103.193.177
+      host: 127.0.0.1
       port: 6379
-      password: Lxk960128.
+      password: password
       database: 4
   web:
     resources:
@@ -47,9 +47,9 @@ rag:
   vector:
     type: pg # 预留，后续支持Milvus和pg
     pg:
-      url: jdbc:postgresql://47.103.193.177:5432/aigc_eval
+      url: jdbc:postgresql://127.0.0.1:5432/aigc_eval
       username: postgres
-      password: G3a5tB7nD9f1
+      password: postgres
       driver-class-name: org.postgresql.Driver
       initialize-schema: false
       schema-name: public
@@ -69,7 +69,7 @@ app:
 # RocketMQ 配置
 rocketmq:
   enabled: true
-  name-server: 47.103.193.177:9876
+  name-server: 127.0.0.1:9876
   producer:
     group: aigc-eval-producer-group
 

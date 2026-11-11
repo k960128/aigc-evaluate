@@ -30,7 +30,7 @@ public class SqlOptimizeAgent {
                 .chatMemoryRepository(redisChatMemoryRepository).build();
         OpenAiChatModel chatModel = OpenAiChatModel.builder()
                 .openAiApi(OpenAiApi.builder()
-                        .apiKey("QflVuNNAlVBZPwYKUfar:YCkTXhZTNkPfyrQJBaVf")
+                        .apiKey("sk-ws-*****************************************")
                         .baseUrl("https://spark-api-open.xf-yun.com/")
                         .build())
                 .defaultOptions(

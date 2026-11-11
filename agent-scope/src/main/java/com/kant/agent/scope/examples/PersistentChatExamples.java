@@ -14,7 +14,7 @@ import java.nio.file.Paths;
 
 public class PersistentChatExamples {
 
-    private static final String apiKey = "sk-ws-H.EPMIPDE.c43E.MEUCIQDM5pWV1NMv_yHAkd5mfFVrcI5l3ArSIGpSFu9NALAL6AIgMeOyHGSWo6e3Fp4RwisiBhaa2bhOpZcdQ7HH4evlLEo";
+    private static final String apiKey = "sk-ws-*****************************************";
 
     public static void main(String[] args) {
         String sessionId = "user_hollis_session";

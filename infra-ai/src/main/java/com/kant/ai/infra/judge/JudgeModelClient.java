@@ -17,7 +17,7 @@ public class JudgeModelClient {
     private static final ClientModelInfo DEFAULT_JUDGE_MODEL_INFO = ClientModelInfo.builder()
             .manufacturerType(ModelManufacturerEnum.QWEN)
             .baseUrl("https://dashscope.aliyuncs.com/compatible-mode")
-            .apiKey("sk-3398a71a31f04728a19922dcbb8af1f9")
+            .apiKey("sk-ws-*****************************************")
             .model("qwen-plus")
             .build();
 

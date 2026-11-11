@@ -157,7 +157,7 @@ CREATE TABLE `embedding_model_info`  (
 -- ----------------------------
 -- Records of embedding_model_info
 -- ----------------------------
-INSERT INTO `embedding_model_info` VALUES (1, 'text-embedding-v4', 'text-embedding-v4', 'QWEN', 'https://dashscope.aliyuncs.com/compatible-mode', 'sk-3398a71a31f04728a19922dcbb8af1f9', 1024, 8192, 10, 'COSINE', 0, '是通义实验室基于Qwen3训练的多语言文本统一向量模型，相较V3版本在文本检索、聚类、分类性能大幅提升；在MTEB多语言、中英、Code检索等评测任务上效果提升15%~40%；支持64~2048维用户自定义向量维度。', NULL, 1, 0, '2026-06-09 08:53:08', '2026-06-09 09:16:22', 0);
+INSERT INTO `embedding_model_info` VALUES (1, 'text-embedding-v4', 'text-embedding-v4', 'QWEN', 'https://dashscope.aliyuncs.com/compatible-mode', 'sk-ws-*****************************************', 1024, 8192, 10, 'COSINE', 0, '是通义实验室基于Qwen3训练的多语言文本统一向量模型，相较V3版本在文本检索、聚类、分类性能大幅提升；在MTEB多语言、中英、Code检索等评测任务上效果提升15%~40%；支持64~2048维用户自定义向量维度。', NULL, 1, 0, '2026-06-09 08:53:08', '2026-06-09 09:16:22', 0);
 
 -- ----------------------------
 -- Table structure for eval_pipeline_node_detail
