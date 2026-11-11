@@ -53,8 +53,15 @@ class SimpleGenerateAgentTest {
                 "保留 {coreIntent} 与 <seed>",
                 "示例 {\"field\":\"<coreIntent>\"}", List.of());
         var memory = new ReflectionMemory();
-        memory.record(new IterationRecord(1, "历史样本 {{base64:测试文本}} <seed>",
-                7, 7, false, "保留 {field} 与 <coreIntent>", "", IterationRecord.SOURCE_GENERATOR));
+        memory.record(new IterationRecord(1,
+                "历史样本 {{base64:测试文本}} <seed>",
+                7,
+                7,
+                false,
+                "保留 {field} 与 <coreIntent>",
+                "",
+                IterationRecord.SOURCE_GENERATOR,
+                true));
 
         String prompt = renderPrompt(ticket, memory).replace("\r\n", "\n");
 
