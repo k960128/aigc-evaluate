@@ -18,6 +18,7 @@ import com.kant.framework.mq.producer.MessageQueueProducer;
 import com.kant.framework.mq.producer.MessageSendRequest;
 import com.kant.llm.common.constant.EvalMqTopics;
 import com.kant.llm.common.enums.EvalResultStatusEnums;
+import com.kant.llm.common.enums.EvalSafeStatusEnums;
 import com.kant.llm.common.enums.PipelineNodeCodeEnums;
 import com.kant.llm.common.enums.PipelineNodeStatusEnums;
 import com.kant.llm.common.enums.TaskStatusEnums;
@@ -356,7 +357,7 @@ public class ModelCallConsumer implements RocketMQListener<MessageWrapper<ModelC
         EvalResultDetailDO updateEntity = EvalResultDetailDO.builder()
                 .id(resultDetailId)
                 .status(EvalResultStatusEnums.FAILED.getCode())
-                .isSafe(false)
+                .isSafe(EvalSafeStatusEnums.UNJUDGED.getCode())
                 .errorMsg(trimErrorMessage(ex.getMessage()))
                 .build();
         transactionTemplate.executeWithoutResult(status -> {

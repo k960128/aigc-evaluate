@@ -45,8 +45,8 @@ public class EvalReportSampleSummaryVO {
     /** 模型输出文本摘要，超过报告摘要长度会被截断。 */
     private String modelOutput;
 
-    /** 最终安全结论，true 表示安全，false 表示违规，null 表示未形成明确结论。 */
-    private Boolean isSafe;
+    /** 最终安全结论：0-未判定，1-安全，2-违规。 */
+    private Integer isSafe;
 
     /** 结果明细状态编码，枚举参见 EvalResultStatusEnums。 */
     private Integer status;

@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollectionUtil;
 import com.kant.framework.exception.ServiceException;
 import com.kant.llm.common.convention.L1EvalContext;
 import com.kant.llm.common.enums.EvalResultStatusEnums;
+import com.kant.llm.common.enums.EvalSafeStatusEnums;
 import com.kant.llm.common.enums.PipelineNodeCodeEnums;
 import com.kant.llm.common.enums.PipelineNodeStatusEnums;
 import com.kant.llm.common.enums.TaskStatusEnums;
@@ -220,7 +221,7 @@ public class SafetyEvaluateExecuteService {
                     resultDetailDO.getId(), context.getRiskDetailsId(), context.getBlockKeyWords());
 
             // ========== 回写结果明细
-            resultDetailDO.setIsSafe(Boolean.FALSE);
+            resultDetailDO.setIsSafe(EvalSafeStatusEnums.VIOLATION.getCode());
             resultDetailDO.setErrorMsg(String.format("L1 负向指纹 判断命中拦截，风险明细ID: %s，触发关键词: %s",
                     context.getRiskDetailsId(), context.getBlockKeyWords()));
             evalResultDetailService.updateById(resultDetailDO);
@@ -292,7 +293,7 @@ public class SafetyEvaluateExecuteService {
         switch (evaluateExecuteRecord.status()) {
             case SAFE:
                 // 安全放行，记录放行节点日志，不再进行后续评测
-                resultDetailDO.setIsSafe(Boolean.TRUE);
+                resultDetailDO.setIsSafe(EvalSafeStatusEnums.SAFE.getCode());
                 resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
                 evalResultDetailService.updateById(resultDetailDO);
 
@@ -318,7 +319,7 @@ public class SafetyEvaluateExecuteService {
             case VIOLATION:
                 // 违规上限，直接击毙，记录违规节点日志，不再进行后续评测
                 // 安全放心，记录放行节点日志，不再进行后续评测
-                resultDetailDO.setIsSafe(Boolean.FALSE);
+                resultDetailDO.setIsSafe(EvalSafeStatusEnums.VIOLATION.getCode());
                 resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
                 evalResultDetailService.updateById(resultDetailDO);
 
@@ -397,7 +398,7 @@ public class SafetyEvaluateExecuteService {
             L3JudgeResult judgeResult = l3SafetyEvaluateExecutorEngine.execute(resultDetailDO, l2PipelineRecord);
             switch (judgeResult.status()) {
                 case SAFE:
-                    resultDetailDO.setIsSafe(Boolean.TRUE);
+                    resultDetailDO.setIsSafe(EvalSafeStatusEnums.SAFE.getCode());
                     resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
                     evalResultDetailService.updateById(resultDetailDO);
 
@@ -414,7 +415,7 @@ public class SafetyEvaluateExecuteService {
                             null);
                     break;
                 case VIOLATION:
-                    resultDetailDO.setIsSafe(Boolean.FALSE);
+                    resultDetailDO.setIsSafe(EvalSafeStatusEnums.VIOLATION.getCode());
                     resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
                     evalResultDetailService.updateById(resultDetailDO);
 

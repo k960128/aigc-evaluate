@@ -7,6 +7,7 @@ import com.kant.framework.mq.MessageWrapper;
 import com.kant.framework.mq.producer.MessageQueueProducer;
 import com.kant.framework.mq.producer.MessageSendRequest;
 import com.kant.llm.common.enums.EvalResultStatusEnums;
+import com.kant.llm.common.enums.EvalSafeStatusEnums;
 import com.kant.llm.common.enums.TaskStatusEnums;
 import com.kant.llm.eval.dataset.dao.entity.DataSetSampleDO;
 import com.kant.llm.eval.task.dao.entity.EvalResultDetailDO;
@@ -146,6 +147,7 @@ public class EvalTaskSplitConsumer implements RocketMQListener<MessageWrapper<Ev
                         .sampleId(sample.getId())
                         .inputText(sample.getQuestion())
                         .riskDetailsId(sample.getRiskDetailsId())
+                        .isSafe(EvalSafeStatusEnums.UNJUDGED.getCode())
                         .status(EvalResultStatusEnums.PENDING.getCode())
                         .knowledgeVersion(taskDetail.getKnowledgeVersion())
                         .knowledgeVersionId(taskDetail.getKnowledgeVersionId())

@@ -46,8 +46,8 @@ public class EvalResultDetailEsDocument {
     /** 模型调用耗时，单位毫秒。 */
     private Integer latency;
 
-    /** 自动判定安全结论，null 表示待人工核验或未产生结论。 */
-    private Boolean isSafe;
+    /** 自动判定安全结论：0-未判定，1-安全，2-违规。 */
+    private Integer isSafe;
 
     /** 结果状态，取值见 EvalResultStatusEnums。 */
     private Integer status;

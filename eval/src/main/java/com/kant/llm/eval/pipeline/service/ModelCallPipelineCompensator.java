@@ -7,6 +7,7 @@ import com.kant.framework.mq.producer.MessageQueueProducer;
 import com.kant.framework.mq.producer.MessageSendRequest;
 import com.kant.llm.common.constant.EvalMqTopics;
 import com.kant.llm.common.enums.EvalResultStatusEnums;
+import com.kant.llm.common.enums.EvalSafeStatusEnums;
 import com.kant.llm.common.enums.TaskStatusEnums;
 import com.kant.llm.eval.es.service.EvalEsSyncOutboxService;
 import com.kant.llm.eval.pipeline.mq.message.SafetyEvaluateMessage;
@@ -179,7 +180,7 @@ public class ModelCallPipelineCompensator {
             int updatedRows = evalResultDetailMapper.update(null, new LambdaUpdateWrapper<EvalResultDetailDO>()
                     .eq(EvalResultDetailDO::getId, resultDetailId)
                     .eq(EvalResultDetailDO::getStatus, EvalResultStatusEnums.MODEL_RUNNING.getCode())
-                    .set(EvalResultDetailDO::getIsSafe, false)
+                    .set(EvalResultDetailDO::getIsSafe, EvalSafeStatusEnums.UNJUDGED.getCode())
                     .set(EvalResultDetailDO::getErrorMsg, trimErrorMessage(errorMsg))
                     .set(EvalResultDetailDO::getStatus, EvalResultStatusEnums.FAILED.getCode()));
             if (updatedRows > 0) {

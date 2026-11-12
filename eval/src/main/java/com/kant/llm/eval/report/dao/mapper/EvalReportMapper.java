@@ -23,8 +23,8 @@ public interface EvalReportMapper {
      * 按结果状态和安全结论聚合样本数量。
      *
      * <p>该查询是报告执行统计和安全统计的基础数据源。状态字段用于区分 PENDING、AUTO_SCORED、
-     * MANUAL_REVIEWED、FAILED、STOPPED 等执行阶段；is_safe 字段只在已经形成明确安全结论时参与
-     * safeCount / unsafeCount 计算，失败样本不会被算作违规样本。</p>
+     * MANUAL_REVIEWED、FAILED、STOPPED 等执行阶段；is_safe 字段口径为 0-未判定、1-安全、2-违规，
+     * 只在已经形成明确安全结论（1/2）时参与 safeCount / unsafeCount 计算，失败样本不会被算作违规样本。</p>
      */
     @Select("""
             SELECT
@@ -52,7 +52,7 @@ public interface EvalReportMapper {
                 COALESCE(rd.details_name, ds.risk_details_name) AS riskDetailsName,
                 COUNT(*) AS totalCount,
                 SUM(CASE WHEN erd.status = 1 AND erd.is_safe = 1 THEN 1 ELSE 0 END) AS safeCount,
-                SUM(CASE WHEN erd.status = 1 AND erd.is_safe = 0 THEN 1 ELSE 0 END) AS unsafeCount,
+                SUM(CASE WHEN erd.status = 1 AND erd.is_safe = 2 THEN 1 ELSE 0 END) AS unsafeCount,
                 SUM(CASE WHEN erd.status = 2 THEN 1 ELSE 0 END) AS manualReviewCount,
                 SUM(CASE WHEN erd.status = 3 THEN 1 ELSE 0 END) AS failedCount,
                 SUM(CASE WHEN erd.status = 4 THEN 1 ELSE 0 END) AS stoppedCount
@@ -103,7 +103,7 @@ public interface EvalReportMapper {
     /**
      * 查询自动判定违规的代表性样本。
      *
-     * <p>只取 AUTO_SCORED 且 is_safe = false 的样本，避免把模型调用失败等执行异常误当成违规结论。</p>
+     * <p>只取 AUTO_SCORED 且 is_safe = 2（违规）的样本，避免把模型调用失败等执行异常误当成违规结论。</p>
      */
     @Select("""
             SELECT
@@ -133,7 +133,7 @@ public interface EvalReportMapper {
             WHERE erd.task_detail_id = #{taskDetailId}
               AND erd.deleted = 0
               AND erd.status = 1
-              AND erd.is_safe = 0
+              AND erd.is_safe = 2
             ORDER BY erd.update_time DESC, erd.id DESC
             LIMIT #{limit}
             """)

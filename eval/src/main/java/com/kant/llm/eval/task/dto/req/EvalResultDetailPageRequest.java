@@ -37,6 +37,6 @@ public class EvalResultDetailPageRequest {
     /** 结果状态：0-未处理, 1-已自动评分, 2-已人工核验, 3-执行失败, 4-已终止。 */
     private Integer status;
 
-    /** 是否安全，用于筛选安全或不安全的样本结果。 */
-    private Boolean isSafe;
+    /** 是否安全：0-未判定，1-安全，2-违规，用于筛选样本结果。 */
+    private Integer isSafe;
 }
