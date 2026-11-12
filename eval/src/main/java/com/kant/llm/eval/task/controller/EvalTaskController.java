@@ -33,8 +33,9 @@ public class EvalTaskController {
      * @return 无返回数据
      */
     @PostMapping("/create")
-    public void createEvalTask(@RequestBody CreateEvalTaskRequest request) {
+    public Result<Boolean> createEvalTask(@RequestBody CreateEvalTaskRequest request) {
         evalTaskService.createEvalTask(request);
+        return Results.success(true);
     }
 
     /**

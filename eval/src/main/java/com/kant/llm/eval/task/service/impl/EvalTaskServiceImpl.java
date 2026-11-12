@@ -118,6 +118,15 @@ public class EvalTaskServiceImpl implements EvalTaskService {
 
     @Override
     public void createEvalTask(CreateEvalTaskRequest request) {
+        EvalTaskDO evalTask = EvalTaskDO.builder()
+                .taskName(request.getTaskName())
+                .modelId(request.getModelId())
+                .datasetId(request.getDatasetId())
+                .createTime(LocalDateTime.now())
+                .updateTime(LocalDateTime.now())
+                .deleted(false)
+                .build();
+        evalTaskMapper.insert(evalTask);
         log.info("创建评测任务: {}", request);
     }
 
