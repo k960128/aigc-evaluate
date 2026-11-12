@@ -269,6 +269,7 @@ public class SourceController {
                 .baseUrl(request.getBaseUrl())
                 .manufacturerType(manufacturerEnum)
                 .modelId(request.getModelId())
+                .type("TEST_CONNECTION")
                 .build();
         ModelRequest modelRequest = ModelRequest.builder()
                 .clientModelInfo(clientModelInfo)

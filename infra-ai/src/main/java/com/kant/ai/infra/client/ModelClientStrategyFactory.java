@@ -2,10 +2,8 @@ package com.kant.ai.infra.client;
 
 import com.kant.ai.infra.client.strategy.*;
 import com.kant.framework.exception.ServiceException;
-import jakarta.annotation.PostConstruct;
 import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,6 +25,10 @@ public class ModelClientStrategyFactory {
      * 根据大模型厂商标识获取模型客户端策略
      */
     public ModelClientStrategy getStrategy(ClientModelInfo modelInfo) {
+        // 判断是否需要缓存ModelInfo。 测试连通性不做缓存
+        if (modelInfo.getType().equals("TEST_CONNECTION")) {
+            return createStrategy(modelInfo);
+        }
         return strategyMap.compute(modelInfo.getModelId(), (modelId, currentStrategy) -> {
             // 模型配置允许修改厂商。缓存中的策略与当前快照不一致时必须重建，
             // 避免使用旧厂商客户端执行已经固定为新版本的评测目标。

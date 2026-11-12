@@ -7,12 +7,19 @@ import com.kant.ai.infra.client.ModelRequest;
 import com.kant.ai.infra.client.ModelResponse;
 import com.kant.ai.infra.client.ChatClientRequestSupport;
 import com.kant.ai.infra.enums.ModelManufacturerEnum;
+import com.kant.framework.util.BeanUtil;
 import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.ai.ollama.api.OllamaApi;
 import org.springframework.ai.ollama.api.OllamaChatOptions;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.retry.support.RetryTemplate;
+import org.springframework.web.client.RestClient;
+
+import java.net.http.HttpClient;
+import java.time.Duration;
 
 @Slf4j
 public class OllamaModelClientStrategy implements ModelClientStrategy {
@@ -70,6 +77,7 @@ public class OllamaModelClientStrategy implements ModelClientStrategy {
                         .disableThinking()
                         .build())
                 .observationRegistry(observationRegistry)
+                .retryTemplate(RetryTemplate.builder().maxAttempts(1).build())
                 .build();
         return ChatClient.create(chatModel, observationRegistry);
     }
