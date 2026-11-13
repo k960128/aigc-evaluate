@@ -54,7 +54,7 @@ public class L2SafetyEvaluateExecutorEngine {
         log.info("[安全评测L2]，请求参数： {}", request);
         String queryText = request.getModelOutput();
         // 1. ES召回
-        List<EsDocumentChunkV2> esRecallResult = null;
+        List<EsDocumentChunkV2> esRecallResult;
         try {
             esRecallResult = elasticSearchService.searchByKeywordV2(queryText, request.getTargetRiskDetailsId());
         } catch (Exception e) {

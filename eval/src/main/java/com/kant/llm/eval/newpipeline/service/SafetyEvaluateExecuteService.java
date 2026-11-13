@@ -1,13 +1,13 @@
 package com.kant.llm.eval.newpipeline.service;
 
 import cn.hutool.core.collection.CollectionUtil;
+import com.kant.framework.errorcode.BaseErrorCode;
 import com.kant.framework.exception.ServiceException;
 import com.kant.llm.common.convention.L1EvalContext;
 import com.kant.llm.common.enums.EvalResultStatusEnums;
 import com.kant.llm.common.enums.EvalSafeStatusEnums;
 import com.kant.llm.common.enums.PipelineNodeCodeEnums;
 import com.kant.llm.common.enums.PipelineNodeStatusEnums;
-import com.kant.llm.common.enums.TaskStatusEnums;
 import com.kant.llm.eval.fingerprint.engine.NegativeFingerprintACTrieManager;
 import com.kant.llm.eval.fingerprint.service.KnowledgePositiveFingerprintService;
 import com.kant.llm.eval.newpipeline.engine.L2SafetyEvaluateExecutorEngine;
@@ -19,15 +19,11 @@ import com.kant.llm.eval.pipeline.mq.message.SafetyEvaluateMessage;
 import com.kant.llm.eval.pipeline.service.EvalPipelineNodeRecorder;
 import com.kant.llm.eval.pipeline.service.l2.model.L2EvaluationRequest;
 import com.kant.llm.eval.task.dao.entity.EvalResultDetailDO;
-import com.kant.llm.eval.task.dao.entity.EvalTaskDetailDO;
-import com.kant.llm.eval.task.service.EvalResultDetailService;
-import com.kant.llm.eval.task.service.EvalTaskDetailService;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.concurrent.TimeUnit;
 
@@ -40,8 +36,7 @@ public class SafetyEvaluateExecuteService {
     private static final String EXECUTION_LOCK_KEY_PREFIX = "EVAL:SAFETY-EVALUATE:LOCK:KEY:%s";
 
     private final RedissonClient redissonClient;
-    private final EvalTaskDetailService evalTaskDetailService;
-    private final EvalResultDetailService evalResultDetailService;
+    private final SafetyEvaluateResultWriter resultWriter;
     private final EvalPipelineNodeRecorder evalPipelineNodeRecorder;
     private final L2SafetyEvaluateExecutorEngine l2SafetyEvaluateExecutorEngine;
     private final L3SafetyEvaluateExecutorEngine l3SafetyEvaluateExecutorEngine;
@@ -49,8 +44,7 @@ public class SafetyEvaluateExecuteService {
     private final KnowledgePositiveFingerprintService knowledgePositiveFingerprintService;
 
     public SafetyEvaluateExecuteService(RedissonClient redissonClient,
-                                        EvalTaskDetailService evalTaskDetailService,
-                                        EvalResultDetailService evalResultDetailService,
+                                        SafetyEvaluateResultWriter resultWriter,
                                         EvalPipelineNodeRecorder evalPipelineNodeRecorder,
                                         L2SafetyEvaluateExecutorEngine l2SafetyEvaluateExecutorEngine,
                                         L3SafetyEvaluateExecutorEngine l3SafetyEvaluateExecutorEngine,
@@ -59,8 +53,7 @@ public class SafetyEvaluateExecuteService {
         this.redissonClient = redissonClient;
         this.l3SafetyEvaluateExecutorEngine = l3SafetyEvaluateExecutorEngine;
         this.negativeFingerprintAcTrieManager = negativeFingerprintAcTrieManager;
-        this.evalTaskDetailService = evalTaskDetailService;
-        this.evalResultDetailService = evalResultDetailService;
+        this.resultWriter = resultWriter;
         this.evalPipelineNodeRecorder = evalPipelineNodeRecorder;
         this.l2SafetyEvaluateExecutorEngine = l2SafetyEvaluateExecutorEngine;
         this.knowledgePositiveFingerprintService = knowledgePositiveFingerprintService;
@@ -72,60 +65,64 @@ public class SafetyEvaluateExecuteService {
      * @param message msg
      */
     public void submitExecute(SafetyEvaluateMessage message) {
-        // 获取分布式锁
+        if (message == null || message.getResultDetailId() == null) {
+            throw new ServiceException("安全评测消息缺少结果明细ID");
+        }
         String lockKey = buildLockKey(message.getResultDetailId());
         RLock rLock = redissonClient.getLock(lockKey);
+        boolean locked = false;
         try {
-            // 尝试获取锁：等待10秒，持有30秒后自动释放
-            boolean locked = rLock.tryLock(10, 30, TimeUnit.SECONDS);
+            // 不指定租期，由 Redisson watchdog 为完整评测链路续期。
+            locked = rLock.tryLock(10, TimeUnit.SECONDS);
             if (!locked) {
-                log.info("评测结果明细正在执行中，跳过重复模型调用消息，resultDetailId: {}",
-                        message.getResultDetailId());
+                throw new ServiceException("安全评测正在执行，请重试，resultDetailId: " + message.getResultDetailId());
+            }
+            EvalResultDetailDO result = resultWriter.claim(message.getResultDetailId());
+            if (result == null) {
                 return;
             }
-            try {
-                // ====== start 执行业务逻辑
-                execute(message);
-                // ====== end 完整评测链路，回写结果
-                Long resultDetailId = message.getResultDetailId();
-                EvalResultDetailDO resultDetailDO = evalResultDetailService.getById(resultDetailId);
-                writeBackToDB(resultDetailDO);
-            } catch (Exception e) {
-                log.error("业务执行异常: {}", lockKey, e);
-                // 根据业务需要决定是否抛出或记录
-                throw new ServiceException(String.format("处理失败，resultDetailId: %s", e.getMessage()));
-            } finally {
-                // 只有当前线程持有锁时才释放
-                if (rLock.isHeldByCurrentThread()) {
-                    rLock.unlock();
-                    log.debug("释放锁成功: {}", lockKey);
-                }
+            execute(result);
+            if (!rLock.isHeldByCurrentThread()) {
+                throw new ServiceException("安全评测执行锁已丢失，resultDetailId: " + result.getId());
             }
+            resultWriter.complete(result);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.error("获取锁被中断: {}", lockKey, e);
-            throw new RuntimeException("获取锁被中断", e);
+            throw new ServiceException("安全评测获取锁被中断，resultDetailId: " + message.getResultDetailId(),
+                    e, BaseErrorCode.SERVICE_ERROR);
+        } catch (RuntimeException e) {
+            log.error("安全评测执行失败，resultDetailId: {}", message.getResultDetailId(), e);
+            throw new ServiceException("安全评测处理失败，resultDetailId: " + message.getResultDetailId(),
+                    e, BaseErrorCode.SERVICE_ERROR);
+        } finally {
+            if (locked) {
+                try {
+                    if (rLock.isHeldByCurrentThread()) {
+                        rLock.unlock();
+                    }
+                } catch (RuntimeException e) {
+                    log.warn("安全评测释放锁失败，lockKey: {}", lockKey, e);
+                }
+            }
         }
     }
 
     /**
      * 执行安全评测业务逻辑
      *
-     * @param message msg
+     * @param resultDetailDO 已取得执行权的评测结果
      */
-    private void execute(SafetyEvaluateMessage message) {
-        Long resultDetailId = message.getResultDetailId();
-        EvalResultDetailDO resultDetailDO = evalResultDetailService.getById(resultDetailId);
+    private void execute(EvalResultDetailDO resultDetailDO) {
         // ================= L1 关键词拦截
         Boolean l1Safetied = safetyEvaluateL1(resultDetailDO);
         // L1 短路点，命中规则直接返回
-        if (l1Safetied) {
+        if (l1Safetied || resultWriter.isTaskStopped(resultDetailDO.getTaskDetailId())) {
             return;
         }
         // ================= L2 混合检索
         L2PipelineRecord l2PipelineRecord = safetyEvaluateL2(resultDetailDO);
         // L2 短路点，混合检索命中规则直接返回
-        if (!l2PipelineRecord.releaseStatus()) {
+        if (!l2PipelineRecord.releaseStatus() || resultWriter.isTaskStopped(resultDetailDO.getTaskDetailId())) {
             return;
         }
         // ================= L3 投递到LLM-AS-JUDGE
@@ -168,6 +165,8 @@ public class SafetyEvaluateExecuteService {
         Boolean aBoolean = knowledgePositiveFingerprintService.validateStandardRefusal(resultDetailDO.getRiskDetailsId(), resultDetailDO.getModelOutput());
         // 3. 判断是否命中拦截,如果命中拦截,则返回true,表示当前为大模型安全拒答，不再进入后续的流水线处理
         if (aBoolean) {
+            resultDetailDO.setIsSafe(EvalSafeStatusEnums.SAFE.getCode());
+            resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
             log.info("L1 正向指纹 判断命中拦截，resultDetailId: {}, riskDetailsId: {}, keyword: {}",
                     resultDetailDO.getId(), resultDetailDO.getRiskDetailsId(), resultDetailDO.getModelOutput());
             // ========== 记录L1正向指纹节点明细，当前为安全拒答，不进入后续的流水线处理
@@ -222,9 +221,9 @@ public class SafetyEvaluateExecuteService {
 
             // ========== 回写结果明细
             resultDetailDO.setIsSafe(EvalSafeStatusEnums.VIOLATION.getCode());
+            resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
             resultDetailDO.setErrorMsg(String.format("L1 负向指纹 判断命中拦截，风险明细ID: %s，触发关键词: %s",
                     context.getRiskDetailsId(), context.getBlockKeyWords()));
-            evalResultDetailService.updateById(resultDetailDO);
             // ========== 记录L1节点明细
             evalPipelineNodeRecorder.finishNode(l1NodeRecordId,
                     PipelineNodeStatusEnums.BLOCKED,
@@ -295,7 +294,6 @@ public class SafetyEvaluateExecuteService {
                 // 安全放行，记录放行节点日志，不再进行后续评测
                 resultDetailDO.setIsSafe(EvalSafeStatusEnums.SAFE.getCode());
                 resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
-                evalResultDetailService.updateById(resultDetailDO);
 
                 evalPipelineNodeRecorder.finishNode(l2NodeRecordId,
                         PipelineNodeStatusEnums.BLOCKED,
@@ -321,7 +319,6 @@ public class SafetyEvaluateExecuteService {
                 // 安全放心，记录放行节点日志，不再进行后续评测
                 resultDetailDO.setIsSafe(EvalSafeStatusEnums.VIOLATION.getCode());
                 resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
-                evalResultDetailService.updateById(resultDetailDO);
 
                 evalPipelineNodeRecorder.finishNode(l2NodeRecordId,
                         PipelineNodeStatusEnums.BLOCKED,
@@ -396,11 +393,13 @@ public class SafetyEvaluateExecuteService {
         );
         try {
             L3JudgeResult judgeResult = l3SafetyEvaluateExecutorEngine.execute(resultDetailDO, l2PipelineRecord);
+            if (judgeResult == null || judgeResult.status() == null) {
+                throw new ServiceException("L3裁判未返回有效结果");
+            }
             switch (judgeResult.status()) {
                 case SAFE:
                     resultDetailDO.setIsSafe(EvalSafeStatusEnums.SAFE.getCode());
                     resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
-                    evalResultDetailService.updateById(resultDetailDO);
 
                     evalPipelineNodeRecorder.finishNode(l3NodeRecordId,
                             PipelineNodeStatusEnums.PASSED,
@@ -417,7 +416,6 @@ public class SafetyEvaluateExecuteService {
                 case VIOLATION:
                     resultDetailDO.setIsSafe(EvalSafeStatusEnums.VIOLATION.getCode());
                     resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
-                    evalResultDetailService.updateById(resultDetailDO);
 
                     evalPipelineNodeRecorder.finishNode(l3NodeRecordId,
                             PipelineNodeStatusEnums.BLOCKED,
@@ -436,11 +434,22 @@ public class SafetyEvaluateExecuteService {
                 case BLURRY:
                 case UNKNOWN:
                 default:
-                    log.error("投递到人工复审");
+                    resultDetailDO.setIsSafe(EvalSafeStatusEnums.UNJUDGED.getCode());
+                    resultDetailDO.setStatus(EvalResultStatusEnums.MANUAL_REVIEWED.getCode());
+                    resultDetailDO.setErrorMsg("L3未形成明确安全结论，待人工核验");
+                    evalPipelineNodeRecorder.finishNode(l3NodeRecordId,
+                            PipelineNodeStatusEnums.PASSED,
+                            judgeResult, judgeResult, resultDetailDO.getErrorMsg());
                     break;
             }
         } catch (Exception e) {
-            log.error("L3异常", e);
+            try {
+                evalPipelineNodeRecorder.failNode(l3NodeRecordId, e, null, null);
+            } catch (RuntimeException recordException) {
+                e.addSuppressed(recordException);
+            }
+            throw new ServiceException("L3安全评测失败，resultDetailId: " + resultDetailDO.getId(),
+                    e, BaseErrorCode.SERVICE_ERROR);
         }
     }
 
@@ -452,23 +461,5 @@ public class SafetyEvaluateExecuteService {
      */
     private String buildLockKey(Long resultDetailId) {
         return String.format(EXECUTION_LOCK_KEY_PREFIX, resultDetailId);
-    }
-
-
-    /**
-     * 评测完成回写结果
-     *
-     * @param resultDetailDO do
-     */
-    private void writeBackToDB(EvalResultDetailDO resultDetailDO) {
-        resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
-        evalResultDetailService.updateById(resultDetailDO);
-
-        // 模拟整体任务完成，后续要做修改
-        EvalTaskDetailDO evalTaskDetailDO = evalTaskDetailService.getById(resultDetailDO.getTaskDetailId());
-        evalTaskDetailDO.setStatus(TaskStatusEnums.COMPLETED.getCode());
-        evalTaskDetailDO.setFinishedCount(evalTaskDetailDO.getTotalCount());
-        evalTaskDetailDO.setEndTime(LocalDateTime.now());
-        evalTaskDetailService.updateById(evalTaskDetailDO);
     }
 }
