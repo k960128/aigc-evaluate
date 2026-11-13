@@ -46,7 +46,8 @@ public class ModelCallPipelineCompensator {
             EvalResultStatusEnums.AUTO_SCORED.getCode(),
             EvalResultStatusEnums.MANUAL_REVIEWED.getCode(),
             EvalResultStatusEnums.FAILED.getCode(),
-            EvalResultStatusEnums.STOPPED.getCode()
+            EvalResultStatusEnums.STOPPED.getCode(),
+            EvalResultStatusEnums.FINISHED.getCode()
     );
 
     private final EvalResultDetailMapper evalResultDetailMapper;
@@ -139,7 +140,7 @@ public class ModelCallPipelineCompensator {
                 markResultStopped(record.getId(), "评测任务已停止，模型调用超时样本不再继续处理");
                 continue;
             }
-            markResultFailedAndIncreaseProgress(record.getId(), taskDetail.getId(),
+            markResultFailedAndIncreaseProgress(record.getId(), record.getExecutionVersion(), taskDetail.getId(),
                     "模型调用阶段超时，已由补偿任务标记失败");
         }
         if (!records.isEmpty()) {
@@ -155,6 +156,7 @@ public class ModelCallPipelineCompensator {
                 .body(SafetyEvaluateMessage.builder()
                         .taskDetailId(taskDetail.getId())
                         .resultDetailId(resultDetail.getId())
+                        .executionVersion(resultDetail.getExecutionVersion())
                         .taskId(taskDetail.getTaskId())
                         .sampleId(resultDetail.getSampleId())
                         .modelId(taskDetail.getModelId())
@@ -175,11 +177,14 @@ public class ModelCallPipelineCompensator {
         });
     }
 
-    private void markResultFailedAndIncreaseProgress(Long resultDetailId, Long taskDetailId, String errorMsg) {
+    private void markResultFailedAndIncreaseProgress(Long resultDetailId, Integer executionVersion, Long taskDetailId, String errorMsg) {
         transactionTemplate.executeWithoutResult(status -> {
             int updatedRows = evalResultDetailMapper.update(null, new LambdaUpdateWrapper<EvalResultDetailDO>()
                     .eq(EvalResultDetailDO::getId, resultDetailId)
+                    .eq(EvalResultDetailDO::getExecutionVersion, executionVersion == null ? 0 : executionVersion)
                     .eq(EvalResultDetailDO::getStatus, EvalResultStatusEnums.MODEL_RUNNING.getCode())
+                    .eq(EvalResultDetailDO::getProgressCounted, false)
+                    .set(EvalResultDetailDO::getProgressCounted, true)
                     .set(EvalResultDetailDO::getIsSafe, EvalSafeStatusEnums.UNJUDGED.getCode())
                     .set(EvalResultDetailDO::getErrorMsg, trimErrorMessage(errorMsg))
                     .set(EvalResultDetailDO::getStatus, EvalResultStatusEnums.FAILED.getCode()));

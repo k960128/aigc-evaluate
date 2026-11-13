@@ -57,6 +57,8 @@ public class EvalResultDetailVO {
     /** 结果状态编码。 */
     private Integer status;
 
+    private Integer executionVersion;
+
     /** 结果状态说明。 */
     private String statusDesc;
 

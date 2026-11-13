@@ -1,28 +1,16 @@
 package com.kant.llm.eval.newpipeline.service;
 
-import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
-import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
 import com.kant.framework.exception.ServiceException;
 import com.kant.llm.common.enums.EvalResultStatusEnums;
 import com.kant.llm.common.enums.EvalSafeStatusEnums;
 import com.kant.llm.common.enums.TaskStatusEnums;
-import com.kant.llm.eval.es.service.EvalEsSyncOutboxService;
 import com.kant.llm.eval.task.dao.entity.EvalResultDetailDO;
-import com.kant.llm.eval.task.dao.mapper.EvalResultDetailMapper;
 import com.kant.llm.eval.task.dao.mapper.EvalTaskDetailMapper;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.mybatis.spring.SqlSessionTemplate;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.transaction.support.TransactionTemplate;
 
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -36,58 +24,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 /** 使用真实 SQL 和事务验证 CAS、回滚及同批次多样本并发，不启动外部服务。 */
-class SafetyEvaluateResultWriterTest {
-    private JdbcTemplate jdbc;
-    private EvalResultDetailMapper resultMapper;
-    private EvalTaskDetailMapper taskMapper;
-    private TransactionTemplate transactions;
-    private SafetyEvaluateResultWriter writer;
-    private final EvalEsSyncOutboxService outbox = mock(EvalEsSyncOutboxService.class);
-
-    @BeforeEach
-    void setUp() throws Exception {
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                "jdbc:h2:mem:safety_" + UUID.randomUUID() + ";MODE=MySQL;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=5000",
-                "sa", "");
-        dataSource.setDriverClassName("org.h2.Driver");
-        jdbc = new JdbcTemplate(dataSource);
-        jdbc.execute("""
-                CREATE TABLE eval_result_detail (
-                  id BIGINT PRIMARY KEY, task_id BIGINT, task_detail_id BIGINT, sample_id BIGINT,
-                  input_text VARCHAR(2000), risk_details_id BIGINT, model_output VARCHAR(2000),
-                  raw_response VARCHAR(2000), latency INT, is_safe INT, status INT, error_msg VARCHAR(2000),
-                  knowledge_version INT, knowledge_version_id BIGINT, create_time TIMESTAMP,
-                  update_time TIMESTAMP, deleted BOOLEAN DEFAULT FALSE)
-                """);
-        jdbc.execute("""
-                CREATE TABLE eval_task_detail (
-                  id BIGINT PRIMARY KEY, task_id BIGINT, serial_no BIGINT, task_name VARCHAR(200),
-                  model_id BIGINT, dataset_id BIGINT, status INT, total_count INT, finished_count INT,
-                  failed_count INT, token_usage INT, knowledge_version INT, knowledge_version_id BIGINT,
-                  create_time TIMESTAMP, update_time TIMESTAMP, start_time TIMESTAMP, end_time TIMESTAMP,
-                  deleted BOOLEAN DEFAULT FALSE)
-                """);
-        MybatisConfiguration configuration = new MybatisConfiguration();
-        configuration.setMapUnderscoreToCamelCase(true);
-        configuration.addMapper(EvalResultDetailMapper.class);
-        configuration.addMapper(EvalTaskDetailMapper.class);
-        MybatisSqlSessionFactoryBean factory = new MybatisSqlSessionFactoryBean();
-        factory.setDataSource(dataSource);
-        factory.setConfiguration(configuration);
-        SqlSessionTemplate sessions = new SqlSessionTemplate(factory.getObject());
-        resultMapper = sessions.getMapper(EvalResultDetailMapper.class);
-        taskMapper = sessions.getMapper(EvalTaskDetailMapper.class);
-        transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
-        writer = new SafetyEvaluateResultWriter(resultMapper, taskMapper, outbox, transactions);
-    }
-
-    @AfterEach
-    void shutDownDatabase() {
-        if (jdbc != null) {
-            jdbc.execute("SHUTDOWN");
-        }
-    }
-
+class SafetyEvaluateResultWriterTest extends ResultExecutionTestDatabase {
     @Test
     void oneSampleDoesNotCompleteEntireBatch() {
         insertTask(100, 0, 0, TaskStatusEnums.RUNNING);
@@ -148,7 +85,7 @@ class SafetyEvaluateResultWriterTest {
     void terminalResultIsNotClaimedAgain(EvalResultStatusEnums status) {
         insertResult(1L, status);
 
-        assertThat(writer.claim(1L)).isNull();
+        assertThat(writer.claim(1L, 0)).isNull();
 
         verifyNoInteractions(outbox);
     }
@@ -158,8 +95,8 @@ class SafetyEvaluateResultWriterTest {
         insertTask(2, 0, 0, TaskStatusEnums.RUNNING);
         insertResult(1L, EvalResultStatusEnums.MODEL_CALLED);
 
-        assertThat(writer.claim(1L).getStatus()).isEqualTo(EvalResultStatusEnums.SAFETY_EVALUATING.getCode());
-        assertThat(writer.claim(1L)).isNotNull();
+        assertThat(writer.claim(1L, 0).getStatus()).isEqualTo(EvalResultStatusEnums.SAFETY_EVALUATING.getCode());
+        assertThat(writer.claim(1L, 0)).isNotNull();
         assertThat(taskInt("finished_count")).isZero();
         verify(outbox, times(1)).recordResultDetailUpsert(1L);
     }
@@ -169,7 +106,7 @@ class SafetyEvaluateResultWriterTest {
         insertResult(1L, EvalResultStatusEnums.MODEL_CALLED);
         jdbc.update("UPDATE eval_result_detail SET status = NULL WHERE id = 1");
 
-        assertThatThrownBy(() -> writer.claim(1L)).isInstanceOf(ServiceException.class);
+        assertThatThrownBy(() -> writer.claim(1L, 0)).isInstanceOf(ServiceException.class);
         verifyNoInteractions(outbox);
     }
 
@@ -204,7 +141,7 @@ class SafetyEvaluateResultWriterTest {
         insertTask(2, 0, 0, TaskStatusEnums.STOPPED);
         insertResult(1L, EvalResultStatusEnums.MODEL_CALLED);
 
-        assertThat(writer.claim(1L)).isNull();
+        assertThat(writer.claim(1L, 0)).isNull();
 
         assertThat(resultMapper.selectById(1L).getStatus()).isEqualTo(EvalResultStatusEnums.STOPPED.getCode());
         assertThat(taskInt("status")).isEqualTo(TaskStatusEnums.STOPPED.getCode());
@@ -215,7 +152,7 @@ class SafetyEvaluateResultWriterTest {
     void stopDuringEvaluationCannotBeOverwrittenBySuccess() {
         insertTask(2, 0, 0, TaskStatusEnums.RUNNING);
         insertResult(1L, EvalResultStatusEnums.MODEL_CALLED);
-        writer.claim(1L);
+        writer.claim(1L, 0);
         jdbc.update("UPDATE eval_task_detail SET status = ? WHERE id = 20", TaskStatusEnums.STOPPED.getCode());
 
         writer.complete(outcome(1L, EvalResultStatusEnums.FINISHED));
@@ -304,27 +241,4 @@ class SafetyEvaluateResultWriterTest {
         }
     }
 
-    private void insertTask(int total, int finished, int failed, TaskStatusEnums status) {
-        jdbc.update("""
-                INSERT INTO eval_task_detail (id, task_id, status, total_count, finished_count, failed_count)
-                VALUES (20, 10, ?, ?, ?, ?)
-                """, status.getCode(), total, finished, failed);
-    }
-
-    private void insertResult(Long id, EvalResultStatusEnums status) {
-        jdbc.update("""
-                INSERT INTO eval_result_detail (id, task_id, task_detail_id, sample_id,
-                    risk_details_id, model_output, status, is_safe)
-                VALUES (?, 10, 20, 30, 40, 'model output', ?, 0)
-                """, id, status.getCode());
-    }
-
-    private EvalResultDetailDO outcome(Long id, EvalResultStatusEnums status) {
-        return EvalResultDetailDO.builder().id(id).taskDetailId(20L).status(status.getCode())
-                .isSafe(EvalSafeStatusEnums.SAFE.getCode()).build();
-    }
-
-    private Integer taskInt(String column) {
-        return jdbc.queryForObject("SELECT " + column + " FROM eval_task_detail WHERE id = 20", Integer.class);
-    }
 }

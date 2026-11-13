@@ -1875,6 +1875,7 @@ CREATE TABLE `eval_pipeline_node_detail` (
   `task_id` bigint NOT NULL COMMENT '评测任务ID，对应 eval_task.id',
   `task_detail_id` bigint NOT NULL COMMENT '任务执行批次ID，对应 eval_task_detail.id',
   `result_detail_id` bigint NOT NULL COMMENT '评测结果明细ID，对应 eval_result_detail.id',
+  `execution_version` int NOT NULL DEFAULT 0 COMMENT '样本执行轮次',
   `sample_id` bigint DEFAULT NULL COMMENT '数据集样本ID，对应 dataset_sample.id',
   `node_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '节点编码：MODEL_CALL-模型调用，L1-L1字面量拦截，L2-L2召回，L3-L3裁决',
   `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '节点状态：RUNNING-执行中，PASSED-通过，BLOCKED-拦截，FAILED-失败，SKIPPED-跳过，STOPPED-终止',
@@ -2604,6 +2605,8 @@ CREATE TABLE `eval_result_detail` (
   `latency` int DEFAULT NULL COMMENT '耗时(ms)',
   `is_safe` tinyint(1) DEFAULT '1' COMMENT '是否安全0:未判定, 1:安全, 2:违规',
   `status` tinyint DEFAULT '0' COMMENT '0:未处理, 1:已自动评分, 2:已人工核验',
+  `execution_version` int NOT NULL DEFAULT 0 COMMENT '执行轮次',
+  `progress_counted` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否已计入批次完成数',
   `knowledge_version` int NOT NULL COMMENT '当前样本版本，来源knowledge_attack_feature_document_version_snapshot.version',
   `knowledge_version_id` bigint NOT NULL COMMENT '当前激活版本ID，指向 knowledge_attack_feature_document_version_snapshot.version_id',
   `error_msg` text CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci COMMENT '错误信息',
@@ -3646,5 +3649,20 @@ CREATE TABLE `t_user` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='系统用户表';
 
 INSERT INTO `t_user` (`id`, `username`, `password`, `role`, `avatar`, `create_time`, `update_time`, `deleted`) VALUES ('2001523723396308993', 'admin', 'admin123', 'admin', 'http://47.103.193.177:9001/images/%E5%A4%B4%E5%83%8F.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=PMD7BRXEQ3Q1SU8I8YDQ%2F20260520%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260520T031544Z&X-Amz-Expires=3600&X-Amz-Security-Token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJleHAiOjE3NzkyOTAwNTAsInBhcmVudCI6ImthbnQifQ.BXw8My-fCPgOqOMZUuKBAjdwKKhYlVILhvl0v0zyOqPEQqCSBRmgra8H7Lesdmw-3P_tD8axAgpNYiZjAbAgzw&X-Amz-Signature=bf0d07d0a19e9849413b20148776d587706c30da387d9c7623d21ac22a59e3da&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject', '2026-03-26 23:05:27', '2026-03-26 23:05:27', 0);
+
+UPDATE eval_result_detail SET progress_counted = CASE WHEN status IN (1, 2, 3, 8) THEN 1 ELSE 0 END;
+
+CREATE TABLE eval_result_retry (
+  id BIGINT NOT NULL PRIMARY KEY,
+  request_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  result_detail_id BIGINT NOT NULL,
+  task_detail_id BIGINT NOT NULL,
+  execution_version INT NOT NULL,
+  mode VARCHAR(16) NOT NULL,
+  start_stage VARCHAR(32) NOT NULL,
+  create_time DATETIME NOT NULL,
+  UNIQUE KEY uk_eval_result_retry_request (request_id),
+  KEY idx_eval_result_retry_result_version (result_detail_id, execution_version)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='单样本重试受理记录及事务消息回查凭据';
 
 SET FOREIGN_KEY_CHECKS = 1;

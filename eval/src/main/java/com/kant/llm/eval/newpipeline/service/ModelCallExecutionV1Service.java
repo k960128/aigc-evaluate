@@ -2,11 +2,11 @@ package com.kant.llm.eval.newpipeline.service;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.ObjectUtil;
-import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.kant.ai.infra.client.*;
 import com.kant.ai.infra.enums.ModelManufacturerEnum;
 import com.kant.framework.exception.ServiceException;
+import com.kant.framework.errorcode.BaseErrorCode;
 import com.kant.framework.mq.producer.MessageQueueProducer;
 import com.kant.framework.mq.producer.MessageSendRequest;
 import com.kant.llm.common.constant.EvalMqTopics;
@@ -24,7 +24,6 @@ import com.kant.llm.eval.pipeline.service.EvalPipelineNodeRecorder;
 import com.kant.llm.eval.pipeline.service.ratelimit.ModelCallPermit;
 import com.kant.llm.eval.pipeline.service.ratelimit.ModelCallRateLimiter;
 import com.kant.llm.eval.task.dao.entity.EvalResultDetailDO;
-import com.kant.llm.eval.task.service.EvalResultDetailService;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
@@ -38,13 +37,12 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @Service
 public class ModelCallExecutionV1Service {
-    private static final String EXECUTION_LOCK_KEY_PREFIX = "EVAL:MODEL-CALL:LOCK:KEY:%s";
 
     private final RedissonClient redissonClient;
     private final ModelInfoService modelInfoService;
     private final MessageQueueProducer messageQueueProducer;
     private final ModelCallRateLimiter modelCallRateLimiter;
-    private final EvalResultDetailService evalResultDetailService;
+    private final SafetyEvaluateResultWriter resultWriter;
     private final EvalPipelineNodeRecorder evalPipelineNodeRecorder;
     private final ModelClientStrategyFactory modelClientStrategyFactory;
     private final MockModelOutputContentService mockModelOutputContentService;
@@ -53,7 +51,7 @@ public class ModelCallExecutionV1Service {
                                        ModelInfoService modelInfoService,
                                        MessageQueueProducer messageQueueProducer,
                                        ModelCallRateLimiter modelCallRateLimiter,
-                                       EvalResultDetailService evalResultDetailService,
+                                       SafetyEvaluateResultWriter resultWriter,
                                        EvalPipelineNodeRecorder evalPipelineNodeRecorder,
                                        ModelClientStrategyFactory modelClientStrategyFactory,
                                        MockModelOutputContentService mockModelOutputContentService) {
@@ -61,7 +59,7 @@ public class ModelCallExecutionV1Service {
         this.modelInfoService = modelInfoService;
         this.messageQueueProducer = messageQueueProducer;
         this.modelCallRateLimiter = modelCallRateLimiter;
-        this.evalResultDetailService = evalResultDetailService;
+        this.resultWriter = resultWriter;
         this.evalPipelineNodeRecorder = evalPipelineNodeRecorder;
         this.modelClientStrategyFactory = modelClientStrategyFactory;
         this.mockModelOutputContentService = mockModelOutputContentService;
@@ -73,35 +71,41 @@ public class ModelCallExecutionV1Service {
      * @param message msg
      */
     public void submitExecute(ModelCallMessage message) {
-        // 获取分布式锁
-        String lockKey = buildLockKey(message.getResultDetailId());
+        if (message == null || message.getResultDetailId() == null) {
+            throw new ServiceException("模型调用消息缺少结果明细ID");
+        }
+        String lockKey = ResultExecution.lockKey(message.getResultDetailId());
         RLock rLock = redissonClient.getLock(lockKey);
+        boolean locked = false;
         try {
-            // 尝试获取锁：等待10秒，持有30秒后自动释放
-            boolean locked = rLock.tryLock(10, 30, TimeUnit.SECONDS);
+            locked = rLock.tryLock(10, TimeUnit.SECONDS);
             if (!locked) {
-                log.info("评测结果明细正在执行中，跳过重复模型调用消息，resultDetailId: {}",
-                        message.getResultDetailId());
-                return;
+                throw new ServiceException("样本正在执行，请稍后重试，resultDetailId: " + message.getResultDetailId());
             }
-            try {
-                // 执行业务逻辑
-                execute(message);
-            } catch (Exception e) {
-                log.error("业务执行异常: {}", lockKey, e);
-                // 根据业务需要决定是否抛出或记录
-                throw new ServiceException(String.format("处理失败，resultDetailId: %s", e.getMessage()));
-            } finally {
-                // 只有当前线程持有锁时才释放
-                if (rLock.isHeldByCurrentThread()) {
-                    rLock.unlock();
-                    log.debug("释放锁成功: {}", lockKey);
-                }
-            }
+            execute(message, rLock);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.error("获取锁被中断: {}", lockKey, e);
-            throw new RuntimeException("获取锁被中断", e);
+            throw new ServiceException("模型调用获取锁被中断", e, BaseErrorCode.SERVICE_ERROR);
+        } catch (RuntimeException e) {
+            if (locked) {
+                try {
+                    resultWriter.recordFailure(message.getResultDetailId(), message.getExecutionVersion(), e);
+                } catch (RuntimeException recordException) {
+                    e.addSuppressed(recordException);
+                }
+            }
+            throw new ServiceException("模型调用处理失败，resultDetailId: " + message.getResultDetailId(),
+                    e, BaseErrorCode.SERVICE_ERROR);
+        } finally {
+            if (locked) {
+                try {
+                    if (rLock.isHeldByCurrentThread()) {
+                        rLock.unlock();
+                    }
+                } catch (RuntimeException e) {
+                    log.warn("模型调用释放锁失败，lockKey: {}", lockKey, e);
+                }
+            }
         }
     }
 
@@ -109,11 +113,16 @@ public class ModelCallExecutionV1Service {
      *  执行模型调用
      * @param message msg
      */
-    private void execute(ModelCallMessage message) {
-        EvalResultDetailDO resultDetail = evalResultDetailService.getById(message.getResultDetailId());
-        // 验证回写结果
-        validateResultDetail(resultDetail);
-        // 获取模型信息
+    private void execute(ModelCallMessage message, RLock lock) {
+        EvalResultDetailDO resultDetail = resultWriter.claimModel(message.getResultDetailId(),
+                ResultExecution.version(message.getExecutionVersion()));
+        if (resultDetail == null) {
+            return;
+        }
+        if (EvalResultStatusEnums.MODEL_CALLED.getCode().equals(resultDetail.getStatus())) {
+            sendSafetyEvaluateMessage(message);
+            return;
+        }
         ModelInfoVO modelInfo = loadModelInfo(message.getModelId());
         ModelCallPermit acquire = null;
         try {
@@ -121,16 +130,19 @@ public class ModelCallExecutionV1Service {
             acquire = modelCallRateLimiter.acquire(modelInfo);
             // 执行模型调用逻辑
             ModelResponse modelResponse = modelCall(modelInfo, resultDetail);
-            // 回写数据库
-            writeBackToDB(resultDetail, modelResponse);
-
-            // 发送SafeEval消息
-            sendSafetyEvaluateMessage(message);
-        } catch (Exception e) {
-            log.error("获取模型调用许可失败: {}", modelInfo, e);
+            if (modelResponse == null || modelResponse.getRespContent() == null || modelResponse.getRespContent().isBlank()) {
+                throw new ServiceException("被评测模型未返回有效输出");
+            }
+            if (!lock.isHeldByCurrentThread()) {
+                throw new ServiceException("模型调用执行锁已丢失");
+            }
+            if (resultWriter.completeModel(resultDetail, modelResponse)) {
+                sendSafetyEvaluateMessage(message);
+            }
         } finally {
-            // 无论如何都要释放模型调用许可
-            acquire.release();
+            if (acquire != null) {
+                acquire.release();
+            }
         }
 
     }
@@ -147,6 +159,7 @@ public class ModelCallExecutionV1Service {
                 .body(SafetyEvaluateMessage.builder()
                         .taskDetailId(message.getTaskDetailId())
                         .resultDetailId(message.getResultDetailId())
+                        .executionVersion(message.getExecutionVersion())
                         .taskId(message.getTaskId())
                         .sampleId(message.getSampleId())
                         .modelId(message.getModelId())
@@ -206,20 +219,6 @@ public class ModelCallExecutionV1Service {
         }
     }
 
-    /**
-     * 构建分布式锁的Key
-     * @param resultDetailId 回写结果ID
-     * @return Key
-     */
-    private String buildLockKey(Long resultDetailId) {
-        return String.format(EXECUTION_LOCK_KEY_PREFIX, resultDetailId);
-    }
-
-    private void validateResultDetail(EvalResultDetailDO resultDetail) {
-        if (resultDetail == null) {
-            throw new ServiceException("评测结果明细不存在");
-        }
-    }
 
     /**
      获取模型信息
@@ -300,17 +299,4 @@ public class ModelCallExecutionV1Service {
         return nodeResult;
     }
 
-    /**
-     * 回写模型调用结果到数据库
-     * @param resultDetailDO 样本
-     * @param modelResponse 大模型返回结果
-     */
-    private void writeBackToDB(EvalResultDetailDO resultDetailDO, ModelResponse modelResponse) {
-        resultDetailDO.setModelOutput(modelResponse.getRespContent());
-        resultDetailDO.setRawResponse(JSON.toJSONString(modelResponse));
-        resultDetailDO.setLatency(Math.toIntExact(modelResponse.getElapsed()));
-        resultDetailDO.setErrorMsg(null);
-        resultDetailDO.setStatus(EvalResultStatusEnums.MODEL_CALLED.getCode());
-        evalResultDetailService.updateById(resultDetailDO);
-    }
 }

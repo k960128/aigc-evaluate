@@ -13,6 +13,10 @@ import com.kant.llm.eval.task.dto.resp.EvalTaskDetailVO;
 import com.kant.llm.eval.task.dto.resp.EvalTaskStatusVO;
 import com.kant.llm.eval.task.dto.resp.EvalTaskVO;
 import com.kant.llm.eval.task.service.EvalTaskService;
+import com.kant.llm.eval.task.service.EvalResultRetryService;
+import com.kant.llm.eval.task.dto.req.RetryEvalResultRequest;
+import com.kant.llm.eval.task.dto.resp.RetryEvalResultVO;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,9 +26,17 @@ import java.util.List;
 public class EvalTaskController {
 
     private final EvalTaskService evalTaskService;
+    private final EvalResultRetryService evalResultRetryService;
 
-    public EvalTaskController(EvalTaskService evalTaskService) {
+    public EvalTaskController(EvalTaskService evalTaskService, EvalResultRetryService evalResultRetryService) {
         this.evalTaskService = evalTaskService;
+        this.evalResultRetryService = evalResultRetryService;
+    }
+
+    /** 异步重试单条样本，返回受理轮次。 */
+    @PostMapping("/result/retry")
+    public Result<RetryEvalResultVO> retryEvalResult(@Valid @RequestBody RetryEvalResultRequest request) {
+        return Results.success(evalResultRetryService.retry(request));
     }
 
     /**

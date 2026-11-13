@@ -33,7 +33,6 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @Service
 public class SafetyEvaluateExecuteService {
-    private static final String EXECUTION_LOCK_KEY_PREFIX = "EVAL:SAFETY-EVALUATE:LOCK:KEY:%s";
 
     private final RedissonClient redissonClient;
     private final SafetyEvaluateResultWriter resultWriter;
@@ -68,7 +67,7 @@ public class SafetyEvaluateExecuteService {
         if (message == null || message.getResultDetailId() == null) {
             throw new ServiceException("安全评测消息缺少结果明细ID");
         }
-        String lockKey = buildLockKey(message.getResultDetailId());
+        String lockKey = ResultExecution.lockKey(message.getResultDetailId());
         RLock rLock = redissonClient.getLock(lockKey);
         boolean locked = false;
         try {
@@ -77,7 +76,8 @@ public class SafetyEvaluateExecuteService {
             if (!locked) {
                 throw new ServiceException("安全评测正在执行，请重试，resultDetailId: " + message.getResultDetailId());
             }
-            EvalResultDetailDO result = resultWriter.claim(message.getResultDetailId());
+            EvalResultDetailDO result = resultWriter.claim(message.getResultDetailId(),
+                    ResultExecution.version(message.getExecutionVersion()));
             if (result == null) {
                 return;
             }
@@ -91,6 +91,13 @@ public class SafetyEvaluateExecuteService {
             throw new ServiceException("安全评测获取锁被中断，resultDetailId: " + message.getResultDetailId(),
                     e, BaseErrorCode.SERVICE_ERROR);
         } catch (RuntimeException e) {
+            if (locked) {
+                try {
+                    resultWriter.recordFailure(message.getResultDetailId(), message.getExecutionVersion(), e);
+                } catch (RuntimeException recordException) {
+                    e.addSuppressed(recordException);
+                }
+            }
             log.error("安全评测执行失败，resultDetailId: {}", message.getResultDetailId(), e);
             throw new ServiceException("安全评测处理失败，resultDetailId: " + message.getResultDetailId(),
                     e, BaseErrorCode.SERVICE_ERROR);
@@ -453,13 +460,4 @@ public class SafetyEvaluateExecuteService {
         }
     }
 
-    /**
-     * 构建分布式锁的Key
-     *
-     * @param resultDetailId 回写结果ID
-     * @return Key
-     */
-    private String buildLockKey(Long resultDetailId) {
-        return String.format(EXECUTION_LOCK_KEY_PREFIX, resultDetailId);
-    }
 }

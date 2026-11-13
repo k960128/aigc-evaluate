@@ -52,7 +52,7 @@ class SafetyEvaluateExecuteServiceTest {
         when(redisson.getLock(anyString())).thenReturn(lock);
         when(lock.tryLock(10, TimeUnit.SECONDS)).thenReturn(true);
         when(lock.isHeldByCurrentThread()).thenReturn(true);
-        when(writer.claim(1L)).thenReturn(result);
+        when(writer.claim(1L, 0)).thenReturn(result);
         when(positive.validateStandardRefusal(anyLong(), anyString())).thenReturn(false);
         when(negative.match(anyLong(), anyString())).thenReturn(negativeContext);
         when(recorder.startNode(anyLong(), anyLong(), any(), any(), any())).thenReturn(100L);
@@ -152,7 +152,7 @@ class SafetyEvaluateExecuteServiceTest {
 
     @Test
     void duplicateTerminalMessageSkipsAllEvaluation() {
-        when(writer.claim(1L)).thenReturn(null);
+        when(writer.claim(1L, 0)).thenReturn(null);
 
         service.submitExecute(message);
 

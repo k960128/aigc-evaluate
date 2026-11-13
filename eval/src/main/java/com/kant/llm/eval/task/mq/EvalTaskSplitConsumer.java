@@ -185,6 +185,7 @@ public class EvalTaskSplitConsumer implements RocketMQListener<MessageWrapper<Ev
                 .body(ModelCallMessage.builder()
                         .taskDetailId(taskDetail.getId())
                         .resultDetailId(resultDetail.getId())
+                        .executionVersion(resultDetail.getExecutionVersion())
                         .taskId(taskDetail.getTaskId())
                         .sampleId(resultDetail.getSampleId())
                         .modelId(taskDetail.getModelId())

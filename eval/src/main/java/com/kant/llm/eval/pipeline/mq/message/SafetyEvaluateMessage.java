@@ -29,6 +29,11 @@ public class SafetyEvaluateMessage implements Serializable {
     /** 单条评测结果明细 ID。 */
     private Long resultDetailId;
 
+    private Integer executionVersion;
+
+    /** 事务消息回查所用的人工重试请求 ID。 */
+    private String retryRequestId;
+
     /** 评测任务 ID。 */
     private Long taskId;
 
