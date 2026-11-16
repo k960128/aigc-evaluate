@@ -3,17 +3,8 @@ package com.kant.llm.eval.simple.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.kant.framework.convention.Result;
 import com.kant.framework.web.Results;
-import com.kant.llm.eval.simple.dto.MutationTacticsTreeVO;
-import com.kant.llm.eval.simple.dto.SampleFactoryTaskDetailLogsVO;
-import com.kant.llm.eval.simple.dto.SampleFactoryTaskExecutionDetailPageRequest;
-import com.kant.llm.eval.simple.dto.SampleFactoryTaskExecutionDetailVO;
-import com.kant.llm.eval.simple.dto.SampleFactoryTaskPageRequest;
-import com.kant.llm.eval.simple.dto.SampleFactoryTaskVO;
-import com.kant.llm.eval.simple.dto.SeedCreateTask;
-import com.kant.llm.eval.simple.service.AgentSampleFactoryTaskExecutionDetailService;
-import com.kant.llm.eval.simple.service.AgentSampleFactoryTaskDetailLogsService;
-import com.kant.llm.eval.simple.service.AgentSampleFactoryTaskService;
-import com.kant.llm.eval.simple.service.AgentSampleMutationTacticsService;
+import com.kant.llm.eval.simple.dto.*;
+import com.kant.llm.eval.simple.service.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,13 +26,15 @@ import java.util.List;
 @Slf4j
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/sample-factory")
-public class SampleFactoryV2Controller {
+@RequestMapping({"/sample-factory",
+        "/agent/sample-factory"})
+public class SampleFactoryController {
 
     private final AgentSampleMutationTacticsService mutationTacticsService;
     private final AgentSampleFactoryTaskService agentSampleFactoryTaskService;
     private final AgentSampleFactoryTaskExecutionDetailService agentSampleFactoryTaskExecutionDetailService;
     private final AgentSampleFactoryTaskDetailLogsService agentSampleFactoryTaskDetailLogsService;
+    private final AgentSampleSeedService agentSampleSeedService;
 
     /**
      * 获取变异战术矩阵树
@@ -133,5 +126,23 @@ public class SampleFactoryV2Controller {
     @PostMapping("/tasks/{taskId}/start")
     public Result<Boolean> start(@PathVariable("taskId") String taskId) {
         return Results.success(agentSampleFactoryTaskService.start(taskId));
+    }
+
+    /** 首版种子/计划导航列表最多返回最近100条；大量候选另用游标分页。 */
+    @GetMapping("/seeds")
+    public Result<List<SimpleSeedFactoryResponses.Seed>> seeds() {
+        return Results.success(agentSampleSeedService.seeds());
+    }
+
+    /** 创建不可变专家种子；没有调用模型。 */
+    @PostMapping("/seeds")
+    public Result<SimpleSeedFactoryResponses.Seed> createSeed(@Valid @RequestBody SimpleSeedFactoryRequests.Seed request) {
+        return Results.success(agentSampleSeedService.createSeed(request));
+    }
+
+    /** 通过独立认证入口读取种子正文，并核对原文摘要。 */
+    @GetMapping("/seeds/{seedId}/content")
+    public Result<SimpleSeedFactoryResponses.Content> seedContent(@PathVariable String seedId) {
+        return Results.success(agentSampleSeedService.seedContent(seedId));
     }
 }
