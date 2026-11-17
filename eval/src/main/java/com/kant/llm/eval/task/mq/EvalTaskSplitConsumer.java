@@ -95,9 +95,10 @@ public class EvalTaskSplitConsumer implements RocketMQListener<MessageWrapper<Ev
         log.info("评测任务批次进入拆分初始化状态，taskDetailId: {}, datasetId: {}",
                 taskDetail.getId(), taskDetail.getDatasetId());
 
-        // TODO 优化为毒丸（读写模式）
-        List<DataSetSampleDO> samples = dataSetSampleMapper.selectList(new LambdaQueryWrapper<>(DataSetSampleDO.class)
-                .eq(DataSetSampleDO::getDatasetId, taskDetail.getDatasetId()));
+        // TODO 优化为毒丸（读写模式） 先查出全部，下一步更改为按照关联表查询
+//        List<DataSetSampleDO> samples = dataSetSampleMapper.selectList(new LambdaQueryWrapper<>(DataSetSampleDO.class)
+//                .eq(DataSetSampleDO::getDatasetId, taskDetail.getDatasetId()));
+        List<DataSetSampleDO> samples = dataSetSampleMapper.selectList(new LambdaQueryWrapper<>(DataSetSampleDO.class));
         if (CollectionUtil.isEmpty(samples)) {
             markTaskDetailError(taskDetail);
             log.warn("评测任务批次数据集为空，taskDetailId: {}, datasetId: {}", taskDetail.getId(), taskDetail.getDatasetId());

@@ -151,9 +151,11 @@ public class EvalTaskServiceImpl implements EvalTaskService {
             }
             // 2. 幂等校验：存在活跃批次时，说明该任务已经在提交、拆分或执行中。
             ensureNoActiveTaskDetail(taskId);
-            // 3. 获取数据集
-            Long sampleCount = dataSetSampleMapper.selectCount(new LambdaQueryWrapper<>(DataSetSampleDO.class)
-                    .eq(DataSetSampleDO::getDatasetId, task.getDatasetId()));
+            // 3. 获取数据集 先查出全部，下一步更改为按照关联表查询
+//            Long sampleCount = dataSetSampleMapper.selectCount(new LambdaQueryWrapper<>(DataSetSampleDO.class)
+//                    .eq(DataSetSampleDO::getDatasetId, task.getDatasetId()));
+
+            Long sampleCount = dataSetSampleMapper.selectCount(new LambdaQueryWrapper<>(DataSetSampleDO.class));
             if (sampleCount == null || sampleCount <= 0) {
                 throw new ServiceException("评测任务数据集为空，无法启动");
             }
@@ -626,7 +628,8 @@ public class EvalTaskServiceImpl implements EvalTaskService {
                 .taskId(resultDetail.getTaskId())
                 .taskDetailId(resultDetail.getTaskDetailId())
                 .sampleId(resultDetail.getSampleId())
-                .datasetId(sample == null ? null : sample.getDatasetId())
+//                .datasetId(sample == null ? null : sample.getDatasetId())
+                .datasetId(null)
                 .riskDetailsId(resultDetail.getRiskDetailsId())
                 .inputText(resultDetail.getInputText())
                 .modelOutput(resultDetail.getModelOutput())

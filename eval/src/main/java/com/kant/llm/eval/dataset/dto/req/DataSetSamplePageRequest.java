@@ -22,9 +22,6 @@ public class DataSetSamplePageRequest {
     /** 每页数量，默认值为 10。 */
     private Integer size;
 
-    /** 数据集 ID，用于筛选指定数据集下的样本。 */
-    private Long datasetId;
-
     /** 题目绑定的风险小类 ID，用于筛选指定评测类型的样本。 */
     private Long riskDetailsId;
 }
