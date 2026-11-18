@@ -16,14 +16,14 @@ import org.springframework.stereotype.Component;
         consumerGroup = "aigc-eval-safety-evaluate-consumer-group",
         maxReconsumeTimes = 2
 )
-public class SafetyEvaluateV2Consumer implements RocketMQListener<MessageWrapper<SafetyEvaluateMessage>> {
+public class SafetyEvaluateConsumer implements RocketMQListener<MessageWrapper<SafetyEvaluateMessage>> {
 
     /** 最大重试次数（不含首次消费，即总消费次数 = MAX_RETRY + 1） */
     private final int MAX_RETRY = 3;
 
     private final SafetyEvaluateExecuteService safetyEvaluateExecuteService;
 
-    public SafetyEvaluateV2Consumer(SafetyEvaluateExecuteService safetyEvaluateExecuteService) {
+    public SafetyEvaluateConsumer(SafetyEvaluateExecuteService safetyEvaluateExecuteService) {
         this.safetyEvaluateExecuteService = safetyEvaluateExecuteService;
     }
 

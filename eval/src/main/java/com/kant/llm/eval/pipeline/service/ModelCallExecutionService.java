@@ -36,7 +36,7 @@ import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
-public class ModelCallExecutionV1Service {
+public class ModelCallExecutionService {
 
     private final RedissonClient redissonClient;
     private final ModelInfoService modelInfoService;
@@ -47,14 +47,14 @@ public class ModelCallExecutionV1Service {
     private final ModelClientStrategyFactory modelClientStrategyFactory;
     private final MockModelOutputContentService mockModelOutputContentService;
 
-    public ModelCallExecutionV1Service(RedissonClient redissonClient,
-                                       ModelInfoService modelInfoService,
-                                       MessageQueueProducer messageQueueProducer,
-                                       ModelCallRateLimiter modelCallRateLimiter,
-                                       SafetyEvaluateResultWriter resultWriter,
-                                       EvalPipelineNodeRecorder evalPipelineNodeRecorder,
-                                       ModelClientStrategyFactory modelClientStrategyFactory,
-                                       MockModelOutputContentService mockModelOutputContentService) {
+    public ModelCallExecutionService(RedissonClient redissonClient,
+                                     ModelInfoService modelInfoService,
+                                     MessageQueueProducer messageQueueProducer,
+                                     ModelCallRateLimiter modelCallRateLimiter,
+                                     SafetyEvaluateResultWriter resultWriter,
+                                     EvalPipelineNodeRecorder evalPipelineNodeRecorder,
+                                     ModelClientStrategyFactory modelClientStrategyFactory,
+                                     MockModelOutputContentService mockModelOutputContentService) {
         this.redissonClient = redissonClient;
         this.modelInfoService = modelInfoService;
         this.messageQueueProducer = messageQueueProducer;

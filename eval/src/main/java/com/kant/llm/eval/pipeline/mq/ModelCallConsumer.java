@@ -2,7 +2,7 @@ package com.kant.llm.eval.pipeline.mq;
 
 import com.kant.framework.mq.MessageWrapper;
 import com.kant.llm.common.constant.EvalMqTopics;
-import com.kant.llm.eval.pipeline.service.ModelCallExecutionV1Service;
+import com.kant.llm.eval.pipeline.service.ModelCallExecutionService;
 import com.kant.llm.eval.pipeline.record.ModelCallMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
@@ -18,12 +18,12 @@ import org.springframework.stereotype.Component;
         topic = EvalMqTopics.MODEL_CALL_TOPIC,
         consumerGroup = "aigc-eval-model-call-consumer-group"
 )
-public class ModelCallV2Consumer implements RocketMQListener<MessageWrapper<ModelCallMessage>> {
+public class ModelCallConsumer implements RocketMQListener<MessageWrapper<ModelCallMessage>> {
 
 
-    private final ModelCallExecutionV1Service modelCallExecutionV1Service;
+    private final ModelCallExecutionService modelCallExecutionV1Service;
 
-    public ModelCallV2Consumer(ModelCallExecutionV1Service modelCallExecutionV1Service) {
+    public ModelCallConsumer(ModelCallExecutionService modelCallExecutionV1Service) {
         this.modelCallExecutionV1Service = modelCallExecutionV1Service;
     }
 

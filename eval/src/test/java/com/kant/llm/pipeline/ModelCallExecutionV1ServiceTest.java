@@ -15,7 +15,7 @@ import com.kant.llm.eval.pipeline.record.SafetyEvaluateMessage;
 import com.kant.llm.eval.pipeline.record.EvalPipelineNodeRecorder;
 import com.kant.llm.eval.pipeline.ratelimit.ModelCallPermit;
 import com.kant.llm.eval.pipeline.ratelimit.ModelCallRateLimiter;
-import com.kant.llm.eval.pipeline.service.ModelCallExecutionV1Service;
+import com.kant.llm.eval.pipeline.service.ModelCallExecutionService;
 import com.kant.llm.eval.pipeline.service.ResultExecution;
 import com.kant.llm.eval.pipeline.service.SafetyEvaluateResultWriter;
 import com.kant.llm.eval.task.dao.entity.EvalResultDetailDO;
@@ -49,11 +49,11 @@ class ModelCallExecutionV1ServiceTest {
     private final EvalResultDetailDO result = EvalResultDetailDO.builder().id(1L).taskId(10L)
             .taskDetailId(20L).sampleId(30L).executionVersion(2)
             .status(EvalResultStatusEnums.MODEL_RUNNING.getCode()).build();
-    private ModelCallExecutionV1Service service;
+    private ModelCallExecutionService service;
 
     @BeforeEach
     void setUp() throws Exception {
-        service = new ModelCallExecutionV1Service(redisson, models, producer, limiter,
+        service = new ModelCallExecutionService(redisson, models, producer, limiter,
                 writer, recorder, strategies, mocks);
         when(redisson.getLock(ResultExecution.lockKey(1L))).thenReturn(lock);
         when(lock.tryLock(10, TimeUnit.SECONDS)).thenReturn(true);
