@@ -10,6 +10,8 @@ import com.kant.llm.common.enums.EvalResultStatusEnums;
 import com.kant.llm.common.enums.EvalSafeStatusEnums;
 import com.kant.llm.common.enums.TaskStatusEnums;
 import com.kant.llm.eval.dataset.dao.entity.DataSetSampleDO;
+import com.kant.llm.eval.dataset.dao.entity.DataSetSampleItemDO;
+import com.kant.llm.eval.dataset.dao.mapper.DataSetSampleItemMapper;
 import com.kant.llm.eval.task.dao.entity.EvalResultDetailDO;
 import com.kant.llm.eval.task.dao.entity.EvalTaskDetailDO;
 import com.kant.llm.eval.dataset.dao.mapper.DataSetSampleMapper;
@@ -27,7 +29,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import static com.kant.llm.common.constant.EvalMqTopics.MODEL_CALL_TOPIC;
 
@@ -42,22 +46,25 @@ import static com.kant.llm.common.constant.EvalMqTopics.MODEL_CALL_TOPIC;
 )
 public class EvalTaskSplitConsumer implements RocketMQListener<MessageWrapper<EvalTaskSplitMessage>> {
 
+    private final DataSetSampleMapper dataSetSampleMapper;
     private final EvalTaskDetailMapper evalTaskDetailMapper;
     private final EvalResultDetailMapper evalResultDetailMapper;
-    private final DataSetSampleMapper dataSetSampleMapper;
+    private final DataSetSampleItemMapper dataSetSampleItemMapper;
     private final MessageQueueProducer messageQueueProducer;
     private final EvalEsSyncOutboxService evalEsSyncOutboxService;
     private final TransactionTemplate transactionTemplate;
 
     public EvalTaskSplitConsumer(EvalTaskDetailMapper evalTaskDetailMapper,
-                                 EvalResultDetailMapper evalResultDetailMapper,
                                  DataSetSampleMapper dataSetSampleMapper,
+                                 EvalResultDetailMapper evalResultDetailMapper,
+                                 DataSetSampleItemMapper dataSetSampleItemMapper,
                                  MessageQueueProducer messageQueueProducer,
                                  EvalEsSyncOutboxService evalEsSyncOutboxService,
                                  TransactionTemplate transactionTemplate) {
         this.evalTaskDetailMapper = evalTaskDetailMapper;
-        this.evalResultDetailMapper = evalResultDetailMapper;
         this.dataSetSampleMapper = dataSetSampleMapper;
+        this.evalResultDetailMapper = evalResultDetailMapper;
+        this.dataSetSampleItemMapper = dataSetSampleItemMapper;
         this.messageQueueProducer = messageQueueProducer;
         this.evalEsSyncOutboxService = evalEsSyncOutboxService;
         this.transactionTemplate = transactionTemplate;
@@ -95,21 +102,25 @@ public class EvalTaskSplitConsumer implements RocketMQListener<MessageWrapper<Ev
         log.info("评测任务批次进入拆分初始化状态，taskDetailId: {}, datasetId: {}",
                 taskDetail.getId(), taskDetail.getDatasetId());
 
-        // TODO 优化为毒丸（读写模式） 先查出全部，下一步更改为按照关联表查询
-//        List<DataSetSampleDO> samples = dataSetSampleMapper.selectList(new LambdaQueryWrapper<>(DataSetSampleDO.class)
-//                .eq(DataSetSampleDO::getDatasetId, taskDetail.getDatasetId()));
-        List<DataSetSampleDO> samples = dataSetSampleMapper.selectList(new LambdaQueryWrapper<>(DataSetSampleDO.class));
-        if (CollectionUtil.isEmpty(samples)) {
+        // TODO 优化为毒丸（读写模式）
+        List<DataSetSampleItemDO> dataSetSampleItems = dataSetSampleItemMapper.selectList(new LambdaQueryWrapper<>(DataSetSampleItemDO.class)
+                .eq(DataSetSampleItemDO::getDatasetId, taskDetail.getDatasetId()));
+        if (CollectionUtil.isEmpty(dataSetSampleItems)) {
             markTaskDetailError(taskDetail);
             log.warn("评测任务批次数据集为空，taskDetailId: {}, datasetId: {}", taskDetail.getId(), taskDetail.getDatasetId());
             return;
         }
         log.info("评测任务批次加载样本完成，taskDetailId: {}, sampleCount: {}",
-                taskDetail.getId(), samples.size());
+                taskDetail.getId(), dataSetSampleItems.size());
+
+        Map<Long, List<DataSetSampleDO>> datasetSamplesMap = dataSetSampleMapper.selectList(new LambdaQueryWrapper<>(DataSetSampleDO.class)
+                .in(DataSetSampleDO::getId, dataSetSampleItems.stream()
+                        .map(DataSetSampleItemDO::getDatasetSampleId)
+                        .collect(Collectors.toList()))).stream().collect(Collectors.groupingBy(DataSetSampleDO::getId));
 
         // 每个样本先生成一条结果明细。执行消息会在批次 READY 后统一投递，避免执行消费者过早消费。
-        List<EvalResultDetailDO> resultDetails = samples.stream()
-                .map(sample -> splitSample(taskDetail, sample))
+        List<EvalResultDetailDO> resultDetails = dataSetSampleItems.stream()
+                .map(sampleItems -> splitSample(taskDetail, sampleItems, datasetSamplesMap))
                 .filter(Objects::nonNull)
                 .toList();
 
@@ -121,14 +132,14 @@ public class EvalTaskSplitConsumer implements RocketMQListener<MessageWrapper<Ev
         }
 
         taskDetail.setStatus(TaskStatusEnums.READY.getCode());
-        taskDetail.setTotalCount(samples.size());
+        taskDetail.setTotalCount(dataSetSampleItems.size());
         evalTaskDetailMapper.updateById(taskDetail);
         log.info("评测任务批次拆分结果明细完成，taskDetailId: {}, resultDetailCount: {}",
                 taskDetail.getId(), resultDetails.size());
 
         // 批次已进入 READY 后再投递单样本执行消息，保证后续消费者能稳定推进 RUNNING 状态。
         resultDetails.forEach(resultDetail -> sendSampleExecutionMessage(taskDetail, resultDetail));
-        log.info("评测任务批次拆分完成，taskDetailId: {}, totalCount: {}", taskDetail.getId(), samples.size());
+        log.info("评测任务批次拆分完成，taskDetailId: {}, totalCount: {}", taskDetail.getId(), dataSetSampleItems.size());
     }
 
     /**
@@ -136,18 +147,20 @@ public class EvalTaskSplitConsumer implements RocketMQListener<MessageWrapper<Ev
      *
      * <p>该方法只负责拆分落库，不投递执行消息；执行消息在批次 READY 后统一发送。</p>
      */
-    private EvalResultDetailDO splitSample(EvalTaskDetailDO taskDetail, DataSetSampleDO sample) {
+    private EvalResultDetailDO splitSample(EvalTaskDetailDO taskDetail,
+                                           DataSetSampleItemDO sample,
+                                           Map<Long, List<DataSetSampleDO>> datasetSamplesMap) {
         return transactionTemplate.execute(status -> {
             // 先查后插配合唯一索引，保证重复消费同一批次拆分消息时不会重复生成结果明细。
-            EvalResultDetailDO resultDetail = findResultDetail(taskDetail.getId(), sample.getId());
+            EvalResultDetailDO resultDetail = findResultDetail(taskDetail.getId(), sample.getDatasetSampleId());
             if (resultDetail == null) {
                 resultDetail = EvalResultDetailDO.builder()
                         .id(IdUtil.getSnowflake().nextId())
                         .taskId(taskDetail.getTaskId())
                         .taskDetailId(taskDetail.getId())
                         .sampleId(sample.getId())
-                        .inputText(sample.getQuestion())
-                        .riskDetailsId(sample.getRiskDetailsId())
+                        .inputText(datasetSamplesMap.get(sample.getDatasetSampleId()).getFirst().getQuestion())
+                        .riskDetailsId(datasetSamplesMap.get(sample.getDatasetSampleId()).getFirst().getRiskDetailsId())
                         .isSafe(EvalSafeStatusEnums.UNJUDGED.getCode())
                         .status(EvalResultStatusEnums.PENDING.getCode())
                         .knowledgeVersion(taskDetail.getKnowledgeVersion())
