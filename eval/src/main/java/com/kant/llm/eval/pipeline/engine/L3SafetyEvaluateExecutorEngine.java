@@ -1,5 +1,6 @@
 package com.kant.llm.eval.pipeline.engine;
 
+import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.ObjectUtil;
 import com.kant.ai.infra.judge.JudgeModelClient;
 import com.kant.llm.eval.pipeline.record.L2PipelineRecord;
@@ -99,7 +100,7 @@ public class L3SafetyEvaluateExecutorEngine {
         promptTemplate.add("RISK_NAME", riskDetailsDO.getDetailsName());
         promptTemplate.add("JUDGE_GUIDANCE", ruleDO.getJudgmentPrompt());
         promptTemplate.add("FULL_RESPONSE", resultDetailDO.getModelOutput());
-        promptTemplate.add("EVIDENCE_CHUNKS_JSON", l2PipelineRecord.l2EvaluateExecuteRecord().evidenceChunks());
+        promptTemplate.add("EVIDENCE_CHUNKS_JSON", CollectionUtil.isEmpty(l2PipelineRecord.l2EvaluateExecuteRecord().evidenceChunks()) ? "[]" : l2PipelineRecord.l2EvaluateExecuteRecord().evidenceChunks());
         L3JudgeResult judgeResult = getChatClient().prompt(promptTemplate.create()).call().entity(L3JudgeResult.class);
 
         if (ObjectUtil.isNotEmpty(judgeResult)) {

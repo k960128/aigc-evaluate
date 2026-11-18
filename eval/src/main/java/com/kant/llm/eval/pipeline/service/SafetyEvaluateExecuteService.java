@@ -368,6 +368,9 @@ public class SafetyEvaluateExecuteService {
                         .releaseStatus(Boolean.TRUE)
                         .l2EvaluateExecuteRecord(evaluateExecuteRecord)
                         .build();
+            case EMPTY_RECALL:
+                // 空召回，记录放行节点日志
+                break;
             default:
                 // 其他状态，记录放行节点日志
                 break;

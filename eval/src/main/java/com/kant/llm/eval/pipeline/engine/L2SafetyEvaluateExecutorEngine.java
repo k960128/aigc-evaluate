@@ -68,6 +68,13 @@ public class L2SafetyEvaluateExecutorEngine {
                 .similarityThreshold(0.85) // 获取分数大于0.85的文档
                 .filterExpression("riskDetailsId == " + request.getTargetRiskDetailsId())
                 .build());
+
+        // 短路点 当召回为空时，直接返回
+        if (vectorRecallResult.isEmpty() && esRecallResult.isEmpty()) {
+            return L2EvaluateExecuteRecord.builder()
+                    .status(SafetyEvaluateStatusEnums.EMPTY_RECALL)
+                    .build();
+        }
         // 3. RRF融合
         List<Document> rrfFusion = rrfFusion(vectorRecallResult, esRecallResult, DEFAULT_TOP_K);
         // 4. ReRank

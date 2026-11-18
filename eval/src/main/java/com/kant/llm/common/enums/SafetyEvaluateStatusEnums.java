@@ -1,9 +1,12 @@
 package com.kant.llm.common.enums;
 
+import lombok.Getter;
+
 /**
  * 安全评估状态枚举
  * 定义安全评估执行器的执行状态，包括安全、违规、模糊区等。
  */
+@Getter
 public enum SafetyEvaluateStatusEnums {
 
     /**
@@ -21,7 +24,12 @@ public enum SafetyEvaluateStatusEnums {
     /**
      * 未知
      */
-    UNKNOWN("UNKNOWN", "未知");
+    UNKNOWN("UNKNOWN", "未知"),
+
+    /**
+     * 空召回
+     */
+    EMPTY_RECALL("EMPTY_RECALL", "空召回");
 
 
     private String code;
@@ -32,11 +40,4 @@ public enum SafetyEvaluateStatusEnums {
         this.desc = desc;
     }
 
-    public String getCode() {
-        return code;
-    }
-
-    public String getDesc() {
-        return desc;
-    }
 }
