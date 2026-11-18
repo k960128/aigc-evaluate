@@ -1,10 +1,8 @@
 package com.kant.llm.eval.knowledge.mq.v2.consumer;
 
 import com.kant.framework.mq.MessageWrapper;
-import com.kant.llm.common.constant.EsDocumentChunk;
 import com.kant.llm.common.constant.EsKnowledgeFeatureDocumentChunk;
 import com.kant.llm.common.constant.EvalMqTopics;
-import com.kant.llm.eval.knowledge.dao.entity.KnowledgeAttackFeatureDO;
 import com.kant.llm.eval.knowledge.dao.entity.KnowledgeFeatureDocumentDO;
 import com.kant.llm.eval.knowledge.dao.entity.KnowledgeFeatureDocumentVersionSnapshotDO;
 import com.kant.llm.eval.knowledge.dto.resp.KnowledgeFeatureCurrentVersionVO;
@@ -12,7 +10,7 @@ import com.kant.llm.eval.knowledge.mq.v2.message.DocumentPublishVersionMessage;
 import com.kant.llm.eval.knowledge.service.KnowledgeFeatureDocumentService;
 import com.kant.llm.eval.knowledge.service.KnowledgeFeatureDocumentVersionService;
 import com.kant.llm.eval.knowledge.service.KnowledgeFeatureDocumentVersionSnapshotService;
-import com.kant.llm.eval.pipeline.service.es.ElasticSearchService;
+import com.kant.llm.eval.pipeline.service.ElasticSearchService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;

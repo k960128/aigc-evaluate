@@ -19,7 +19,7 @@ import com.kant.llm.eval.task.dao.mapper.EvalResultDetailMapper;
 import com.kant.llm.eval.task.dao.mapper.EvalTaskDetailMapper;
 import com.kant.llm.common.constant.EvalMqTopics;
 import com.kant.llm.eval.es.service.EvalEsSyncOutboxService;
-import com.kant.llm.eval.pipeline.mq.message.ModelCallMessage;
+import com.kant.llm.eval.pipeline.record.ModelCallMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;

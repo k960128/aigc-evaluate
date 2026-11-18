@@ -17,7 +17,7 @@ import com.kant.llm.eval.knowledge.mq.v1.producer.KbSyncMqProducer;
 import com.kant.llm.eval.knowledge.service.KnowledgeSyncEventService;
 import com.kant.llm.eval.knowledge.service.L2KnowledgeSyncService;
 import com.kant.llm.eval.knowledge.service.KnowledgeAttackFeatureService;
-import com.kant.llm.eval.pipeline.service.es.ElasticSearchService;
+import com.kant.llm.eval.pipeline.service.ElasticSearchService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;

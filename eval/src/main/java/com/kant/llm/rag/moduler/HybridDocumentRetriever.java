@@ -1,7 +1,7 @@
 package com.kant.llm.rag.moduler;
 
 import com.kant.llm.common.constant.EsDocumentChunk;
-import com.kant.llm.eval.pipeline.service.es.ElasticSearchService;
+import com.kant.llm.eval.pipeline.service.ElasticSearchService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.rag.Query;
