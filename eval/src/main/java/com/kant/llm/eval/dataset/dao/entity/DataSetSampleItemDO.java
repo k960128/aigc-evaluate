@@ -35,7 +35,7 @@ public class DataSetSampleItemDO {
     /**
      * 样本ID
      */
-    private Long sampleId;
+    private Long datasetSampleId;
 
     /**
      * 创建时间

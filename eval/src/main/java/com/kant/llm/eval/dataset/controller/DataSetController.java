@@ -169,7 +169,7 @@ public class DataSetController {
                 relationPage.getCurrent(), relationPage.getSize(), relationPage.getTotal());
         voPage.setRecords(relationPage.getRecords().stream()
                 .map(relation -> {
-                    DataSetSampleDO sample = sampleMap.get(relation.getSampleId());
+                    DataSetSampleDO sample = sampleMap.get(relation.getDatasetSampleId());
                     return sample == null ? null : convertToSampleVO(sample, relation.getDatasetId());
                 })
                 .filter(Objects::nonNull)
@@ -245,7 +245,7 @@ public class DataSetController {
      */
     private Map<Long, DataSetSampleDO> buildSampleMap(List<DataSetSampleItemDO> relations) {
         List<Long> sampleIds = relations.stream()
-                .map(DataSetSampleItemDO::getSampleId)
+                .map(DataSetSampleItemDO::getDatasetSampleId)
                 .filter(Objects::nonNull)
                 .distinct()
                 .collect(Collectors.toList());
