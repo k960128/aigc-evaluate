@@ -23,4 +23,11 @@ public class ClientModelInfo {
      * 模型厂商标识
      */
     private ModelManufacturerEnum manufacturerType;
+
+    /**
+     * 用于测试连通性还是大模型CallBack
+     * value:TEST_CONNECTION | CALL_BACK
+     */
+    @Builder.Default
+    private String type = "CALL_BACK";
 }

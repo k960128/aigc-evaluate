@@ -13,6 +13,10 @@ import com.kant.llm.eval.task.dto.resp.EvalTaskDetailVO;
 import com.kant.llm.eval.task.dto.resp.EvalTaskStatusVO;
 import com.kant.llm.eval.task.dto.resp.EvalTaskVO;
 import com.kant.llm.eval.task.service.EvalTaskService;
+import com.kant.llm.eval.task.service.EvalResultRetryService;
+import com.kant.llm.eval.task.dto.req.RetryEvalResultRequest;
+import com.kant.llm.eval.task.dto.resp.RetryEvalResultVO;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,9 +26,17 @@ import java.util.List;
 public class EvalTaskController {
 
     private final EvalTaskService evalTaskService;
+    private final EvalResultRetryService evalResultRetryService;
 
-    public EvalTaskController(EvalTaskService evalTaskService) {
+    public EvalTaskController(EvalTaskService evalTaskService, EvalResultRetryService evalResultRetryService) {
         this.evalTaskService = evalTaskService;
+        this.evalResultRetryService = evalResultRetryService;
+    }
+
+    /** 异步重试单条样本，返回受理轮次。 */
+    @PostMapping("/result/retry")
+    public Result<RetryEvalResultVO> retryEvalResult(@Valid @RequestBody RetryEvalResultRequest request) {
+        return Results.success(evalResultRetryService.retry(request));
     }
 
     /**
@@ -33,8 +45,9 @@ public class EvalTaskController {
      * @return 无返回数据
      */
     @PostMapping("/create")
-    public void createEvalTask(@RequestBody CreateEvalTaskRequest request) {
+    public Result<Boolean> createEvalTask(@RequestBody CreateEvalTaskRequest request) {
         evalTaskService.createEvalTask(request);
+        return Results.success(true);
     }
 
     /**
@@ -44,8 +57,7 @@ public class EvalTaskController {
      */
     @PostMapping("/submit")
     public Result<Boolean> submitEvalTask(@RequestParam("taskId") Long taskId) {
-        Boolean b = evalTaskService.submitEvalTask(taskId);
-        return Results.success(b);
+        return Results.success(evalTaskService.submitEvalTask(taskId));
     }
 
     /**
@@ -58,8 +70,7 @@ public class EvalTaskController {
      */
     @PostMapping("/stop")
     public Result<Boolean> stopEvalTask(@RequestParam("taskId") Long taskId) {
-        Boolean stopped = evalTaskService.stopEvalTask(taskId);
-        return Results.success(stopped);
+        return Results.success(evalTaskService.stopEvalTask(taskId));
     }
 
     /**
@@ -72,8 +83,7 @@ public class EvalTaskController {
      */
     @PostMapping("/page")
     public Result<Page<EvalTaskVO>> pageEvalTask(@RequestBody EvalTaskPageRequest request) {
-        Page<EvalTaskVO> pageResult = evalTaskService.pageEvalTask(request);
-        return Results.success(pageResult);
+        return Results.success(evalTaskService.pageEvalTask(request));
     }
 
     /**
@@ -86,8 +96,7 @@ public class EvalTaskController {
      */
     @PostMapping("/detail/page")
     public Result<Page<EvalTaskDetailVO>> pageEvalTaskDetail(@RequestBody EvalTaskDetailPageRequest request) {
-        Page<EvalTaskDetailVO> pageResult = evalTaskService.pageEvalTaskDetail(request);
-        return Results.success(pageResult);
+        return Results.success(evalTaskService.pageEvalTaskDetail(request));
     }
 
     /**
@@ -100,8 +109,7 @@ public class EvalTaskController {
      */
     @PostMapping("/result/page")
     public Result<Page<EvalResultDetailVO>> pageEvalResultDetail(@RequestBody EvalResultDetailPageRequest request) {
-        Page<EvalResultDetailVO> pageResult = evalTaskService.pageEvalResultDetail(request);
-        return Results.success(pageResult);
+        return Results.success(evalTaskService.pageEvalResultDetail(request));
     }
 
     /**
@@ -114,8 +122,7 @@ public class EvalTaskController {
      */
     @GetMapping("/status")
     public Result<EvalTaskStatusVO> getEvalTaskStatus(@RequestParam("taskId") Long taskId) {
-        EvalTaskStatusVO status = evalTaskService.getEvalTaskStatus(taskId);
-        return Results.success(status);
+        return Results.success(evalTaskService.getEvalTaskStatus(taskId));
     }
 
     /**
@@ -128,8 +135,7 @@ public class EvalTaskController {
      */
     @GetMapping("/pipeline-node/list")
     public Result<List<EvalPipelineNodeDetailVO>> listPipelineNodeLogs(@RequestParam("resultDetailId") Long resultDetailId) {
-        List<EvalPipelineNodeDetailVO> logs = evalTaskService.listPipelineNodeLogs(resultDetailId);
-        return Results.success(logs);
+        return Results.success(evalTaskService.listPipelineNodeLogs(resultDetailId));
     }
 
     /**

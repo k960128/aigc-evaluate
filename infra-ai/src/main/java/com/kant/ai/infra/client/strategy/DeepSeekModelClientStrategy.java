@@ -3,6 +3,7 @@ package com.kant.ai.infra.client.strategy;
 import cn.hutool.core.util.ObjectUtil;
 import com.kant.ai.infra.client.*;
 import com.kant.ai.infra.enums.ModelManufacturerEnum;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
@@ -15,6 +16,12 @@ import java.util.concurrent.TimeUnit;
 
 @Slf4j
 public class DeepSeekModelClientStrategy implements ModelClientStrategy {
+    private final ObservationRegistry observationRegistry;
+
+    public DeepSeekModelClientStrategy(ObservationRegistry observationRegistry) {
+        this.observationRegistry = observationRegistry;
+    }
+
 
     @Override
     public ModelResponse call(ModelRequest modelRequest) {
@@ -27,12 +34,11 @@ public class DeepSeekModelClientStrategy implements ModelClientStrategy {
                 .defaultOptions(DeepSeekChatOptions.builder()
                         .model(modelRequest.getClientModelInfo().getModel())
                         .build())
+                .observationRegistry(observationRegistry)
                 .build();
-        ChatClient client = ChatClient.builder(chatModel).build();
-        ChatClient.ChatClientRequestSpec requestSpec = client.prompt(modelRequest.getInputText());
-        log.error("DeepSeekModelClientStrategy requestSpec: {}", requestSpec);
+        ChatClient client = ChatClient.create(chatModel, observationRegistry);
+        ChatClient.ChatClientRequestSpec requestSpec = ChatClientRequestSupport.prompt(client, modelRequest);
         ChatClient.CallResponseSpec call = requestSpec.call();
-        log.error("DeepSeekModelClientStrategy call: {}", call);
         long endTime = System.currentTimeMillis();
         return ModelResponse.builder()
                 .modelId(modelRequest.getClientModelInfo().getModelId())
@@ -58,8 +64,9 @@ public class DeepSeekModelClientStrategy implements ModelClientStrategy {
                 .defaultOptions(DeepSeekChatOptions.builder()
                         .model(modelRequest.getClientModelInfo().getModel())
                         .build())
+                .observationRegistry(observationRegistry)
                 .build();
-        ChatClient client = ChatClient.builder(chatModel).build();
+        ChatClient client = ChatClient.create(chatModel, observationRegistry);
         ChatClient.ChatClientRequestSpec requestSpec = client.prompt("只返回1,不要返回其他任何内容!");
         ChatClient.CallResponseSpec call = requestSpec.call();
         String content = call.content();

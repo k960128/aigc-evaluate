@@ -32,6 +32,9 @@ public class DataSetSampleVO {
     /** 题目绑定的风险小类 ID，用于 L2 按评测类型约束知识库召回范围。 */
     private Long riskDetailsId;
 
+    /** 风险等级，表示样本所属的风险等级，危险程度：基础-BASIC、进阶-MEDIATE、高危-HIGH */
+    private String levelOfDanger;
+
     /** 创建时间，表示样本记录首次创建的时间。 */
     @JsonSerialize(using = LocalDateTimeSerializer.class)
     private LocalDateTime createTime;

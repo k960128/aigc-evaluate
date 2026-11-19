@@ -4,7 +4,7 @@ import com.alibaba.cloud.ai.dashscope.rerank.DashScopeRerankModel;
 import com.alibaba.cloud.ai.model.RerankRequest;
 import com.alibaba.cloud.ai.model.RerankResponse;
 import com.kant.llm.common.constant.EsDocumentChunk;
-import com.kant.llm.eval.pipeline.service.es.ElasticSearchService;
+import com.kant.llm.eval.pipeline.service.ElasticSearchService;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;

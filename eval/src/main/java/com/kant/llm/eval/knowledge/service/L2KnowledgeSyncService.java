@@ -1,8 +1,8 @@
 package com.kant.llm.eval.knowledge.service;
 
 import com.kant.llm.eval.knowledge.dto.resp.L2KnowledgeSyncSubmitVO;
-import com.kant.llm.eval.knowledge.mq.message.KbSyncEventMessage;
-import com.kant.llm.eval.knowledge.mq.message.L2KnowledgeSyncBatchMessage;
+import com.kant.llm.eval.knowledge.mq.v1.message.KbSyncEventMessage;
+import com.kant.llm.eval.knowledge.mq.v1.message.L2KnowledgeSyncBatchMessage;
 
 /**
  * L2 知识库索引同步服务。

@@ -28,4 +28,10 @@ public class EvalTaskSplitMessage {
 
     /** 任务执行流水号，用于日志排查和批次追踪。 */
     private Long serialNo;
+
+    /** 知识特征版本 ID。 */
+    private Long knowledgeVersionId;
+
+    /** 知识特征版本。 */
+    private Integer knowledgeVersion;
 }

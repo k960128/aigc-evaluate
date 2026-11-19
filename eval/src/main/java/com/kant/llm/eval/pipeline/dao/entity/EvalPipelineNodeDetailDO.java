@@ -42,6 +42,9 @@ public class EvalPipelineNodeDetailDO {
     /** 评测结果明细ID，对应 eval_result_detail.id */
     private Long resultDetailId;
 
+    /** 本节点所属的样本执行轮次。 */
+    private Integer executionVersion;
+
     /** 数据集样本ID，对应 dataset_sample.id */
     private Long sampleId;
 

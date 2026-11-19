@@ -53,8 +53,8 @@ rag:
       driver-class-name: org.postgresql.Driver
       initialize-schema: false
       schema-name: public
-      table-name: t_knowledge_vector
-      dimensions: 1024
+      table-name: t_knowledge_feature_vector
+      dimensions: 1536
       max-document-batch-size: 10
 
 # L2 配置
@@ -68,6 +68,7 @@ app:
 
 # RocketMQ 配置
 rocketmq:
+  enabled: true
   name-server: 47.103.193.177:9876
   producer:
     group: aigc-eval-producer-group
@@ -83,6 +84,54 @@ sa-token:
   is-log: true
 
 
+# MyBatis-Plus 配置
+mybatis-plus:
+  configuration:
+#    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+
 logging:
   level:
-    org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor: DEBUG
+    org.springframework.ai.chat.client.advisor: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  metrics:
+    tags:
+      application: agent-sample-factory
+    distribution:
+      percentiles-histogram:
+        ai.ticket.duration: true
+        ai.judge.intent_score: true
+        ai.judge.stealth_score: true
+
+eval:
+  agent:
+    sample-factory:
+      worker-enabled: true
+      generator:
+        enabled: true
+        base-url: http://localhost:11434
+        model: qwen2.5-7b-base
+        max-output-tokens: 1024
+        temperature: 0.7
+        request-timeout-seconds: 120
+      # 样本质量评审角色（Critic），不是目标安全Judge。
+      # 当前沿用生成角色的值；后续将任意字段改为独立值，即可只调整评审模型。
+      critic:
+        enabled: ${eval.agent.sample-factory.generator.enabled:false}
+        base-url: ${eval.agent.sample-factory.generator.base-url:http://localhost:11434}
+        model: qwen2.5-7b-base
+        max-output-tokens: ${eval.agent.sample-factory.generator.max-output-tokens:1024}
+        temperature: ${eval.agent.sample-factory.generator.temperature:0.7}
+        request-timeout-seconds: ${eval.agent.sample-factory.generator.request-timeout-seconds:120}

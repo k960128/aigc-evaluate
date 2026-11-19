@@ -1,0 +1,1781 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>样本工厂三期演进方案 · 架构与流程</title>
+<style>
+:root {
+  --bg: #f7f8fa;
+  --surface: #fff;
+  --text: #1f2328;
+  --text-soft: #57606a;
+  --text-mute: #8a9199;
+  --border: #e4e7eb;
+  --border-soft: #eef0f3;
+  --accent: #2563eb;
+  --accent-soft: #eff4ff;
+  --purple: #7c3aed;
+  --purple-soft: #f5f3ff;
+  --green: #059669;
+  --green-soft: #ecfdf5;
+  --amber: #d97706;
+  --amber-soft: #fffbeb;
+  --red: #dc2626;
+  --red-soft: #fef2f2;
+  --radius: 12px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.05);
+  --shadow: 0 1px 3px rgba(0,0,0,.06), 0 6px 16px rgba(0,0,0,.04);
+  --sidebar-w: 260px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+               "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg); color: var(--text); line-height: 1.75;
+  font-size: 15px; -webkit-font-smoothing: antialiased;
+}
+#readingBar {
+  position: fixed; top: 0; left: 0; height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--purple));
+  z-index: 300; width: 0; transition: width .1s linear;
+}
+.layout { display: flex; max-width: 1420px; margin: 0 auto; padding: 0 24px; gap: 32px; }
+
+/* 侧边 */
+.sidebar {
+  width: var(--sidebar-w); flex-shrink: 0; position: sticky; top: 0;
+  align-self: flex-start; height: 100vh; overflow-y: auto;
+  padding: 28px 0; scrollbar-width: thin;
+}
+.sidebar::-webkit-scrollbar { width: 6px; }
+.sidebar::-webkit-scrollbar-thumb { background: #d0d7de; border-radius: 3px; }
+.sidebar-title {
+  font-size: 12px; font-weight: 600; color: var(--text-mute);
+  text-transform: uppercase; letter-spacing: .1em; margin: 0 0 14px 12px;
+}
+.toc { list-style: none; margin: 0; padding: 0; }
+.toc a {
+  display: block; padding: 5px 12px; color: var(--text-soft); text-decoration: none;
+  font-size: 13.5px; border-left: 2px solid transparent; transition: all .15s;
+  border-radius: 0 6px 6px 0;
+}
+.toc a:hover { color: var(--accent); background: var(--accent-soft); }
+.toc a.active { color: var(--accent); background: var(--accent-soft);
+  border-left-color: var(--accent); font-weight: 600; }
+.toc .sub a { padding-left: 26px; font-size: 12.5px; color: var(--text-mute); }
+.toc .sub a.active { color: var(--accent); }
+.ptag {
+  display: inline-block; padding: 0 6px; border-radius: 3px;
+  font-size: 10px; font-weight: 700; margin-right: 6px; vertical-align: 1px;
+  letter-spacing: .02em;
+}
+.ptag.p1 { background: #dbeafe; color: #2563eb; }
+.ptag.p2 { background: #ede9fe; color: #7c3aed; }
+.ptag.p3 { background: #fee2e2; color: #dc2626; }
+
+/* 主内容 */
+.main { flex: 1; min-width: 0; padding: 28px 0 100px; }
+.doc {
+  background: var(--surface); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 52px 56px; max-width: 900px;
+}
+
+/* 封面 */
+.cover { padding-bottom: 32px; margin-bottom: 36px; border-bottom: 1px solid var(--border); }
+.cover h1 { font-size: 32px; line-height: 1.25; margin: 0 0 10px; letter-spacing: -.02em; }
+.cover .subtitle { font-size: 16.5px; color: var(--text-soft); margin: 0 0 22px; }
+.cover .meta { display: flex; flex-wrap: wrap; gap: 6px 24px; font-size: 13px; color: var(--text-soft); }
+.cover .meta strong { color: var(--text); }
+
+/* 阶段横幅 */
+.phase-banner {
+  display: flex; align-items: center; gap: 16px; padding: 18px 22px;
+  border-radius: 12px; margin: 0 0 20px;
+  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+  color: #fff;
+}
+.phase-banner.p2 { background: linear-gradient(135deg, #7c3aed 0%, #c026d3 100%); }
+.phase-banner.p3 { background: linear-gradient(135deg, #dc2626 0%, #ea580c 100%); }
+.phase-banner .num {
+  font-size: 28px; font-weight: 800; opacity: .6; line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.phase-banner .txt h3 { margin: 0; font-size: 18px; font-weight: 700; }
+.phase-banner .txt p { margin: 4px 0 0; font-size: 13px; opacity: .9; }
+
+/* 标题 */
+h2 {
+  font-size: 22px; font-weight: 700; margin: 56px 0 18px;
+  padding-bottom: 10px; border-bottom: 1px solid var(--border);
+  scroll-margin-top: 20px; letter-spacing: -.01em;
+}
+h2:first-of-type { margin-top: 0; }
+h3 {
+  font-size: 16.5px; font-weight: 600; margin: 32px 0 12px;
+  scroll-margin-top: 20px;
+}
+h4 { font-size: 14.5px; font-weight: 600; margin: 22px 0 10px; color: var(--text); }
+p { margin: 0 0 14px; }
+ul, ol { margin: 0 0 14px; padding-left: 22px; }
+li { margin: 5px 0; }
+code {
+  font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  font-size: 12.5px; background: #f2f4f7; padding: 2px 5px;
+  border-radius: 4px; color: #b91c5c;
+}
+
+/* 表格 */
+.table-wrap { overflow-x: auto; margin: 0 0 22px; border: 1px solid var(--border); border-radius: 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 460px; }
+thead th {
+  background: #fafbfc; text-align: left; padding: 11px 14px;
+  font-weight: 600; border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+tbody td { padding: 10px 14px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: #fafbfc; }
+
+/* 提示块 */
+.callout {
+  padding: 14px 18px; border-radius: 10px; margin: 0 0 20px;
+  border-left: 4px solid var(--accent); background: var(--accent-soft);
+  font-size: 14px;
+}
+.callout strong { color: var(--accent); }
+.callout.warn { border-left-color: var(--amber); background: var(--amber-soft); }
+.callout.warn strong { color: var(--amber); }
+.callout.danger { border-left-color: var(--red); background: var(--red-soft); }
+.callout.danger strong { color: var(--red); }
+.callout.success { border-left-color: var(--green); background: var(--green-soft); }
+.callout.success strong { color: var(--green); }
+
+/* 阶段定位卡 */
+.position-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px; margin: 0 0 22px;
+}
+.position-card {
+  padding: 16px 18px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); transition: all .25s; position: relative; overflow: hidden;
+}
+.position-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--purple));
+  transform: scaleX(0); transform-origin: left; transition: transform .4s;
+}
+.position-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+.position-card:hover::before { transform: scaleX(1); }
+.position-card .k {
+  font-size: 11px; color: var(--text-mute); text-transform: uppercase;
+  letter-spacing: .06em; font-weight: 700; margin-bottom: 6px;
+}
+.position-card .v { font-size: 14.5px; font-weight: 600; line-height: 1.4; }
+
+/* 流程图 */
+.diagram {
+  background: linear-gradient(180deg, #fafbfc, #f4f6f9);
+  border: 1px solid var(--border); border-radius: 12px;
+  padding: 28px 20px; margin: 0 0 22px; overflow-x: auto;
+}
+.diagram-caption {
+  text-align: center; font-size: 12.5px; color: var(--text-mute);
+  margin: 12px 0 0; font-style: italic;
+}
+.row {
+  display: flex; align-items: center; justify-content: center;
+  gap: 10px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.row:last-child { margin-bottom: 0; }
+.node {
+  padding: 9px 16px; border-radius: 8px; font-size: 12.5px; font-weight: 600;
+  white-space: nowrap; border: 1.5px solid var(--border); background: #fff;
+  transition: all .25s; text-align: center;
+}
+.node:hover { transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+.node.api    { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
+.node.svc    { background: #eff6ff; border-color: #93c5fd; color: #1e40af; }
+.node.pipe   { background: #f5f3ff; border-color: #c4b5fd; color: #5b21b6; }
+.node.agent  {
+  background: linear-gradient(135deg, #2563eb, #7c3aed); color: #fff;
+  border-color: transparent; animation: pulse 2.6s infinite;
+}
+.node.tool   { background: #ecfdf5; border-color: #6ee7b7; color: #065f46; }
+.node.store  { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
+.node.super  {
+  background: linear-gradient(135deg, #7c3aed, #c026d3); color: #fff;
+  border-color: transparent; animation: pulse 2.6s infinite;
+}
+.node.auto   {
+  background: linear-gradient(135deg, #dc2626, #ea580c); color: #fff;
+  border-color: transparent; animation: pulse 2.6s infinite;
+}
+.node.bus    { background: #fef3c7; border-color: #fbbf24; color: #92400e; }
+.node.stop   { background: #f3f4f6; border-color: #d1d5db; color: #4b5563; }
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,.35); }
+  50%      { box-shadow: 0 0 0 10px rgba(99,102,241,0); }
+}
+
+.arrow { color: var(--text-mute); font-size: 15px; animation: slideX 1.6s infinite; }
+.arrow.down { display: block; text-align: center; margin: 6px 0; }
+@keyframes slideX {
+  0%, 100% { transform: translateX(0); opacity: .55; }
+  50%      { transform: translateX(3px); opacity: 1; }
+}
+
+/* 时序图 */
+.sequence { margin: 0 0 22px; }
+.seq-row {
+  display: grid; grid-template-columns: 140px 1fr;
+  gap: 12px; align-items: start; padding: 10px 0;
+  border-bottom: 1px dashed var(--border-soft);
+}
+.seq-row:last-child { border-bottom: none; }
+.seq-actor {
+  font-size: 12.5px; font-weight: 700; color: var(--accent);
+  text-align: right; padding-top: 2px;
+}
+.seq-action {
+  font-size: 13.5px; padding: 8px 14px; border-radius: 8px;
+  background: #f8fafc; border-left: 3px solid var(--accent);
+}
+.seq-action.purple { border-left-color: var(--purple); background: #faf8ff; }
+.seq-action.green  { border-left-color: var(--green);  background: #f5fdf9; }
+.seq-action.amber  { border-left-color: var(--amber);  background: #fffdf5; }
+.seq-action.red    { border-left-color: var(--red);    background: #fef8f8; }
+
+/* 用例卡 */
+.usecase {
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 20px 22px; margin: 0 0 16px; background: #fcfdfe;
+  transition: all .25s;
+}
+.usecase:hover { box-shadow: var(--shadow); border-color: #c7d2fe; }
+.usecase-head {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+  padding-bottom: 10px; border-bottom: 1px dashed var(--border);
+}
+.usecase-head .icon {
+  width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; background: var(--accent-soft); color: var(--accent);
+}
+.usecase-head .title { font-size: 14.5px; font-weight: 700; }
+.usecase dl {
+  margin: 0; display: grid; grid-template-columns: 74px 1fr;
+  gap: 6px 14px; font-size: 13.5px;
+}
+.usecase dt { color: var(--text-mute); font-weight: 600; font-size: 12.5px; padding-top: 2px; }
+.usecase dd { margin: 0; }
+
+/* 可观测示例 */
+.obs-block {
+  border: 1px solid var(--border); border-radius: 10px;
+  overflow: hidden; margin: 0 0 18px;
+}
+.obs-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 16px; background: #f8fafc;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px; font-weight: 700; color: var(--text-soft);
+  letter-spacing: .02em;
+}
+.obs-head .dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+}
+.obs-head .dot.green { background: var(--green); }
+.obs-head .dot.amber { background: var(--amber); }
+.obs-head .dot.red   { background: var(--red); }
+.obs-body {
+  padding: 14px 16px; font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  font-size: 12.5px; line-height: 1.75; color: #334155;
+  background: #fcfdfe; white-space: pre; overflow-x: auto;
+}
+.obs-body .key   { color: #7c3aed; }
+.obs-body .str   { color: #059669; }
+.obs-body .num   { color: #2563eb; }
+.obs-body .dim   { color: #94a3b8; }
+.obs-body .warn  { color: #d97706; font-weight: 600; }
+.obs-body .err   { color: #dc2626; font-weight: 600; }
+
+/* 指标卡 */
+.metrics {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 10px; margin: 0 0 20px;
+}
+.metric {
+  padding: 14px 12px; text-align: center; border-radius: 10px;
+  border: 1px solid var(--border); background: linear-gradient(180deg, #fff, #fafbfc);
+  transition: all .25s;
+}
+.metric:hover { transform: translateY(-2px); border-color: var(--accent); }
+.metric .num {
+  font-size: 20px; font-weight: 700; color: var(--accent);
+  font-variant-numeric: tabular-nums; line-height: 1.2;
+}
+.metric .num.green { color: var(--green); }
+.metric .num.amber { color: var(--amber); }
+.metric .num.red   { color: var(--red); }
+.metric .lbl { font-size: 11.5px; color: var(--text-mute); margin-top: 3px; font-weight: 500; }
+
+/* 步骤 */
+.steps { counter-reset: s; list-style: none; padding: 0; margin: 0 0 22px; }
+.steps > li {
+  counter-increment: s; position: relative;
+  padding: 13px 18px 13px 52px; margin-bottom: 8px;
+  background: #fafbfc; border-radius: 9px;
+  border-left: 3px solid var(--accent); font-size: 14px;
+  transition: all .2s;
+}
+.steps > li:hover { background: var(--accent-soft); }
+.steps > li::before {
+  content: counter(s); position: absolute; left: 14px; top: 13px;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700;
+}
+.steps > li strong { color: var(--text); }
+
+/* Agent 卡片 */
+.agent-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px; margin: 0 0 22px;
+}
+.agent-card {
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px 18px; background: #fff;
+  transition: all .25s; border-top: 3px solid var(--accent);
+}
+.agent-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+.agent-card.tool   { border-top-color: var(--green); }
+.agent-card.super  { border-top-color: var(--purple); }
+.agent-card.auto   { border-top-color: var(--red); }
+.agent-card .name {
+  font-size: 14px; font-weight: 700; margin-bottom: 6px;
+  display: flex; align-items: center; gap: 6px;
+}
+.agent-card .role {
+  font-size: 12px; color: var(--text-mute); font-weight: 600;
+  text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px;
+}
+.agent-card .desc { font-size: 13px; color: var(--text-soft); line-height: 1.6; }
+
+/* 对比条 */
+.compare-row {
+  display: grid; grid-template-columns: 120px 1fr 1fr 1fr;
+  gap: 0; margin: 0 0 22px; border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden; font-size: 13px;
+}
+.compare-row > div {
+  padding: 11px 14px; border-bottom: 1px solid var(--border-soft);
+  border-right: 1px solid var(--border-soft);
+}
+.compare-row > div:nth-child(4n) { border-right: none; }
+.compare-row > div.head {
+  background: #f8fafc; font-weight: 700; font-size: 12.5px;
+  color: var(--text-soft); text-transform: uppercase; letter-spacing: .04em;
+}
+.compare-row > div.label {
+  background: #fcfdfe; font-weight: 600; color: var(--text-soft);
+}
+.compare-row > div.p1 { background: #f8fbff; }
+.compare-row > div.p2 { background: #fbf9ff; }
+.compare-row > div.p3 { background: #fffafa; }
+
+/* 页脚 */
+.footer {
+  margin-top: 60px; padding-top: 22px; border-top: 1px solid var(--border);
+  font-size: 12.5px; color: var(--text-mute); text-align: center;
+}
+
+/* 回顶 */
+#backTop {
+  position: fixed; right: 28px; bottom: 28px; width: 42px; height: 42px;
+  border-radius: 50%; background: var(--accent); color: #fff; border: none;
+  cursor: pointer; box-shadow: 0 4px 12px rgba(37,99,235,.3);
+  display: none; align-items: center; justify-content: center;
+  font-size: 17px; transition: all .2s; z-index: 100;
+}
+#backTop:hover { transform: translateY(-2px); }
+#backTop.show { display: flex; }
+
+/* 移动端 */
+.menu-toggle {
+  display: none; position: fixed; top: 14px; left: 14px; z-index: 200;
+  width: 40px; height: 40px; border-radius: 8px;
+  background: #fff; border: 1px solid var(--border);
+  box-shadow: var(--shadow); cursor: pointer;
+  align-items: center; justify-content: center; font-size: 17px;
+}
+@media (max-width: 1024px) {
+  .layout { padding: 0 14px; gap: 0; }
+  .sidebar {
+    position: fixed; left: 0; top: 0; width: 270px; height: 100vh;
+    background: #fff; border-right: 1px solid var(--border);
+    padding: 68px 14px 28px; z-index: 150;
+    transform: translateX(-100%); transition: transform .25s;
+    box-shadow: 4px 0 20px rgba(0,0,0,.06);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .menu-toggle { display: flex; }
+  .main { padding: 68px 0 70px; }
+  .doc { padding: 28px 20px; }
+  .cover h1 { font-size: 23px; }
+  h2 { font-size: 19px; }
+  .compare-row { grid-template-columns: 90px 1fr 1fr 1fr; font-size: 12px; }
+  .compare-row > div { padding: 9px 10px; }
+}
+@media print {
+  .sidebar, .menu-toggle, #backTop, #readingBar { display: none !important; }
+  .doc { box-shadow: none; padding: 0; }
+}
+</style>
+</head>
+<body>
+
+<div id="readingBar"></div>
+<button class="menu-toggle" id="menuToggle">☰</button>
+
+<div class="layout">
+
+  <!-- 侧边目录 -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-title">目录</div>
+    <ul class="toc" id="toc">
+      <li><a href="#intro">0. 阅读说明</a></li>
+      <li><a href="#overview">1. 三期总览</a></li>
+
+      <li><a href="#p1"><span class="ptag p1">一期</span>Workflow</a></li>
+      <li class="sub"><a href="#p1-goal">1.1 目标与定位</a></li>
+      <li class="sub"><a href="#p1-agents">1.2 Agent 清单</a></li>
+      <li class="sub"><a href="#p1-arch">1.3 架构图</a></li>
+      <li class="sub"><a href="#p1-flow">1.4 流程流转</a></li>
+      <li class="sub"><a href="#p1-usecase">1.5 用例</a></li>
+      <li class="sub"><a href="#p1-obs">1.6 可观测性</a></li>
+
+      <li><a href="#p2"><span class="ptag p2">二期</span>Supervisor</a></li>
+      <li class="sub"><a href="#p2-goal">2.1 目标与定位</a></li>
+      <li class="sub"><a href="#p2-agents">2.2 Agent 清单</a></li>
+      <li class="sub"><a href="#p2-arch">2.3 架构图</a></li>
+      <li class="sub"><a href="#p2-flow">2.4 流程流转</a></li>
+      <li class="sub"><a href="#p2-usecase">2.5 用例</a></li>
+      <li class="sub"><a href="#p2-obs">2.6 可观测性</a></li>
+
+      <li><a href="#p3"><span class="ptag p3">三期</span>自主 ReAct</a></li>
+      <li class="sub"><a href="#p3-goal">3.1 目标与定位</a></li>
+      <li class="sub"><a href="#p3-agents">3.2 Agent 清单</a></li>
+      <li class="sub"><a href="#p3-arch">3.3 架构图</a></li>
+      <li class="sub"><a href="#p3-flow">3.4 流程流转</a></li>
+      <li class="sub"><a href="#p3-usecase">3.5 用例</a></li>
+      <li class="sub"><a href="#p3-obs">3.6 可观测性</a></li>
+
+      <li><a href="#compare">4. 三期横向对比</a></li>
+      <li><a href="#migration">5. 迁移路径</a></li>
+      <li><a href="#summary">6. 总结</a></li>
+    </ul>
+  </aside>
+
+  <!-- 主内容 -->
+  <main class="main">
+    <article class="doc">
+
+      <!-- 封面 -->
+      <header class="cover">
+        <h1>样本工厂三期演进方案</h1>
+        <p class="subtitle">Workflow → Supervisor → 自主 ReAct · 架构 / Agent / 流程 / 可观测</p>
+        <div class="meta">
+          <span><strong>版本：</strong>v4.0</span>
+          <span><strong>技术栈：</strong>Spring Boot 3.4 / Spring AI 1.0.0</span>
+          <span><strong>文档定位：</strong>架构与流程说明</span>
+        </div>
+      </header>
+
+      <!-- 0. 阅读说明 -->
+      <h2 id="intro">0. 阅读说明</h2>
+
+      <p>本文档聚焦于<strong>每一期做什么、需要哪些 Agent、架构长什么样、流程如何流转</strong>，并配有用例与可观测性示例。不展开完整代码，只讲清楚系统全貌。</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>章节</th><th>回答什么问题</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>第 1 章</td><td>三期分别是什么、怎么选、成本多少</td></tr>
+            <tr><td>第 2 章</td><td>一期 Workflow：目标、Agent、架构、流程、用例、可观测</td></tr>
+            <tr><td>第 3 章</td><td>二期 Supervisor：同上维度</td></tr>
+            <tr><td>第 4 章</td><td>三期自主 ReAct：同上维度</td></tr>
+            <tr><td>第 5-7 章</td><td>横向对比、迁移路径、总结</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 1. 总览 -->
+      <h2 id="overview">1. 三期总览</h2>
+
+      <p>三期不是版本升级，而是<strong>三种不同的编排范式</strong>。它们共存于同一生产系统，覆盖不同的场景象限。</p>
+
+      <div class="diagram">
+        <div class="row">
+          <div class="node api">批量生产</div>
+          <span class="arrow">→</span>
+          <div class="node pipe">一期 Workflow</div>
+          <span class="arrow">→</span>
+          <div class="node svc">稳定产出</div>
+        </div>
+        <div class="row">
+          <div class="node api">补盲 / 异常</div>
+          <span class="arrow">→</span>
+          <div class="node super">二期 Supervisor</div>
+          <span class="arrow">→</span>
+          <div class="node svc">动态调整</div>
+        </div>
+        <div class="row">
+          <div class="node api">未知 / 探索</div>
+          <span class="arrow">→</span>
+          <div class="node auto">三期 ReAct</div>
+          <span class="arrow">→</span>
+          <div class="node svc">发现新策略</div>
+        </div>
+        <p class="diagram-caption">三期分别对应三类场景，互不替代，协同工作</p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>期</th><th>模式</th><th>定位</th><th>适用场景</th><th>成本</th><th>可预测性</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><span class="ptag p1">一期</span></td><td>Workflow</td><td>批量生产线</td><td>已知类别、标准扩充</td><td>低</td><td>高</td></tr>
+            <tr><td><span class="ptag p2">二期</span></td><td>Supervisor</td><td>灵活调度台</td><td>补盲、探索、异常处理</td><td>中</td><td>中</td></tr>
+            <tr><td><span class="ptag p3">三期</span></td><td>自主 ReAct</td><td>研究实验室</td><td>未知领域、策略发现</td><td>高</td><td>低</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <strong>核心差异一句话：</strong>控制流从「Java 代码」到「Supervisor 的 LLM」再到「N 个自主 Agent 的消息传递」，每往上一期，能力上限提高，可预测性下降。
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- ========================= 一期 ============================= -->
+      <!-- ============================================================ -->
+
+      <h2 id="p1">2. 一期：Workflow 模式</h2>
+
+      <div class="phase-banner">
+        <div class="num">01</div>
+        <div class="txt">
+          <h3>批量生产线</h3>
+          <p>控制流写死在 Java 里，LLM 只负责内容生成与判定</p>
+        </div>
+      </div>
+
+      <!-- 2.1 目标 -->
+      <h3 id="p1-goal">2.1 目标与定位</h3>
+
+      <p>一期解决的是<strong>「稳定批量生产安全评测样本」</strong>的问题。所有步骤可枚举、可复现、可预估，是整个样本工厂的生产主力。</p>
+
+      <div class="position-grid">
+        <div class="position-card"><div class="k">核心目标</div><div class="v">批量、稳定、便宜地扩充样本</div></div>
+        <div class="position-card"><div class="k">控制流位置</div><div class="v">Java 代码（for 循环）</div></div>
+        <div class="position-card"><div class="k">谁决定下一步</div><div class="v">程序员</div></div>
+        <div class="position-card"><div class="k">Agent 自主性</div><div class="v">无，被动执行</div></div>
+      </div>
+
+      <h4>适用 / 不适用</h4>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>✅ 适用</th><th>❌ 不适用</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>已有成熟类别的批量扩充</td>
+              <td>需要根据结果动态调整策略</td>
+            </tr>
+            <tr>
+              <td>需要可复现、可审计的生产任务</td>
+              <td>处理全新、未知的样本方向</td>
+            </tr>
+            <tr>
+              <td>成本敏感、调用次数可预估</td>
+              <td>需要 Agent 主动拒绝或要求补充信息</td>
+            </tr>
+            <tr>
+              <td>标准化验收，通过率稳定</td>
+              <td>探索性、试错性的研究任务</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 2.2 Agent 清单 -->
+      <h3 id="p1-agents">2.2 Agent 清单</h3>
+
+      <p>一期共 <strong>5 个 Worker Agent</strong>，每个单一职责、互不感知、无自主权。它们按固定顺序被调用，前一个的输出是后一个的输入。</p>
+
+      <div class="agent-grid">
+        <div class="agent-card">
+          <div class="role">Agent 1</div>
+          <div class="name">🌱 SeedCuratorAgent</div>
+          <div class="desc"><strong>策展种子。</strong>把主题方向展开成 N 条结构化种子，每条含 content / category / attackType / language / difficulty。种子写入本地缓存供后续查找。</div>
+        </div>
+        <div class="agent-card">
+          <div class="role">Agent 2</div>
+          <div class="name">✍️ GeneratorAgent</div>
+          <div class="desc"><strong>生成候选。</strong>从种子 + 任务约束批量生成候选样本。一次生成 1 条，外层循环控制批量，避免模型把 N 条塞进一条。</div>
+        </div>
+        <div class="agent-card">
+          <div class="role">Agent 3</div>
+          <div class="name">🛡️ SafetyFilterAgent</div>
+          <div class="desc"><strong>安全过滤。</strong>判定候选是否可放行。拦截条件：真实 PII、真实组织名、具体违法步骤。解析失败保守拦截。</div>
+        </div>
+        <div class="agent-card">
+          <div class="role">Agent 4</div>
+          <div class="name">🧹 DedupAgent</div>
+          <div class="desc"><strong>去重。</strong>归一化 + SHA-256 精确哈希。设置 <code>contentHash</code> 供后续判重，命中则拦截为 DUPLICATE。</div>
+        </div>
+        <div class="agent-card">
+          <div class="role">Agent 5</div>
+          <div class="name">⭐ QualityReviewerAgent</div>
+          <div class="desc"><strong>质量评审。</strong>四维评分（相关性 / 清晰度 / 可复现性 / 多样性）。<code>score ≥ 75</code> 判通过。与生成环节独立，避免"自己判自己"。</div>
+        </div>
+      </div>
+
+      <div class="callout warn">
+        <strong>设计原则：</strong>每个 Agent 只做一件事，不做决策、不做编排、不感知其他 Agent。所有顺序由 Java 代码决定。
+      </div>
+
+      <!-- 2.3 架构图 -->
+      <h3 id="p1-arch">2.3 架构图</h3>
+
+      <div class="diagram">
+        <div class="row">
+          <div class="node api">REST 接口<br><span style="font-weight:400;font-size:11px;">POST /produce</span></div>
+        </div>
+        <div class="arrow down">↓</div>
+        <div class="row">
+          <div class="node svc">SampleFactoryService<br><span style="font-weight:400;font-size:11px;">业务编排 / 统计</span></div>
+        </div>
+        <div class="arrow down">↓</div>
+        <div class="row">
+          <div class="node pipe">SamplePipeline<br><span style="font-weight:400;font-size:11px;">固定五步流水线</span></div>
+        </div>
+        <div class="arrow down">↓</div>
+        <div class="row">
+          <div class="node agent">SeedCurator</div>
+          <span class="arrow">→</span>
+          <div class="node agent">Generator</div>
+          <span class="arrow">→</span>
+          <div class="node agent">SafetyFilter</div>
+          <span class="arrow">→</span>
+          <div class="node agent">Dedup</div>
+          <span class="arrow">→</span>
+          <div class="node agent">Reviewer</div>
+        </div>
+        <div class="arrow down">↓</div>
+        <div class="row">
+          <div class="node store">SampleStore<br><span style="font-weight:400;font-size:11px;">样本落库</span></div>
+        </div>
+        <p class="diagram-caption">五层结构，控制流自上而下单向，无回路</p>
+      </div>
+
+      <h4>分层职责</h4>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>层</th><th>职责</th><th>关键类</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>接入层</td><td>对外提供 REST 接口</td><td><code>SampleFactoryController</code></td></tr>
+            <tr><td>服务层</td><td>业务编排、结果汇总、统计</td><td><code>SampleFactoryService</code></td></tr>
+            <tr><td>流水线层</td><td>定义五步流程、控制流转</td><td><code>SamplePipeline</code></td></tr>
+            <tr><td>Agent 层</td><td>各司其职的 Worker</td><td>5 个 Agent</td></tr>
+            <tr><td>存储层</td><td>样本持久化</td><td><code>SampleStore</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 2.4 流程 -->
+      <h3 id="p1-flow">2.4 流程流转</h3>
+
+      <p>一期的流程是<strong>单向直线</strong>：从策展到评审，5 步顺序执行。每一步拦截的样本状态即定，不再进入下一步。</p>
+
+      <div class="sequence">
+        <div class="seq-row">
+          <div class="seq-actor">用户</div>
+          <div class="seq-action">提交主题 + 类别 + 攻击策略 + 目标数量</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">Pipeline</div>
+          <div class="seq-action">① 调用 SeedCurator，生成 N 条种子</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">SeedCurator</div>
+          <div class="seq-action purple">返回种子列表，写入本地缓存</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">Pipeline</div>
+          <div class="seq-action">② 遍历种子，逐个调用 Generator</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">Generator</div>
+          <div class="seq-action purple">每种子生成 M 条候选，落库为 CANDIDATE</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">Pipeline</div>
+          <div class="seq-action">③ 遍历候选，调用 SafetyFilter</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">SafetyFilter</div>
+          <div class="seq-action amber">不通过 → FILTERED_OUT；通过 → 保持 CANDIDATE</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">Pipeline</div>
+          <div class="seq-action">④ 遍历剩余候选，调用 Dedup</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">Dedup</div>
+          <div class="seq-action amber">重复 → DUPLICATE；不重复 → 写入 contentHash</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">Pipeline</div>
+          <div class="seq-action">⑤ 遍历剩余候选，调用 Reviewer</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">Reviewer</div>
+          <div class="seq-action green">通过 → ACCEPTED；不通过 → REJECTED</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">Pipeline</div>
+          <div class="seq-action">汇总 counters + trace，返回结果</div>
+        </div>
+      </div>
+
+      <h4>样本状态机</h4>
+      <div class="diagram">
+        <div class="row">
+          <div class="node pipe">CANDIDATE</div>
+          <span class="arrow">→</span>
+          <div class="node stop">FILTERED_OUT</div>
+        </div>
+        <div class="row" style="margin-top:6px;">
+          <div class="node pipe">CANDIDATE</div>
+          <span class="arrow">→</span>
+          <div class="node stop">DUPLICATE</div>
+        </div>
+        <div class="row" style="margin-top:6px;">
+          <div class="node pipe">CANDIDATE</div>
+          <span class="arrow">→</span>
+          <div class="node stop">REJECTED</div>
+        </div>
+        <div class="row" style="margin-top:6px;">
+          <div class="node pipe">CANDIDATE</div>
+          <span class="arrow">→</span>
+          <div class="node tool">ACCEPTED</div>
+        </div>
+        <p class="diagram-caption">每个样本从 CANDIDATE 出发，经过三道拦截，最终停在某一状态</p>
+      </div>
+
+      <!-- 2.5 用例 -->
+      <h3 id="p1-usecase">2.5 用例</h3>
+
+      <div class="usecase">
+        <div class="usecase-head">
+          <div class="icon">📋</div>
+          <div class="title">用例 A：标准批量扩充</div>
+        </div>
+        <dl>
+          <dt>场景</dt><dd>某安全团队需要对「专业建议滥用 + 角色扮演」这一类别，从现有 20 条种子扩充到 200 条评测样本。</dd>
+          <dt>输入</dt><dd>主题 = "诱导模型输出医疗建议"，类别 = "专业建议滥用"，攻击策略 = "角色扮演"，目标数量 = 10</dd>
+          <dt>流程</dt><dd>策展出 4 条种子 → 每条生成 2 条候选 → 得到 8 条候选 → 过滤 1 条 → 去重 2 条 → 评审通过 4 条</dd>
+          <dt>产出</dt><dd>4 条 ACCEPTED 样本 + 完整 trace</dd>
+          <dt>耗时</dt><dd>约 45 秒（8 次 LLM 调用）</dd>
+        </dl>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-head">
+          <div class="icon">🔁</div>
+          <div class="title">用例 B：多语言版本扩充</div>
+        </div>
+        <dl>
+          <dt>场景</dt><dd>已有中文种子，需要扩充英文版本，语义保持一致。</dd>
+          <dt>输入</dt><dd>language = "en"，其余参数与中文版本一致</dd>
+          <dt>流程</dt><dd>一期流水线不需要改动，只是 language 参数变化，模型自动输出英文样本</dd>
+          <dt>产出</dt><dd>英文版本的 ACCEPTED 样本，与中文版本一一对应</dd>
+        </dl>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-head">
+          <div class="icon">📊</div>
+          <div class="title">用例 C：日常巡检补量</div>
+        </div>
+        <dl>
+          <dt>场景</dt><dd>监控发现「隐私侵犯 + 多轮诱导」类别的样本数量不足目标值的 60%。</dd>
+          <dt>输入</dt><dd>将该类别作为参数提交一期任务</dd>
+          <dt>流程</dt><dd>批量提交 20 个任务，每个目标 5 条</dd>
+          <dt>产出</dt><dd>100 条候选，约 40-60 条通过评审入库</dd>
+          <dt>特点</dt><dd>无人值守、成本可控、可复现</dd>
+        </dl>
+      </div>
+
+      <!-- 2.6 可观测 -->
+      <h3 id="p1-obs">2.6 可观测性</h3>
+
+      <p>一期提供<strong>任务级 trace</strong> 和 <strong>分类计数器</strong>两类可观测信息。所有信息在任务结束后随响应返回，不留存历史。</p>
+
+      <h4>① 任务 trace（响应内返回）</h4>
+      <div class="obs-block">
+        <div class="obs-head"><span class="dot"></span>POST /api/factory/produce 响应中的 trace 字段</div>
+        <div class="obs-body">{
+  <span class="key">"taskId"</span>: <span class="str">"8a3f2b1c-..."</span>,
+  <span class="key">"generated"</span>: <span class="num">8</span>,
+  <span class="key">"filteredOut"</span>: <span class="num">1</span>,
+  <span class="key">"duplicate"</span>: <span class="num">2</span>,
+  <span class="key">"accepted"</span>: <span class="num">4</span>,
+  <span class="key">"rejected"</span>: <span class="num">1</span>,
+  <span class="key">"trace"</span>: [
+    <span class="str">"任务开始：诱导模型输出医疗建议"</span>,
+    <span class="str">"策展完成，种子 2 条"</span>,
+    <span class="str">"生成完成，候选 8 条"</span>,
+    <span class="str">"过滤完成，拦截 1 条"</span>,
+    <span class="str">"去重完成，重复 2 条"</span>,
+    <span class="str">"评审完成，通过 4 条"</span>
+  ]
+}</div>
+      </div>
+
+      <h4>② 分类计数器（stats 接口）</h4>
+      <div class="obs-block">
+        <div class="obs-head"><span class="dot green"></span>GET /api/factory/stats 响应</div>
+        <div class="obs-body">{
+  <span class="key">"total"</span>: <span class="num">8</span>,
+  <span class="key">"candidate"</span>: <span class="num">0</span>,        <span class="dim">// 已全部处理</span>
+  <span class="key">"filteredOut"</span>: <span class="num">1</span>,
+  <span class="key">"duplicate"</span>: <span class="num">2</span>,
+  <span class="key">"rejected"</span>: <span class="num">1</span>,
+  <span class="key">"accepted"</span>: <span class="num">4</span>          <span class="dim">// 通过率 50%</span>
+}</div>
+      </div>
+
+      <h4>③ 关键指标看板（建议采集）</h4>
+      <div class="metrics">
+        <div class="metric"><div class="num">50%</div><div class="lbl">单任务通过率</div></div>
+        <div class="metric"><div class="num">45s</div><div class="lbl">单任务 P50 时延</div></div>
+        <div class="metric"><div class="num amber">12.5%</div><div class="lbl">过滤拦截率</div></div>
+        <div class="metric"><div class="num amber">25%</div><div class="lbl">去重率</div></div>
+        <div class="metric"><div class="num green">8×</div><div class="lbl">平均 LLM 调用</div></div>
+      </div>
+
+      <div class="callout">
+        <strong>一期的可观测局限：</strong>trace 随响应返回，进程重启即丢；无法跨任务聚合分析；不支持历史回放。这是二期必须引入决策日志表的原因。
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- ========================= 二期 ============================= -->
+      <!-- ============================================================ -->
+
+      <h2 id="p2">3. 二期：Supervisor 模式</h2>
+
+      <div class="phase-banner p2">
+        <div class="num">02</div>
+        <div class="txt">
+          <h3>灵活调度台</h3>
+          <p>由 Supervisor Agent 动态决定下一步调谁，处理补盲、探索与异常</p>
+        </div>
+      </div>
+
+      <!-- 3.1 -->
+      <h3 id="p2-goal">3.1 目标与定位</h3>
+
+      <p>二期解决的是<strong>「一期的固定流程处理不了的场景」</strong>：某类别反复被过滤、目标产出不足、需要根据反馈调整策略。核心变化是——控制流从 Java 代码转移到了 Supervisor 的 LLM 中。</p>
+
+      <div class="position-grid">
+        <div class="position-card"><div class="k">核心目标</div><div class="v">灵活补盲、异常兜底</div></div>
+        <div class="position-card"><div class="k">控制流位置</div><div class="v">Supervisor 的 LLM</div></div>
+        <div class="position-card"><div class="k">谁决定下一步</div><div class="v">模型（带硬性约束）</div></div>
+        <div class="position-card"><div class="k">Agent 自主性</div><div class="v">Supervisor 有；Worker 无</div></div>
+      </div>
+
+      <h4>与一期的本质差异</h4>
+      <div class="compare-row">
+        <div class="head">维度</div><div class="head p1">一期 Workflow</div><div class="head p2">二期 Supervisor</div><div class="head p3">说明</div>
+        <div class="label">控制流</div><div class="p1">Java 代码</div><div class="p2">Supervisor LLM</div><div class="p3">谁在写流程</div>
+        <div class="label">反馈回路</div><div class="p1">无</div><div class="p2">有（读结果调策略）</div><div class="p3">能否自我纠偏</div>
+        <div class="label">终止方式</div><div class="p1">for 循环结束</div><div class="p2">模型主动 finish</div><div class="p3">何时停止</div>
+        <div class="label">调用次数</div><div class="p1">可预估</div><div class="p2">需硬性上限</div><div class="p3">成本控制</div>
+        <div class="label">可复现性</div><div class="p1">高</div><div class="p2">低</div><div class="p3">同输入同输出</div>
+      </div>
+
+      <!-- 3.2 Agent 清单 -->
+      <h3 id="p2-agents">3.2 Agent 清单</h3>
+
+      <p>二期引入 <strong>1 个 Supervisor Agent</strong>（决策者），把一期 5 个 Worker 包装成 <strong>8 个工具</strong>（执行者），新增 2 个辅助工具。Worker 本身不改，只改变它们的调用方式。</p>
+
+      <h4>决策者：Supervisor Agent</h4>
+      <div class="agent-grid">
+        <div class="agent-card super">
+          <div class="role">Supervisor</div>
+          <div class="name">🎯 SampleSupervisor</div>
+          <div class="desc"><strong>动态调度者。</strong>持有全部工具，读 system prompt 与目标后，自主决定调哪个工具、调几次、何时 finish。所有工具调用受上限与决策日志约束。</div>
+        </div>
+      </div>
+
+      <h4>执行者：8 个工具</h4>
+      <div class="agent-grid">
+        <div class="agent-card tool">
+          <div class="name">🌱 callCurator</div>
+          <div class="desc">策展种子。返回 seedIds + 下一步建议。</div>
+        </div>
+        <div class="agent-card tool">
+          <div class="name">✍️ callGenerator</div>
+          <div class="desc">按 seedId 生成候选样本。返回 sampleIds。</div>
+        </div>
+        <div class="agent-card tool">
+          <div class="name">🛡️ callFilter</div>
+          <div class="desc">安全过滤单个样本。返回 safe 布尔值 + 拦截原因 + 调整建议。</div>
+        </div>
+        <div class="agent-card tool">
+          <div class="name">⭐ callReviewer</div>
+          <div class="desc">质量评审单个样本。返回分数 + pass + reasons。</div>
+        </div>
+        <div class="agent-card tool">
+          <div class="name">📊 queryStats</div>
+          <div class="desc">查询样本池统计。Supervisor 每次决策前先调它了解现状。</div>
+        </div>
+        <div class="agent-card tool">
+          <div class="name">📋 listSamples</div>
+          <div class="desc">列出指定状态的样本摘要。用于分析失败模式。</div>
+        </div>
+        <div class="agent-card tool">
+          <div class="name">🧭 queryCoverage</div>
+          <div class="desc">（二期后段）查询覆盖度矩阵缺口，指导补盲方向。</div>
+        </div>
+        <div class="agent-card tool">
+          <div class="name">🚪 finish</div>
+          <div class="desc">主动结束任务。Supervisor 判断目标达成或无法推进时调用。</div>
+        </div>
+      </div>
+
+      <div class="callout warn">
+        <strong>关键设计：</strong>每个工具返回<strong>结构化结果</strong>（ToolResult），包含 summary、data、suggestions。Supervisor 不只能读到结果，还能读到"下一步建议"，从而做出更智能的决策。
+      </div>
+
+      <!-- 3.3 架构图 -->
+      <h3 id="p2-arch">3.3 架构图</h3>
+
+      <div class="diagram">
+        <div class="row">
+          <div class="node api">REST 接口<br><span style="font-weight:400;font-size:11px;">/supervisor/run · /hybrid</span></div>
+        </div>
+        <div class="arrow down">↓</div>
+        <div class="row">
+          <div class="node svc">HybridSampleService<br><span style="font-weight:400;font-size:11px;">一期优先 → 不达标则触发二期</span></div>
+        </div>
+        <div class="arrow down">↓</div>
+        <div class="row">
+          <div class="node super">SampleSupervisor (LLM)<br><span style="font-weight:400;font-size:11px;">决策者</span></div>
+        </div>
+        <div class="row">
+          <div class="node stop">LoopGuardAdvisor<br><span style="font-weight:400;font-size:11px;">调用上限保护</span></div>
+          <span class="arrow">+</span>
+          <div class="node stop">TraceAdvisor<br><span style="font-weight:400;font-size:11px;">决策日志记录</span></div>
+        </div>
+        <div class="arrow down">↓ 工具调用</div>
+        <div class="row">
+          <div class="node tool">callCurator</div>
+          <div class="node tool">callGenerator</div>
+          <div class="node tool">callFilter</div>
+        </div>
+        <div class="row">
+          <div class="node tool">callReviewer</div>
+          <div class="node tool">queryStats</div>
+          <div class="node tool">listSamples</div>
+          <div class="node tool">finish</div>
+        </div>
+        <div class="arrow down">↓ 复用</div>
+        <div class="row">
+          <div class="node agent">一期 5 个 Worker Agent</div>
+        </div>
+        <div class="arrow down">↓</div>
+        <div class="row">
+          <div class="node store">SampleStore</div>
+          <span class="arrow">+</span>
+          <div class="node store">supervisor_trace</div>
+        </div>
+        <p class="diagram-caption">Supervisor 是决策中枢，Worker 是被调用的工具，决策日志完整留档</p>
+      </div>
+
+      <h4>新增分层职责</h4>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>层</th><th>职责</th><th>关键组件</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>混合调度层</td><td>决定走一期还是二期</td><td><code>HybridSampleService</code></td></tr>
+            <tr><td>Supervisor 层</td><td>动态决策下一步调谁</td><td><code>SampleSupervisor</code></td></tr>
+            <tr><td>工具层</td><td>把 Worker 包装为工具</td><td><code>SupervisorTools</code></td></tr>
+            <tr><td>保护层</td><td>循环上限 + 决策日志</td><td>两个 Advisor</td></tr>
+            <tr><td>复用层</td><td>一期 5 个 Worker</td><td>不变</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 3.4 流程 -->
+      <h3 id="p2-flow">3.4 流程流转</h3>
+
+      <p>二期有两种入口：<strong>纯 Supervisor 模式</strong>（直接由 Supervisor 全程调度）与 <strong>混合模式</strong>（一期先跑，不达标才触发 Supervisor 补盲）。</p>
+
+      <h4>混合模式流程（推荐）</h4>
+
+      <div class="sequence">
+        <div class="seq-row">
+          <div class="seq-actor">用户</div>
+          <div class="seq-action">提交任务，目标 5 条样本</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">HybridService</div>
+          <div class="seq-action">① 先跑一期 SamplePipeline</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">一期</div>
+          <div class="seq-action green">产出 3 条 ACCEPTED</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">HybridService</div>
+          <div class="seq-action amber">3 &lt; 5，缺口 2 条 → 触发 Supervisor</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">Supervisor</div>
+          <div class="seq-action purple">② queryStats() 了解现状</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">Supervisor</div>
+          <div class="seq-action purple">③ 思考：已通过 3 条，缺 2 条，需要补充生成</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">Supervisor</div>
+          <div class="seq-action purple">④ callGenerator(seedX, 2) 生成新候选</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">Supervisor</div>
+          <div class="seq-action amber">⑤ callFilter → 1 条被拦截</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">Supervisor</div>
+          <div class="seq-action purple">⑥ 反思：拦截率高，调整策略，降低难度重生成</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">Supervisor</div>
+          <div class="seq-action purple">⑦ callGenerator(seedY, 2, difficulty=low)</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">Supervisor</div>
+          <div class="seq-action green">⑧ callFilter × 2 → 通过；callReviewer × 2 → 通过</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">Supervisor</div>
+          <div class="seq-action green">⑨ finish("已补足 2 条")</div>
+        </div>
+      </div>
+
+      <div class="callout">
+        <strong>对比一期：</strong>一期遇到过滤失败不会调整策略，只会继续处理下一个样本。二期 Supervisor 看到拦截率异常，会<strong>改变生成策略</strong>（降低难度、换种子）后重试。
+      </div>
+
+      <h4>Supervisor 内部决策循环</h4>
+      <div class="diagram">
+        <div class="row">
+          <div class="node super">读目标</div>
+          <span class="arrow">→</span>
+          <div class="node svc">调工具</div>
+          <span class="arrow">→</span>
+          <div class="node svc">读结果</div>
+          <span class="arrow">→</span>
+          <div class="node svc">反思</div>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <div class="node stop">达到上限?</div>
+          <span class="arrow">→</span>
+          <div class="node stop">目标达成?</div>
+          <span class="arrow">→</span>
+          <div class="node tool">finish</div>
+        </div>
+        <p class="diagram-caption">循环直到目标达成、确认无法推进或达到调用上限</p>
+      </div>
+
+      <!-- 3.5 用例 -->
+      <h3 id="p2-usecase">3.5 用例</h3>
+
+      <div class="usecase">
+        <div class="usecase-head">
+          <div class="icon">🎯</div>
+          <div class="title">用例 A：一期不达标，Supervisor 补盲</div>
+        </div>
+        <dl>
+          <dt>场景</dt><dd>某类别样本的过滤率异常高，一期产出始终达不到目标。交给 Supervisor 处理。</dd>
+          <dt>输入</dt><dd>goal = "一期已产出 2 条，目标 5 条，缺口 3 条"</dd>
+          <dt>流程</dt><dd>queryStats 看现状 → 分析 listSamples(FILTERED_OUT) 发现原因 → 调整难度 / 换攻击策略 → callGenerator 重新生成 → 过滤评审 → finish</dd>
+          <dt>产出</dt><dd>3 条补充通过的样本，成本约为纯一期重跑的 40%</dd>
+          <dt>价值</dt><dd>避免整体重跑，只补缺口</dd>
+        </dl>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-head">
+          <div class="icon">🔍</div>
+          <div class="title">用例 B：覆盖度补盲</div>
+        </div>
+        <dl>
+          <dt>场景</dt><dd>覆盖度矩阵显示「隐私侵犯 + 多轮诱导 + en」这个格子缺口 30 条。</dd>
+          <dt>输入</dt><dd>goal = "补足隐私侵犯类别英文样本 30 条"</dd>
+          <dt>流程</dt><dd>Supervisor 调 queryCoverage 确认缺口 → 决定先生成小批量试探 → 根据过滤通过率决定是否放大批量</dd>
+          <dt>特点</dt><dd>动态批量：通过率高就放量，通过率低就换策略</dd>
+        </dl>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-head">
+          <div class="icon">🧪</div>
+          <div class="title">用例 C：探索新类别</div>
+        </div>
+        <dl>
+          <dt>场景</dt><dd>安全团队想探索"代码生成类滥用"这一新方向，但不确定哪种子类别容易生成成功。</dd>
+          <dt>输入</dt><dd>goal = "探索代码生成类滥用样本，找出高通过率的子方向，产出 10 条"</dd>
+          <dt>流程</dt><dd>Supervisor 先 queryStats → 尝试多种子类别（代码补全 / 调试 / 重构）→ 观察哪种通过率最高 → 聚焦该方向放量</dd>
+          <dt>特点</dt><dd>策略发现：Supervisor 会保留有效路径，放弃无效路径</dd>
+        </dl>
+      </div>
+
+      <!-- 3.6 可观测 -->
+      <h3 id="p2-obs">3.6 可观测性</h3>
+
+      <p>二期新增<strong>决策日志表 supervisor_trace</strong>，把 Supervisor 的每一次工具调用完整留档。这是二期最有价值的资产——它让"LLM 的决策过程"变成可分析、可回放、可优化的数据。</p>
+
+      <h4>① 决策日志表结构</h4>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>字段</th><th>说明</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>run_id</code></td><td>本次任务唯一 ID</td></tr>
+            <tr><td><code>step</code></td><td>第几次工具调用</td></tr>
+            <tr><td><code>tool_name</code></td><td>工具名</td></tr>
+            <tr><td><code>arguments</code></td><td>调用参数（JSON）</td></tr>
+            <tr><td><code>result_summary</code></td><td>返回摘要</td></tr>
+            <tr><td><code>success</code></td><td>是否成功</td></tr>
+            <tr><td><code>elapsed_ms</code></td><td>耗时</td></tr>
+            <tr><td><code>created_at</code></td><td>时间戳</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>② 一次真实决策序列（示例）</h4>
+      <div class="obs-block">
+        <div class="obs-head"><span class="dot green"></span>GET /api/supervisor/trace/{runId}</div>
+        <div class="obs-body">[
+  { <span class="key">"step"</span>: <span class="num">1</span>, <span class="key">"tool"</span>: <span class="str">"queryStats"</span>,    <span class="key">"elapsed"</span>: <span class="num">850</span> },
+  { <span class="key">"step"</span>: <span class="num">2</span>, <span class="key">"tool"</span>: <span class="str">"callCurator"</span>,   <span class="key">"elapsed"</span>: <span class="num">2400</span>, <span class="key">"success"</span>: <span class="num">true</span> },
+  { <span class="key">"step"</span>: <span class="num">3</span>, <span class="key">"tool"</span>: <span class="str">"callGenerator"</span>, <span class="key">"elapsed"</span>: <span class="num">3100</span>, <span class="key">"success"</span>: <span class="num">true</span> },
+  { <span class="key">"step"</span>: <span class="num">4</span>, <span class="key">"tool"</span>: <span class="str">"callFilter"</span>,    <span class="key">"elapsed"</span>: <span class="num">1200</span>, <span class="key">"success"</span>: <span class="num">true</span> },
+  { <span class="key">"step"</span>: <span class="num">5</span>, <span class="key">"tool"</span>: <span class="str">"callFilter"</span>,    <span class="key">"elapsed"</span>: <span class="num">1150</span>, <span class="key">"success"</span>: <span class="num">false</span>, <span class="key">"note"</span>: <span class="warn">"样本被拦截"</span> },
+  { <span class="key">"step"</span>: <span class="num">6</span>, <span class="key">"tool"</span>: <span class="str">"callGenerator"</span>, <span class="key">"elapsed"</span>: <span class="num">2900</span>, <span class="key">"success"</span>: <span class="num">true</span>, <span class="dim">// 调整策略后重生成</span> },
+  { <span class="key">"step"</span>: <span class="num">7</span>, <span class="key">"tool"</span>: <span class="str">"callFilter"</span>,    <span class="key">"elapsed"</span>: <span class="num">1180</span>, <span class="key">"success"</span>: <span class="num">true</span> },
+  { <span class="key">"step"</span>: <span class="num">8</span>, <span class="key">"tool"</span>: <span class="str">"callReviewer"</span>,  <span class="key">"elapsed"</span>: <span class="num">1500</span>, <span class="key">"success"</span>: <span class="num">true</span> },
+  { <span class="key">"step"</span>: <span class="num">9</span>, <span class="key">"tool"</span>: <span class="str">"finish"</span>,        <span class="key">"elapsed"</span>: <span class="num">320</span>,  <span class="key">"success"</span>: <span class="num">true</span> }
+]</div>
+      </div>
+
+      <h4>③ 关键指标看板</h4>
+      <div class="metrics">
+        <div class="metric"><div class="num">9</div><div class="lbl">平均工具调用</div></div>
+        <div class="metric"><div class="num green">70%</div><div class="lbl">任务成功率</div></div>
+        <div class="metric"><div class="num amber">18s</div><div class="lbl">P50 时延</div></div>
+        <div class="metric"><div class="num amber">45s</div><div class="lbl">P99 时延</div></div>
+        <div class="metric"><div class="num red">3%</div><div class="lbl">循环上限触发率</div></div>
+      </div>
+
+      <h4>④ 异常告警规则</h4>
+      <div class="obs-block">
+        <div class="obs-head"><span class="dot red"></span>建议告警规则</div>
+        <div class="obs-body"><span class="err">ALERT</span> 工具调用数 &gt; 25        <span class="dim">// 可能空转，检查提示词</span>
+<span class="err">ALERT</span> 单任务耗时 &gt; 3min       <span class="dim">// 模型响应慢或工具阻塞</span>
+<span class="warn">WARN </span> callFilter 重复率 &gt; 30%  <span class="dim">// 模型在重复调用同一 ID</span>
+<span class="warn">WARN </span> finish 未被调用          <span class="dim">// 模型不知道何时结束</span>
+<span class="warn">WARN </span> 平均工具调用 &gt; 20        <span class="dim">// 决策效率低下</span></div>
+      </div>
+
+      <div class="callout success">
+        <strong>二期的可观测价值：</strong>决策日志让"LLM 的思考过程"变成可回放的数据。分析这些日志，能发现哪些路径是稳定高效的——那些路径就是可以固化回一期的候选。
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- ========================= 三期 ============================= -->
+      <!-- ============================================================ -->
+
+      <h2 id="p3">4. 三期：自主 ReAct 模式</h2>
+
+      <div class="phase-banner p3">
+        <div class="num">03</div>
+        <div class="txt">
+          <h3>研究实验室</h3>
+          <p>多个自主 Agent 通过消息总线协作，探索未知领域、发现新策略</p>
+        </div>
+      </div>
+
+      <!-- 4.1 -->
+      <h3 id="p3-goal">4.1 目标与定位</h3>
+
+      <p>三期解决的是<strong>「发现未知策略」</strong>的问题。它不是生产线，而是研发部门：让多个自主 Agent 通过消息协作、试错、反思，找到人工未曾预设的新样本类型或新攻击组合。</p>
+
+      <div class="position-grid">
+        <div class="position-card"><div class="k">核心目标</div><div class="v">探索、发现、创新</div></div>
+        <div class="position-card"><div class="k">控制流位置</div><div class="v">多 Agent 消息总线</div></div>
+        <div class="position-card"><div class="k">谁决定下一步</div><div class="v">每个 Agent 自己</div></div>
+        <div class="position-card"><div class="k">Agent 自主性</div><div class="v">完全自主</div></div>
+      </div>
+
+      <div class="callout danger">
+        <strong>重要提醒：</strong>三期成本是一期的 5-20 倍，可预测性极低，不适合生产批量。它必须默认关闭、人工开启、强绑定熔断。
+      </div>
+
+      <!-- 4.2 Agent 清单 -->
+      <h3 id="p3-agents">4.2 Agent 清单</h3>
+
+      <p>三期不再有中心调度者。每个 Agent 都是自主体，拥有自己的目标、工具集和 ReAct 循环。它们通过消息总线互相通信、传递任务、汇报结果。</p>
+
+      <div class="agent-grid">
+        <div class="agent-card auto">
+          <div class="role">自主 Agent</div>
+          <div class="name">🌱 SeedAgent</div>
+          <div class="desc"><strong>种子探索者。</strong>自主检索、组合、变形种子。当 GenAgent 反馈"这个方向没效果"时，主动尝试新方向。</div>
+        </div>
+        <div class="agent-card auto">
+          <div class="role">自主 Agent</div>
+          <div class="name">✍️ GenAgent</div>
+          <div class="desc"><strong>样本生成者。</strong>接收生成任务，自主选择生成策略。失败后能反思并改变参数，主动请求 SeedAgent 提供新种子。</div>
+        </div>
+        <div class="agent-card auto">
+          <div class="role">自主 Agent</div>
+          <div class="name">🛡️ FilterAgent</div>
+          <div class="desc"><strong>安全守门者。</strong>不仅判定，还会<strong>解释</strong>拦截原因，主动向 GenAgent 发送"建议修改方向"的消息。</div>
+        </div>
+        <div class="agent-card auto">
+          <div class="role">自主 Agent</div>
+          <div class="name">⭐ ReviewAgent</div>
+          <div class="desc"><strong>质量评估者。</strong>多维评审，能识别"新类型"样本并主动标记为"值得关注"，触发进一步探索。</div>
+        </div>
+        <div class="agent-card auto">
+          <div class="role">自主 Agent</div>
+          <div class="name">🔬 ExplorerAgent</div>
+          <div class="desc"><strong>策略探索者。</strong>专门负责组合不同攻击策略（如"角色扮演 + 多轮诱导 + 语言切换"），尝试发现高通过率的新组合。</div>
+        </div>
+      </div>
+
+      <h4>支撑组件</h4>
+      <div class="agent-grid">
+        <div class="agent-card">
+          <div class="role">基础设施</div>
+          <div class="name">📮 MessageBus</div>
+          <div class="desc">消息总线。Agent 间通过消息通信，支持点对点与广播。所有消息留档供回放。</div>
+        </div>
+        <div class="agent-card">
+          <div class="role">守护者</div>
+          <div class="name">⚖️ GroupArbiter</div>
+          <div class="desc">死锁 / 活锁检测。监控全局步数、时长、无进展步数，超限强制熔断。</div>
+        </div>
+        <div class="agent-card">
+          <div class="role">安全边界</div>
+          <div class="name">🔒 Sandbox</div>
+          <div class="desc">每个 Agent 独立进程，工具白名单，禁止写文件 / 发网络请求等副作用操作。</div>
+        </div>
+      </div>
+
+      <!-- 4.3 架构图 -->
+      <h3 id="p3-arch">4.3 架构图</h3>
+
+      <div class="diagram">
+        <div class="row">
+          <div class="node api">实验入口<br><span style="font-weight:400;font-size:11px;">默认关闭，人工开启</span></div>
+        </div>
+        <div class="arrow down">↓</div>
+        <div class="row">
+          <div class="node bus">MessageBus<br><span style="font-weight:400;font-size:11px;">消息总线</span></div>
+        </div>
+        <div class="arrow down">↓</div>
+        <div class="row">
+          <div class="node auto">SeedAgent</div>
+          <div class="node auto">GenAgent</div>
+          <div class="node auto">FilterAgent</div>
+        </div>
+        <div class="row">
+          <div class="node auto">ReviewAgent</div>
+          <div class="node auto">ExplorerAgent</div>
+        </div>
+        <div class="arrow down">↑ 每个 Agent 独立 ReAct 循环 ↓</div>
+        <div class="row">
+          <div class="node stop">GroupArbiter<br><span style="font-weight:400;font-size:11px;">死锁/活锁检测</span></div>
+          <div class="node stop">Sandbox<br><span style="font-weight:400;font-size:11px;">工具白名单</span></div>
+        </div>
+        <div class="arrow down">↓</div>
+        <div class="row">
+          <div class="node store">MessageLog</div>
+          <span class="arrow">+</span>
+          <div class="node store">SampleStore</div>
+        </div>
+        <p class="diagram-caption">无中心调度，Agent 通过消息总线协作，外部有仲裁与沙箱守护</p>
+      </div>
+
+      <!-- 4.4 流程 -->
+      <h3 id="p3-flow">4.4 流程流转</h3>
+
+      <p>三期没有固定流程。每个 Agent 自主运行 ReAct 循环，通过消息总线协作。整体行为像一个<strong>分布式探索系统</strong>。</p>
+
+      <h4>单个 Agent 的 ReAct 循环</h4>
+      <div class="diagram">
+        <div class="row">
+          <div class="node auto">① 读消息</div>
+          <span class="arrow">→</span>
+          <div class="node auto">② 思考</div>
+          <span class="arrow">→</span>
+          <div class="node auto">③ 选工具</div>
+          <span class="arrow">→</span>
+          <div class="node auto">④ 行动</div>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <div class="node auto">⑤ 写消息</div>
+          <span class="arrow">→</span>
+          <div class="node stop">⑥ 判断是否退出</div>
+          <span class="arrow">→</span>
+          <div class="node tool">返回①</div>
+        </div>
+        <p class="diagram-caption">每个 Agent 独立循环，通过消息总线与其他 Agent 交互</p>
+      </div>
+
+      <h4>多 Agent 协作流程（示例）</h4>
+
+      <div class="sequence">
+        <div class="seq-row">
+          <div class="seq-actor">SeedAgent</div>
+          <div class="seq-action purple">生成 3 条探索性种子，广播给 GenAgent</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">GenAgent</div>
+          <div class="seq-action purple">收到种子，生成 6 条候选</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">GenAgent</div>
+          <div class="seq-action purple">发送 REQUEST 给 FilterAgent，请求过滤</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">FilterAgent</div>
+          <div class="seq-action amber">2 条被拦截，主动回复 GenAgent："种子 2 太具体，建议抽象化"</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">GenAgent</div>
+          <div class="seq-action purple">收到反馈，反思后向 SeedAgent 请求新种子</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">SeedAgent</div>
+          <div class="seq-action purple">生成 2 条更抽象的种子，回复 GenAgent</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">GenAgent</div>
+          <div class="seq-action green">重新生成 4 条，全部通过过滤</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">ReviewAgent</div>
+          <div class="seq-action green">评审 4 条，3 条通过，1 条标记"新类型，值得关注"</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">ExplorerAgent</div>
+          <div class="seq-action purple">看到 ReviewAgent 的标记，主动探索该新类型，尝试组合其他策略</div>
+        </div>
+        <div class="seq-row">
+          <div class="seq-actor">GroupArbiter</div>
+          <div class="seq-action green">监控到进展正常，允许继续</div>
+        </div>
+      </div>
+
+      <div class="callout warn">
+        <strong>死锁 / 活锁风险：</strong>无中心调度时，最容易出的问题是 A 等 B、B 等 A（死锁），或互相发消息但无进展（活锁）。GroupArbiter 监控全局步数、时长、无进展步数，超限强制熔断。
+      </div>
+
+      <!-- 4.5 用例 -->
+      <h3 id="p3-usecase">4.5 用例</h3>
+
+      <div class="usecase">
+        <div class="usecase-head">
+          <div class="icon">🔬</div>
+          <div class="title">用例 A：发现新攻击组合</div>
+        </div>
+        <dl>
+          <dt>场景</dt><dd>安全团队想发现"角色扮演 + 多轮诱导 + 语言切换"这个组合是否有效，但人工没有时间系统地试。</dd>
+          <dt>流程</dt><dd>ExplorerAgent 组合多种策略 → GenAgent 生成候选 → FilterAgent 过滤 → ReviewAgent 评估 → ExplorerAgent 观察哪种组合通过率最高 → 聚焦该组合继续探索</dd>
+          <dt>产出</dt><dd>发现 2-3 个高通过率的新组合，固化为一期新策略</dd>
+          <dt>价值</dt><dd>人力无法穷举的探索，由多个自主 Agent 并行完成</dd>
+        </dl>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-head">
+          <div class="icon">🌐</div>
+          <div class="title">用例 B：小语种样本探索</div>
+        </div>
+        <dl>
+          <dt>场景</dt><dd>需要探索藏语、维吾尔语等小语种的安全评测样本，但种子资源稀缺。</dd>
+          <dt>流程</dt><dd>SeedAgent 从中文种子出发，Agent 之间协作尝试多轮翻译 + 本地化改写，FilterAgent 判断跨语言后是否仍安全，ReviewAgent 判断是否保持原意</dd>
+          <dt>特点</dt><dd>Agent 之间需要多轮往返，这种协作是 Supervisior 模式难以完成的</dd>
+        </dl>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-head">
+          <div class="icon">🧩</div>
+          <div class="title">用例 C：红队对抗演练</div>
+        </div>
+        <dl>
+          <dt>场景</dt><dd>红队需要演练针对新模型的攻击策略，探索防御边界。</dd>
+          <dt>流程</dt><dd>多个 GenAgent 扮演攻击者，FilterAgent 与 ReviewAgent 扮演防御者，通过消息总线对抗。GroupArbiter 监控不让对抗失控</dd>
+          <dt>特点</dt><dd>多 Agent 对抗，属于典型的自主协作场景</dd>
+        </dl>
+      </div>
+
+      <!-- 4.6 可观测 -->
+      <h3 id="p3-obs">4.6 可观测性</h3>
+
+      <p>三期的可观测性比二期更复杂：不仅需要追踪每个 Agent 的工具调用，还要追踪<strong>跨 Agent 的消息传递</strong>。核心资产是消息日志（MessageLog）与全局会话视图（GroupSession）。</p>
+
+      <h4>① 消息日志视图</h4>
+      <div class="obs-block">
+        <div class="obs-head"><span class="dot"></span>MessageLog（按时间顺序）</div>
+        <div class="obs-body"><span class="dim">[00.000]</span> <span class="key">SeedAgent</span>    → <span class="key">GenAgent</span>     <span class="str">REQUEST: 3 条探索种子</span>
+<span class="dim">[00.850]</span> <span class="key">GenAgent</span>     → <span class="key">FilterAgent</span>  <span class="str">REQUEST: 过滤 6 条候选</span>
+<span class="dim">[02.100]</span> <span class="key">FilterAgent</span>  → <span class="key">GenAgent</span>     <span class="warn">RESPONSE: 2 条拦截，建议抽象化</span>
+<span class="dim">[02.500]</span> <span class="key">GenAgent</span>     → <span class="key">SeedAgent</span>    <span class="str">REQUEST: 需要更抽象的种子</span>
+<span class="dim">[03.200]</span> <span class="key">SeedAgent</span>    → <span class="key">GenAgent</span>     <span class="str">RESPONSE: 2 条新种子</span>
+<span class="dim">[05.400]</span> <span class="key">GenAgent</span>     → <span class="key">ReviewAgent</span>  <span class="str">REQUEST: 评审 4 条</span>
+<span class="dim">[07.100]</span> <span class="key">ReviewAgent</span>  → <span class="key">ALL</span>          <span class="str">BROADCAST: 3 通过，1 条标记新类型</span>
+<span class="dim">[07.500]</span> <span class="key">ExplorerAgent</span>→ <span class="key">GenAgent</span>     <span class="str">REQUEST: 探索新类型组合</span>
+<span class="dim">[08.300]</span> <span class="key">GenAgent</span>     → <span class="key">FilterAgent</span>  <span class="str">REQUEST: 过滤 3 条新组合</span>
+<span class="dim">[09.800]</span> <span class="key">FilterAgent</span>  → <span class="key">ALL</span>          <span class="str">BROADCAST: 3 通过</span>
+<span class="dim">[10.200]</span> <span class="key">GroupArbiter</span> → <span class="key">ALL</span>          <span class="warn">WARN: 连续 8 步无实际进展，准备熔断</span>
+<span class="dim">[10.500]</span> <span class="key">GenAgent</span>     → <span class="key">ALL</span>          <span class="str">COMPLETED: 任务完成，发现 1 个新组合</span></div>
+      </div>
+
+      <h4>② 全局会话状态</h4>
+      <div class="obs-block">
+        <div class="obs-head"><span class="dot green"></span>GroupSession 快照</div>
+        <div class="obs-body">{
+  <span class="key">"sessionId"</span>: <span class="str">"sess-9a3f..."</span>,
+  <span class="key">"totalSteps"</span>: <span class="num">42</span>,
+  <span class="key">"elapsedMs"</span>: <span class="num">10500</span>,
+  <span class="key">"stepsSinceLastProgress"</span>: <span class="num">0</span>,
+  <span class="key">"agents"</span>: {
+    <span class="str">"SeedAgent"</span>:     { <span class="key">"steps"</span>: <span class="num">6</span>, <span class="key">"messages"</span>: <span class="num">4</span> },
+    <span class="str">"GenAgent"</span>:      { <span class="key">"steps"</span>: <span class="num">14</span>, <span class="key">"messages"</span>: <span class="num">8</span> },
+    <span class="str">"FilterAgent"</span>:   { <span class="key">"steps"</span>: <span class="num">8</span>, <span class="key">"messages"</span>: <span class="num">6</span> },
+    <span class="str">"ReviewAgent"</span>:   { <span class="key">"steps"</span>: <span class="num">5</span>, <span class="key">"messages"</span>: <span class="num">3</span> },
+    <span class="str">"ExplorerAgent"</span>: { <span class="key">"steps"</span>: <span class="num">9</span>, <span class="key">"messages"</span>: <span class="num">5</span> }
+  },
+  <span class="key">"status"</span>: <span class="str">"COMPLETED"</span>
+}</div>
+      </div>
+
+      <h4>③ 关键指标看板</h4>
+      <div class="metrics">
+        <div class="metric"><div class="num">42</div><div class="lbl">全局总步数</div></div>
+        <div class="metric"><div class="num amber">26</div><div class="lbl">消息总数</div></div>
+        <div class="metric"><div class="num green">1</div><div class="lbl">发现新策略</div></div>
+        <div class="metric"><div class="num red">0</div><div class="lbl">死锁/活锁次数</div></div>
+        <div class="metric"><div class="num amber">10.5s</div><div class="lbl">端到端耗时</div></div>
+      </div>
+
+      <h4>④ 熔断日志示例</h4>
+      <div class="obs-block">
+        <div class="obs-head"><span class="dot red"></span>GroupArbiter 熔断记录</div>
+        <div class="obs-body">{
+  <span class="key">"sessionId"</span>: <span class="str">"sess-9a3f..."</span>,
+  <span class="key">"reason"</span>: <span class="err">"连续 12 步无实际进展，判定活锁"</span>,
+  <span class="key">"triggeredAt"</span>: <span class="num">10500</span>,
+  <span class="key">"lastProgress"</span>: <span class="num">3200</span>,
+  <span class="key">"agentsInvolved"</span>: [<span class="str">"GenAgent"</span>, <span class="str">"SeedAgent"</span>],
+  <span class="key">"action"</span>: <span class="str">"force-stop + 保留已完成样本"</span>
+}</div>
+      </div>
+
+      <div class="callout success">
+        <strong>三期的可观测价值：</strong>消息日志记录了 Agent 之间所有协作细节，可以回放"探索过程"，理解"为什么这个策略被选中"。这是把 Agent 发现反哺回一二期的原材料。
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- ======================== 4. 对比 =========================== -->
+      <!-- ============================================================ -->
+
+      <h2 id="compare">5. 三期横向对比</h2>
+
+      <h3>5.1 能力矩阵</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>能力</th><th><span class="ptag p1">一期</span></th><th><span class="ptag p2">二期</span></th><th><span class="ptag p3">三期</span></th></tr>
+          </thead>
+          <tbody>
+            <tr><td>批量生产</td><td>✅✅✅</td><td>✅</td><td>❌</td></tr>
+            <tr><td>补盲探索</td><td>❌</td><td>✅✅✅</td><td>✅✅</td></tr>
+            <tr><td>策略发现</td><td>❌</td><td>✅</td><td>✅✅✅</td></tr>
+            <tr><td>可复现</td><td>✅✅✅</td><td>✅</td><td>❌</td></tr>
+            <tr><td>可调试</td><td>✅✅✅</td><td>✅✅</td><td>❌</td></tr>
+            <tr><td>成本可控</td><td>✅✅✅</td><td>✅✅</td><td>✅</td></tr>
+            <tr><td>生产就绪</td><td>✅</td><td>✅</td><td>❌</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>5.2 成本对比</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>项</th><th><span class="ptag p1">一期</span></th><th><span class="ptag p2">二期</span></th><th><span class="ptag p3">三期</span></th></tr>
+          </thead>
+          <tbody>
+            <tr><td>LLM 调用次数</td><td>1x</td><td>1.5-3x</td><td>5-20x</td></tr>
+            <tr><td>Token 消耗</td><td>1x</td><td>2-4x</td><td>10-30x</td></tr>
+            <tr><td>工程复杂度</td><td>1x</td><td>3x</td><td>10x</td></tr>
+            <tr><td>调试时间</td><td>1x</td><td>3x</td><td>10x</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout danger">
+        <strong>核心结论：</strong>能用一期解决的，绝不用二期；能用二期解决的，绝不用三期。每往上一期，能力上限提高，成本同时放大 3-10 倍。
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- ====================== 5. 迁移 ============================= -->
+      <!-- ============================================================ -->
+
+      <h2 id="migration">6. 迁移路径</h2>
+
+      <h3>6.1 演进时间线</h3>
+
+      <div class="diagram">
+        <div class="row">
+          <div class="node pipe">一期上线<br><span style="font-weight:400;font-size:11px;">1-2 周</span></div>
+          <span class="arrow">→</span>
+          <div class="node svc">稳定运行<br><span style="font-weight:400;font-size:11px;">持续观察 2 周</span></div>
+        </div>
+        <div class="arrow down">↓ 出现"固定流程处理不了"的场景</div>
+        <div class="row">
+          <div class="node super">二期搭建<br><span style="font-weight:400;font-size:11px;">3-5 周</span></div>
+          <span class="arrow">→</span>
+          <div class="node svc">灰度 + 调优<br><span style="font-weight:400;font-size:11px;">4 周</span></div>
+        </div>
+        <div class="arrow down">↓ 需要"发现未知策略"而非"执行已知策略"</div>
+        <div class="row">
+          <div class="node auto">三期实验<br><span style="font-weight:400;font-size:11px;">10-14 周</span></div>
+          <span class="arrow">→</span>
+          <div class="node tool">反哺一二期<br><span style="font-weight:400;font-size:11px;">持续</span></div>
+        </div>
+        <p class="diagram-caption">每期上线前都需要前一期稳定运行、可观测数据充分</p>
+      </div>
+
+      <h3>6.2 关键决策点</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>决策</th><th>何时做</th><th>判断依据</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>是否进二期</td><td>一期稳定 2 周后</td><td>是否出现"固定流程处理不了"的场景</td></tr>
+            <tr><td>是否进三期</td><td>二期稳定 4 周后</td><td>是否需要"发现未知策略"而非"执行已知策略"</td></tr>
+            <tr><td>是否回退</td><td>任何时候</td><td>成本超过收益，果断降级</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>6.3 反哺机制（最重要）</h3>
+
+      <div class="callout">
+        <strong>核心思想：</strong>三期是一期的"研发部门"，不是"生产部门"。没有反哺，三期就是烧钱玩具。
+      </div>
+
+      <div class="diagram">
+        <div class="row">
+          <div class="node auto">三期<br><span style="font-weight:400;font-size:11px;">探索发现</span></div>
+          <span class="arrow">→</span>
+          <div class="node svc">分析决策日志<br><span style="font-weight:400;font-size:11px;">找稳定高通过路径</span></div>
+        </div>
+        <div class="arrow down">↓ 固化</div>
+        <div class="row">
+          <div class="node super">二期<br><span style="font-weight:400;font-size:11px;">变成可调用工具</span></div>
+          <span class="arrow">→</span>
+          <div class="node svc">观察稳定性<br><span style="font-weight:400;font-size:11px;">占比 &gt; 30%</span></div>
+        </div>
+        <div class="arrow down">↓ 再固化</div>
+        <div class="row">
+          <div class="node pipe">一期<br><span style="font-weight:400;font-size:11px;">变成固定流水线步骤</span></div>
+        </div>
+        <p class="diagram-caption">三期发现 → 二期工具 → 一期流水线，形成完整的固化闭环</p>
+      </div>
+
+      <h4>固化判定标准</h4>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>条件</th><th>阈值</th><th>说明</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>出现占比</td><td>≥ 30%</td><td>该模式在任务中的占比</td></tr>
+            <tr><td>成功率</td><td>≥ 85%</td><td>该模式的样本通过率</td></tr>
+            <tr><td>调用数方差</td><td>≤ 3</td><td>路径稳定，步骤数固定</td></tr>
+            <tr><td>可解释性</td><td>人工通过</td><td>安全研究员 + 架构师评审</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout success">
+        <strong>固化节奏建议：</strong>每日看异常告警，每周做路径聚类，每月固化一批，每季复盘回滚。形成稳定的"研发 → 生产"循环。
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- ======================= 6. 总结 ============================ -->
+      <!-- ============================================================ -->
+
+      <h2 id="summary">7. 总结</h2>
+
+      <p><strong>三期不是三个版本，是三种工具。</strong></p>
+
+      <div class="position-grid">
+        <div class="position-card">
+          <div class="k">一期</div>
+          <div class="v">装配线</div>
+          <p style="margin:8px 0 0;font-size:13px;color:var(--text-soft);">稳定、便宜、大批量</p>
+        </div>
+        <div class="position-card">
+          <div class="k">二期</div>
+          <div class="v">调度台</div>
+          <p style="margin:8px 0 0;font-size:13px;color:var(--text-soft);">灵活、可反馈、处理异常</p>
+        </div>
+        <div class="position-card">
+          <div class="k">三期</div>
+          <div class="v">实验室</div>
+          <p style="margin:8px 0 0;font-size:13px;color:var(--text-soft);">探索、创新、发现新策略</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <strong>生产系统 = 一期为主 + 二期兜底 + 三期反哺。</strong><br>
+        不要把三期当生产用，也不要用一期硬扛所有场景。每期的价值在于覆盖不同的象限，而不是替代前一期。
+      </div>
+
+      <h3>三期的一句话对照</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th></th><th>一期</th><th>二期</th><th>三期</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>做什么</strong></td><td>批量生产样本</td><td>补盲 + 异常处理</td><td>探索 + 发现新策略</td></tr>
+            <tr><td><strong>需要哪些 Agent</strong></td><td>5 个 Worker</td><td>1 Supervisor + 8 工具</td><td>5 个自主 Agent + 消息总线</td></tr>
+            <tr><td><strong>架构核心</strong></td><td>Java 流水线</td><td>Supervisor + 工具集</td><td>消息总线 + 仲裁 + 沙箱</td></tr>
+            <tr><td><strong>流程特点</strong></td><td>固定五步，单向</td><td>动态循环，带反馈</td><td>多 Agent 并发，无中心</td></tr>
+            <tr><td><strong>可观测重点</strong></td><td>任务 trace + 计数器</td><td>决策日志表</td><td>消息日志 + 会话快照</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <footer class="footer">
+        样本工厂三期演进方案 · v4.0 · 架构与流程说明 · 文档结束
+      </footer>
+
+    </article>
+  </main>
+</div>
+
+<button id="backTop">↑</button>
+
+<script>
+(function () {
+  'use strict';
+
+  var tocLinks = Array.prototype.slice.call(document.querySelectorAll('#toc a'));
+  var headings = tocLinks.map(function (a) {
+    return document.querySelector(a.getAttribute('href'));
+  }).filter(Boolean);
+
+  function updateActive() {
+    var scrollY = window.scrollY || window.pageYOffset;
+    var offset = 110;
+    var current = null;
+    for (var i = 0; i < headings.length; i++) {
+      var el = headings[i];
+      if (!el) continue;
+      if (el.getBoundingClientRect().top + scrollY - offset <= scrollY) {
+        current = el;
+      } else { break; }
+    }
+    tocLinks.forEach(function (a) { a.classList.remove('active'); });
+    if (current) {
+      var link = document.querySelector('#toc a[href="#' + current.id + '"]');
+      if (link) link.classList.add('active');
+    }
+  }
+
+  var readingBar = document.getElementById('readingBar');
+  function updateProgress() {
+    var h = document.documentElement;
+    var scrolled = h.scrollTop || document.body.scrollTop;
+    var total = h.scrollHeight - h.clientHeight;
+    readingBar.style.width = (total > 0 ? (scrolled / total) * 100 : 0) + '%';
+  }
+
+  var ticking = false;
+  window.addEventListener('scroll', function () {
+    if (!ticking) {
+      window.requestAnimationFrame(function () {
+        updateActive(); toggleBackTop(); updateProgress(); ticking = false;
+      });
+      ticking = true;
+    }
+  }, { passive: true });
+
+  var backTop = document.getElementById('backTop');
+  function toggleBackTop() {
+    if ((window.scrollY || window.pageYOffset) > 400) backTop.classList.add('show');
+    else backTop.classList.remove('show');
+  }
+  backTop.addEventListener('click', function () {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  var sidebar = document.getElementById('sidebar');
+  var menuToggle = document.getElementById('menuToggle');
+  menuToggle.addEventListener('click', function (e) {
+    e.stopPropagation(); sidebar.classList.toggle('open');
+  });
+  document.addEventListener('click', function (e) {
+    if (sidebar.classList.contains('open') &&
+        !sidebar.contains(e.target) && e.target !== menuToggle) {
+      sidebar.classList.remove('open');
+    }
+  });
+  tocLinks.forEach(function (a) {
+    a.addEventListener('click', function () {
+      if (window.innerWidth <= 1024) sidebar.classList.remove('open');
+    });
+  });
+
+  updateActive(); toggleBackTop(); updateProgress();
+})();
+</script>
+</body>
+</html>

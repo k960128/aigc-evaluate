@@ -2,9 +2,12 @@ package com.kant.framework.mq.producer;
 
 import cn.hutool.core.util.StrUtil;
 import com.kant.framework.mq.MessageWrapper;
+import com.kant.framework.exception.ServiceException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.client.producer.SendResult;
+import org.apache.rocketmq.client.producer.SendStatus;
+import org.apache.rocketmq.client.producer.LocalTransactionState;
 import org.apache.rocketmq.client.producer.TransactionSendResult;
 import org.apache.rocketmq.common.message.MessageConst;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
@@ -28,7 +31,11 @@ public class RocketMQProducerAdapter implements MessageQueueProducer {
         messageSendRequest.setKeys(StrUtil.isEmpty(messageSendRequest.getKeys()) ? UUID.randomUUID().toString() : messageSendRequest.getKeys());
 
         Message<MessageWrapper<Object>> message = MessageBuilder
-                .withPayload(MessageWrapper.builder().keys(messageSendRequest.getKeys()).body(messageSendRequest.getBody()).build())
+                .withPayload(MessageWrapper.builder()
+                        .keys(messageSendRequest.getKeys())
+                        .body(messageSendRequest.getBody())
+                        .bizDesc(messageSendRequest.getBizDesc())
+                        .build())
                 .setHeader(MessageConst.PROPERTY_KEYS, messageSendRequest.getKeys())
                 .build();
 
@@ -47,13 +54,20 @@ public class RocketMQProducerAdapter implements MessageQueueProducer {
 
     @Override
     public void sendInTransaction(MessageSendRequest messageSendRequest) {
+        if (messageSendRequest.getLocalTransaction() == null) {
+            throw new IllegalArgumentException("事务消息缺少本地事务");
+        }
         messageSendRequest.setKeys(StrUtil.isEmpty(messageSendRequest.getKeys()) ? UUID.randomUUID().toString() : messageSendRequest.getKeys());
         String txId = UUID.randomUUID().toString();
 
         transactionListener.registerLocalTransaction(txId, messageSendRequest.getLocalTransaction());
 
         Message<MessageWrapper<Object>> message = MessageBuilder
-                .withPayload(MessageWrapper.builder().keys(messageSendRequest.getKeys()).body(messageSendRequest.getBody()).build())
+                .withPayload(MessageWrapper.builder()
+                        .keys(messageSendRequest.getKeys())
+                        .body(messageSendRequest.getBody())
+                        .bizDesc(messageSendRequest.getBizDesc())
+                        .build())
                 .setHeader(MessageConst.PROPERTY_KEYS, messageSendRequest.getKeys())
                 .setHeader(DelegatingTransactionListener.HEADER_TX_ID, txId)
                 .setHeader(DelegatingTransactionListener.HEADER_TOPIC, messageSendRequest.getTopic())
@@ -65,6 +79,13 @@ public class RocketMQProducerAdapter implements MessageQueueProducer {
         } catch (Throwable ex) {
             log.error("[生产者] {} - 事务消息发送失败，topic: {}, keys: {}", messageSendRequest.getBizDesc(), messageSendRequest.getTopic(), messageSendRequest.getKeys(), ex);
             throw ex;
+        } finally {
+            transactionListener.removeLocalTransaction(txId);
+        }
+
+        if (sendResult == null || sendResult.getSendStatus() != SendStatus.SEND_OK
+                || sendResult.getLocalTransactionState() != LocalTransactionState.COMMIT_MESSAGE) {
+            throw new ServiceException("事务消息尚未确认提交，请使用相同请求ID重试");
         }
 
         log.info("[生产者] {} - 事务消息发送结果: {}, 本地事务状态: {}, 消息ID: {}, Keys: {}",

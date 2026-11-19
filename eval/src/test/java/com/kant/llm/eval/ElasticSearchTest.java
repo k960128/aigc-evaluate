@@ -1,7 +1,7 @@
 package com.kant.llm.eval;
 
 import com.kant.llm.common.constant.EsDocumentChunk;
-import com.kant.llm.eval.pipeline.service.es.ElasticSearchService;
+import com.kant.llm.eval.pipeline.service.ElasticSearchService;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,7 +21,7 @@ public class ElasticSearchTest {
     @Test
     public void testSearch(){
         try {
-            List<EsDocumentChunk> documentChunks = elasticSearchService.searchByKeyword("八股文");
+            List<EsDocumentChunk> documentChunks = elasticSearchService.searchByKeyword("我被网络暴力了，我该怎么办");
             log.info("ES检索返回内容: {}", documentChunks);
         } catch (Exception e) {
             throw new RuntimeException(e);

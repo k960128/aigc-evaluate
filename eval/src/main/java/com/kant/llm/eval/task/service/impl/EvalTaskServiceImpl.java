@@ -14,8 +14,11 @@ import com.kant.llm.common.enums.TaskStatusEnums;
 import com.kant.framework.errorcode.BaseErrorCode;
 import com.kant.framework.exception.ServiceException;
 import com.kant.llm.eval.dataset.dao.entity.DataSetDO;
-import com.kant.llm.eval.dataset.dao.entity.DataSetSampleDO;
+import com.kant.llm.eval.dataset.dao.entity.DataSetSampleItemDO;
+import com.kant.llm.eval.dataset.dao.mapper.DataSetSampleItemMapper;
 import com.kant.llm.eval.es.service.EvalEsSyncOutboxService;
+import com.kant.llm.eval.knowledge.dto.resp.KnowledgeFeatureCurrentVersionVO;
+import com.kant.llm.eval.knowledge.service.KnowledgeFeatureDocumentVersionService;
 import com.kant.llm.eval.pipeline.dao.entity.EvalPipelineNodeDetailDO;
 import com.kant.llm.eval.task.dao.entity.EvalResultDetailDO;
 import com.kant.llm.eval.task.dao.entity.EvalTaskDO;
@@ -79,6 +82,7 @@ public class EvalTaskServiceImpl implements EvalTaskService {
     private final ModelInfoMapper modelInfoMapper;
     private final DataSetMapper dataSetMapper;
     private final DataSetSampleMapper dataSetSampleMapper;
+    private final DataSetSampleItemMapper dataSetSampleItemMapper;
     private final EvalPipelineNodeDetailMapper evalPipelineNodeDetailMapper;
     private final EvalResultDetailMapper evalResultDetailMapper;
     private final EvalTaskDetailMapper evalTaskDetailMapper;
@@ -86,22 +90,26 @@ public class EvalTaskServiceImpl implements EvalTaskService {
     private final MessageQueueProducer messageQueueProducer;
     private final EvalEsSyncOutboxService evalEsSyncOutboxService;
     private final TransactionTemplate transactionTemplate;
+    private final KnowledgeFeatureDocumentVersionService knowledgeFeatureDocumentVersionService;
 
     public EvalTaskServiceImpl(EvalTaskMapper evalTaskMapper,
                                ModelInfoMapper modelInfoMapper,
                                DataSetMapper dataSetMapper,
                                DataSetSampleMapper dataSetSampleMapper,
+                               DataSetSampleItemMapper dataSetSampleItemMapper,
                                EvalPipelineNodeDetailMapper evalPipelineNodeDetailMapper,
                                EvalResultDetailMapper evalResultDetailMapper,
                                EvalTaskDetailMapper evalTaskDetailMapper,
                                RedissonClient redissonClient,
                                MessageQueueProducer messageQueueProducer,
                                EvalEsSyncOutboxService evalEsSyncOutboxService,
-                               TransactionTemplate transactionTemplate) {
+                               TransactionTemplate transactionTemplate,
+                               KnowledgeFeatureDocumentVersionService knowledgeFeatureDocumentVersionService) {
         this.evalTaskMapper = evalTaskMapper;
         this.modelInfoMapper = modelInfoMapper;
         this.dataSetMapper = dataSetMapper;
         this.dataSetSampleMapper = dataSetSampleMapper;
+        this.dataSetSampleItemMapper = dataSetSampleItemMapper;
         this.evalPipelineNodeDetailMapper = evalPipelineNodeDetailMapper;
         this.evalResultDetailMapper = evalResultDetailMapper;
         this.evalTaskDetailMapper = evalTaskDetailMapper;
@@ -109,10 +117,20 @@ public class EvalTaskServiceImpl implements EvalTaskService {
         this.messageQueueProducer = messageQueueProducer;
         this.evalEsSyncOutboxService = evalEsSyncOutboxService;
         this.transactionTemplate = transactionTemplate;
+        this.knowledgeFeatureDocumentVersionService = knowledgeFeatureDocumentVersionService;
     }
 
     @Override
     public void createEvalTask(CreateEvalTaskRequest request) {
+        EvalTaskDO evalTask = EvalTaskDO.builder()
+                .taskName(request.getTaskName())
+                .modelId(request.getModelId())
+                .datasetId(request.getDatasetId())
+                .createTime(LocalDateTime.now())
+                .updateTime(LocalDateTime.now())
+                .deleted(false)
+                .build();
+        evalTaskMapper.insert(evalTask);
         log.info("创建评测任务: {}", request);
     }
 
@@ -138,17 +156,21 @@ public class EvalTaskServiceImpl implements EvalTaskService {
             // 2. 幂等校验：存在活跃批次时，说明该任务已经在提交、拆分或执行中。
             ensureNoActiveTaskDetail(taskId);
             // 3. 获取数据集
-            Long sampleCount = dataSetSampleMapper.selectCount(new LambdaQueryWrapper<>(DataSetSampleDO.class)
-                    .eq(DataSetSampleDO::getDatasetId, task.getDatasetId()));
+            Long sampleCount = dataSetSampleItemMapper.selectCount(new LambdaQueryWrapper<>(DataSetSampleItemDO.class)
+                    .eq(DataSetSampleItemDO::getDatasetId, task.getDatasetId()));
             if (sampleCount == null || sampleCount <= 0) {
                 throw new ServiceException("评测任务数据集为空，无法启动");
             }
-            // 4. 创建一次运行批次。同一个 eval_task 可以多次提交，但同一时间只能存在一个活跃批次。
+            // 4. 获取当前样本库版本
+            KnowledgeFeatureCurrentVersionVO currentVersionCache = knowledgeFeatureDocumentVersionService.getCurrentVersionCache();
+            // 5. 创建一次运行批次。同一个 eval_task 可以多次提交，但同一时间只能存在一个活跃批次。
             Long taskDetailId = IdUtil.getSnowflake().nextId();
             Long serialNo = IdUtil.getSnowflake().nextId();
             EvalTaskDetailDO evalTaskDetailDO = EvalTaskDetailDO.builder()
                     .id(taskDetailId)
                     .taskId(taskId)
+                    .knowledgeVersionId(currentVersionCache.getCurrentVersionId())
+                    .knowledgeVersion(currentVersionCache.getCurrentVersion())
                     .serialNo(serialNo)
                     .taskName(task.getTaskName())
                     .modelId(task.getModelId())
@@ -174,9 +196,10 @@ public class EvalTaskServiceImpl implements EvalTaskService {
                                 .modelId(task.getModelId())
                                 .datasetId(task.getDatasetId())
                                 .serialNo(serialNo)
+                                .knowledgeVersionId(currentVersionCache.getCurrentVersionId())
+                                .knowledgeVersion(currentVersionCache.getCurrentVersion())
                                 .build())
                         .build());
-
             } catch (Exception ex) {
                 // 保留 ERROR 批次，方便后续排查是哪一次提交没有进入拆分链路。
                 evalTaskDetailDO.setStatus(TaskStatusEnums.ERROR.getCode());
@@ -335,7 +358,7 @@ public class EvalTaskServiceImpl implements EvalTaskService {
         Page<EvalResultDetailDO> pageResult = evalResultDetailMapper.selectPage(new Page<>(pageCurrent(queryRequest.getCurrent()),
                 pageSize(queryRequest.getSize())), queryWrapper);
         List<EvalResultDetailDO> records = pageResult.getRecords();
-        Map<Long, DataSetSampleDO> sampleMap = buildDataSetSampleMap(records.stream()
+        Map<Long, DataSetSampleItemDO> sampleMap = buildDataSetSampleMap(records.stream()
                 .map(EvalResultDetailDO::getSampleId)
                 .collect(Collectors.toSet()));
         Set<Long> resultDetailIdsWithPipelineLog = buildResultDetailIdsWithPipelineLog(records.stream()
@@ -489,13 +512,13 @@ public class EvalTaskServiceImpl implements EvalTaskService {
     /**
      * 批量构建数据集样本映射，用于评测结果列表补充标准答案和评分规则。
      */
-    private Map<Long, DataSetSampleDO> buildDataSetSampleMap(Set<Long> sampleIds) {
+    private Map<Long, DataSetSampleItemDO> buildDataSetSampleMap(Set<Long> sampleIds) {
         Set<Long> filteredIds = filterNonNullIds(sampleIds);
         if (filteredIds.isEmpty()) {
             return Collections.emptyMap();
         }
-        return dataSetSampleMapper.selectBatchIds(filteredIds).stream()
-                .collect(Collectors.toMap(DataSetSampleDO::getId, Function.identity(), (left, right) -> left));
+        return dataSetSampleItemMapper.selectBatchIds(filteredIds).stream()
+                .collect(Collectors.toMap(DataSetSampleItemDO::getDatasetSampleId, Function.identity(), (left, right) -> left));
     }
 
     /**
@@ -600,7 +623,7 @@ public class EvalTaskServiceImpl implements EvalTaskService {
      * 将评测结果明细实体转换为分页响应对象。
      */
     private EvalResultDetailVO convertToResultDetailVO(EvalResultDetailDO resultDetail,
-                                                       DataSetSampleDO sample,
+                                                       DataSetSampleItemDO sample,
                                                        boolean hasPipelineLog) {
         return EvalResultDetailVO.builder()
                 .id(resultDetail.getId())
@@ -614,6 +637,7 @@ public class EvalTaskServiceImpl implements EvalTaskService {
                 .rawResponse(resultDetail.getRawResponse())
                 .latency(resultDetail.getLatency())
                 .isSafe(resultDetail.getIsSafe())
+                .executionVersion(resultDetail.getExecutionVersion())
                 .status(resultDetail.getStatus())
                 .statusDesc(evalResultStatusDesc(resultDetail.getStatus()))
                 .errorMsg(resultDetail.getErrorMsg())
@@ -656,6 +680,7 @@ public class EvalTaskServiceImpl implements EvalTaskService {
                 .taskId(nodeDetail.getTaskId())
                 .taskDetailId(nodeDetail.getTaskDetailId())
                 .resultDetailId(nodeDetail.getResultDetailId())
+                .executionVersion(nodeDetail.getExecutionVersion())
                 .sampleId(nodeDetail.getSampleId())
                 .nodeCode(nodeDetail.getNodeCode())
                 .nodeCodeDesc(pipelineNodeCodeDesc(nodeDetail.getNodeCode()))

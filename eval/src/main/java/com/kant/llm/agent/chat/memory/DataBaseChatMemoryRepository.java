@@ -230,9 +230,6 @@ public class DataBaseChatMemoryRepository implements ChatMemoryRepository {
 
         public String text;
 
-        public MemoryMessage() {
-        }
-
         public MemoryMessage(MessageType messageType, String text) {
             this.messageType = messageType;
             this.text = text;

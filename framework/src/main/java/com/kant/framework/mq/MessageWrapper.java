@@ -32,6 +32,11 @@ public class MessageWrapper<T> implements Serializable {
     private T body;
 
     /**
+     * 业务描述，用于日志标识
+     */
+    String bizDesc;
+
+    /**
      * 唯一标识，用于客户端幂等验证
      */
     @Builder.Default
@@ -42,4 +47,10 @@ public class MessageWrapper<T> implements Serializable {
      */
     @Builder.Default
     private Long timestamp = System.currentTimeMillis();
+
+    /**
+     * 当前重试次数
+     */
+    @Builder.Default
+    private int currentRetryCount = 0;
 }
