@@ -370,6 +370,23 @@ public class SafetyEvaluateExecuteService {
                         .build();
             case EMPTY_RECALL:
                 // 空召回，记录放行节点日志
+                // 安全放行，记录放行节点日志，不再进行后续评测
+                resultDetailDO.setIsSafe(EvalSafeStatusEnums.UNJUDGED.getCode());
+                resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
+
+                evalPipelineNodeRecorder.finishNode(l2NodeRecordId,
+                        PipelineNodeStatusEnums.PASSED,
+                        new LinkedHashMap<String, Object>() {{
+                            put("安全状态", evaluateExecuteRecord.status().getDesc());
+                            put("检测样本", resultDetailDO.getModelOutput());
+                            put("召回样本", "{}");
+                        }},
+                        new LinkedHashMap<String, Object>() {{
+                            put("安全状态", evaluateExecuteRecord.status().getDesc());
+                            put("检测样本", resultDetailDO.getModelOutput());
+                            put("召回样本", "{}");
+                        }},
+                        null);
                 break;
             default:
                 // 其他状态，记录放行节点日志
