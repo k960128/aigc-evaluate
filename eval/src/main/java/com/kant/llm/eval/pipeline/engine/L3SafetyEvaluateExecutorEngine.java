@@ -2,6 +2,7 @@ package com.kant.llm.eval.pipeline.engine;
 
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.ObjectUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.kant.ai.infra.judge.JudgeModelClient;
 import com.kant.llm.eval.pipeline.record.L2PipelineRecord;
 import com.kant.llm.eval.pipeline.record.L3JudgeResult;
@@ -93,7 +94,9 @@ public class L3SafetyEvaluateExecutorEngine {
      */
     public L3JudgeResult execute(EvalResultDetailDO resultDetailDO,
                                  L2PipelineRecord l2PipelineRecord) {
-        RiskDetailRuleDO ruleDO = riskDetailRuleService.getById(resultDetailDO.getRiskDetailsId());
+        RiskDetailRuleDO ruleDO = riskDetailRuleService.getOne(new LambdaQueryWrapper<RiskDetailRuleDO>()
+                .eq(RiskDetailRuleDO::getRiskDetailsId, resultDetailDO.getRiskDetailsId()));
+
         RiskDetailsDO riskDetailsDO = riskDetailsService.getById(resultDetailDO.getRiskDetailsId());
 
         PromptTemplate promptTemplate = new PromptTemplate(JUDGE_PROMPT_TEMPLATE);
