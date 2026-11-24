@@ -31,7 +31,11 @@ public enum PipelineNodeStatusEnums {
     SKIPPED("SKIPPED", "跳过"),
 
     /** 终止：用户主动停止批次后，该节点不再继续执行或写入成功结果。 */
-    STOPPED("STOPPED", "终止");
+    STOPPED("STOPPED", "终止"),
+
+    /** 空召回：节点处理完成，但未产生有效召回结果。 */
+    EMPTY_RECALL("EMPTY_RECALL", "空召回"),
+    ;
 
     private final String code;
 
