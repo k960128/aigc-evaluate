@@ -72,7 +72,7 @@ public class L2SafetyEvaluateExecutorEngine {
         // 短路点 当召回为空时，直接返回
         if (vectorRecallResult.isEmpty() && esRecallResult.isEmpty()) {
             return L2EvaluateExecuteRecord.builder()
-                    .status(SafetyEvaluateStatusEnums.EMPTY_RECALL)
+                    .status(SafetyEvaluateStatusEnums.L2SafetyEvaluateStatusEnums.SEMANTIC_MISS)
                     .build();
         }
         // 3. RRF融合
@@ -195,32 +195,33 @@ public class L2SafetyEvaluateExecutorEngine {
         log.info("安全下限分数 = {} ,违规上线分数：{}，当前分数：{}", safeThreshold.doubleValue(), violationThreshold.doubleValue(), score);
 
         // 2. 判断是否安全或违规
-        if (score < safeThreshold.doubleValue()) {
-            // 安全下限，直接放行
-            return L2EvaluateExecuteRecord
-                    .builder()
-                    .status(SafetyEvaluateStatusEnums.SAFE)
-                    .score(score)
-                    .evidenceChunks(Collections.emptyList())
-                    .riskDetailsId(request.getTargetRiskDetailsId())
-                    .build();
-        }
-        if (score > violationThreshold.doubleValue()) {
-            // 违规上限，直接击毙
-            return L2EvaluateExecuteRecord
-                    .builder()
-                    .status(SafetyEvaluateStatusEnums.VIOLATION)
-                    .score(score)
-                    .evidenceChunks(rrfFusion.stream().map(Document::getText).collect(Collectors.toList()))
-                    .riskDetailsId(request.getTargetRiskDetailsId())
-                    .build();
-        }
-        return L2EvaluateExecuteRecord
-                .builder()
-                .status(SafetyEvaluateStatusEnums.BLURRY)
-                .score(score)
-                .evidenceChunks(Collections.emptyList())
-                .riskDetailsId(request.getTargetRiskDetailsId())
-                .build();
+//        if (score < safeThreshold.doubleValue()) {
+//            // 安全下限，直接放行
+//            return L2EvaluateExecuteRecord
+//                    .builder()
+//                    .status(SafetyEvaluateStatusEnums.SAFE)
+//                    .score(score)
+//                    .evidenceChunks(Collections.emptyList())
+//                    .riskDetailsId(request.getTargetRiskDetailsId())
+//                    .build();
+//        }
+//        if (score > violationThreshold.doubleValue()) {
+//            // 违规上限，直接击毙
+//            return L2EvaluateExecuteRecord
+//                    .builder()
+//                    .status(SafetyEvaluateStatusEnums.VIOLATION)
+//                    .score(score)
+//                    .evidenceChunks(rrfFusion.stream().map(Document::getText).collect(Collectors.toList()))
+//                    .riskDetailsId(request.getTargetRiskDetailsId())
+//                    .build();
+//        }
+//        return L2EvaluateExecuteRecord
+//                .builder()
+//                .status(SafetyEvaluateStatusEnums.BLURRY)
+//                .score(score)
+//                .evidenceChunks(Collections.emptyList())
+//                .riskDetailsId(request.getTargetRiskDetailsId())
+//                .build();
+        return null;
     }
 }

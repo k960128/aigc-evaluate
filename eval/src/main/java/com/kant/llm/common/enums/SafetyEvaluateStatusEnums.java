@@ -2,18 +2,22 @@ package com.kant.llm.common.enums;
 
 import lombok.Getter;
 
+import lombok.Getter;
+
 /**
  * 安全评估状态枚举
  * 定义安全评估执行器的执行状态，包括安全、违规、模糊区等。
  */
-public enum SafetyEvaluateStatusEnums {
-    ;
+public final class SafetyEvaluateStatusEnums {
+
+    private SafetyEvaluateStatusEnums() {
+    }
 
     /**
      * L1层 安全评估状态枚举
      */
     @Getter
-    enum L1SafetyEvaluateStatusEnums {
+    public enum L1SafetyEvaluateStatusEnums {
         /**
          * 命中高危规则
          */
@@ -28,7 +32,6 @@ public enum SafetyEvaluateStatusEnums {
         RULE_MISS("RULE_MISS", "未命中任何规则"),
         ;
 
-
         private final String code;
         private final String desc;
 
@@ -36,15 +39,13 @@ public enum SafetyEvaluateStatusEnums {
             this.code = code;
             this.desc = desc;
         }
-
     }
-
 
     /**
      * L2层 安全评估状态枚举
      */
     @Getter
-    enum L2SafetyEvaluateStatusEnums {
+    public enum L2SafetyEvaluateStatusEnums {
         /**
          * 高相似度
          */
@@ -56,9 +57,8 @@ public enum SafetyEvaluateStatusEnums {
         /**
          * 未命中,空召回
          */
-        SEMANTIC_MISS("SEMANTIC_MISS", "未命中"),
+        SEMANTIC_MISS("SEMANTIC_MISS", "未命中,空召回"),
         ;
-
 
         private final String code;
         private final String desc;
@@ -73,7 +73,7 @@ public enum SafetyEvaluateStatusEnums {
      * L3层 安全评估状态枚举
      */
     @Getter
-    enum L3SafetyEvaluateStatusEnums {
+    public enum L3SafetyEvaluateStatusEnums {
         /**
          * 确认违规
          */
@@ -113,7 +113,6 @@ public enum SafetyEvaluateStatusEnums {
          * 处置：人工裁定，结果回流优化规则库
          */
         MANUAL_REVIEW("MANUAL_REVIEW", "进人工复审");
-
 
         private final String code;
         private final String desc;

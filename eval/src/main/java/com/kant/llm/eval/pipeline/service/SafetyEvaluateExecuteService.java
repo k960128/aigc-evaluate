@@ -298,96 +298,96 @@ public class SafetyEvaluateExecuteService {
 
         // 判定结果
         switch (evaluateExecuteRecord.status()) {
-            case SAFE:
-                // 安全放行，记录放行节点日志，不再进行后续评测
-                resultDetailDO.setIsSafe(EvalSafeStatusEnums.SAFE.getCode());
-                resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
-
-                evalPipelineNodeRecorder.finishNode(l2NodeRecordId,
-                        PipelineNodeStatusEnums.BLOCKED,
-                        new LinkedHashMap<String, Object>() {{
-                            put("安全状态", evaluateExecuteRecord.status().getDesc());
-                            put("样本分数", evaluateExecuteRecord.score());
-                            put("检测样本", resultDetailDO.getModelOutput());
-                            put("召回样本", evaluateExecuteRecord.evidenceChunks());
-                        }},
-                        new LinkedHashMap<String, Object>() {{
-                            put("安全状态", evaluateExecuteRecord.status().getDesc());
-                            put("样本分数", evaluateExecuteRecord.score());
-                            put("检测样本", resultDetailDO.getModelOutput());
-                            put("召回样本", evaluateExecuteRecord.evidenceChunks());
-                        }},
-                        null);
-                return L2PipelineRecord.builder()
-                        .releaseStatus(Boolean.FALSE)
-                        .l2EvaluateExecuteRecord(evaluateExecuteRecord)
-                        .build();
-            case VIOLATION:
-                // 违规上限，直接击毙，记录违规节点日志，不再进行后续评测
-                // 安全放心，记录放行节点日志，不再进行后续评测
-                resultDetailDO.setIsSafe(EvalSafeStatusEnums.VIOLATION.getCode());
-                resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
-
-                evalPipelineNodeRecorder.finishNode(l2NodeRecordId,
-                        PipelineNodeStatusEnums.BLOCKED,
-                        new LinkedHashMap<String, Object>() {{
-                            put("安全状态", evaluateExecuteRecord.status().getDesc());
-                            put("样本分数", evaluateExecuteRecord.score());
-                            put("检测样本", resultDetailDO.getModelOutput());
-                            put("召回样本", evaluateExecuteRecord.evidenceChunks());
-                        }},
-                        new LinkedHashMap<String, Object>() {{
-                            put("安全状态", evaluateExecuteRecord.status().getDesc());
-                            put("样本分数", evaluateExecuteRecord.score());
-                            put("检测样本", resultDetailDO.getModelOutput());
-                            put("召回样本", evaluateExecuteRecord.evidenceChunks());
-                        }},
-                        null);
-                return L2PipelineRecord.builder()
-                        .releaseStatus(Boolean.FALSE)
-                        .l2EvaluateExecuteRecord(evaluateExecuteRecord)
-                        .build();
-            case BLURRY:
-                // 模糊，记录模糊节点日志，投递到L3进行评测
-                evalPipelineNodeRecorder.finishNode(l2NodeRecordId,
-                        PipelineNodeStatusEnums.PASSED,
-                        new LinkedHashMap<String, Object>() {{
-                            put("安全状态", evaluateExecuteRecord.status().getDesc());
-                            put("样本分数", evaluateExecuteRecord.score());
-                            put("检测样本", resultDetailDO.getModelOutput());
-                            put("召回样本", evaluateExecuteRecord.evidenceChunks());
-                        }},
-                        new LinkedHashMap<String, Object>() {{
-                            put("安全状态", evaluateExecuteRecord.status().getDesc());
-                            put("样本分数", evaluateExecuteRecord.score());
-                            put("检测样本", resultDetailDO.getModelOutput());
-                            put("召回样本", evaluateExecuteRecord.evidenceChunks());
-                        }},
-                        null);
-                return L2PipelineRecord.builder()
-                        .releaseStatus(Boolean.TRUE)
-                        .l2EvaluateExecuteRecord(evaluateExecuteRecord)
-                        .build();
-            case EMPTY_RECALL:
-                // 空召回，记录放行节点日志
-                // 安全放行，记录放行节点日志，不再进行后续评测
-                resultDetailDO.setIsSafe(EvalSafeStatusEnums.UNJUDGED.getCode());
-                resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
-
-                evalPipelineNodeRecorder.finishNode(l2NodeRecordId,
-                        PipelineNodeStatusEnums.PASSED,
-                        new LinkedHashMap<String, Object>() {{
-                            put("安全状态", evaluateExecuteRecord.status().getDesc());
-                            put("检测样本", resultDetailDO.getModelOutput());
-                            put("召回样本", "{}");
-                        }},
-                        new LinkedHashMap<String, Object>() {{
-                            put("安全状态", evaluateExecuteRecord.status().getDesc());
-                            put("检测样本", resultDetailDO.getModelOutput());
-                            put("召回样本", "{}");
-                        }},
-                        null);
-                break;
+//            case SAFE:
+//                // 安全放行，记录放行节点日志，不再进行后续评测
+//                resultDetailDO.setIsSafe(EvalSafeStatusEnums.SAFE.getCode());
+//                resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
+//
+//                evalPipelineNodeRecorder.finishNode(l2NodeRecordId,
+//                        PipelineNodeStatusEnums.BLOCKED,
+//                        new LinkedHashMap<String, Object>() {{
+//                            put("安全状态", evaluateExecuteRecord.status().getDesc());
+//                            put("样本分数", evaluateExecuteRecord.score());
+//                            put("检测样本", resultDetailDO.getModelOutput());
+//                            put("召回样本", evaluateExecuteRecord.evidenceChunks());
+//                        }},
+//                        new LinkedHashMap<String, Object>() {{
+//                            put("安全状态", evaluateExecuteRecord.status().getDesc());
+//                            put("样本分数", evaluateExecuteRecord.score());
+//                            put("检测样本", resultDetailDO.getModelOutput());
+//                            put("召回样本", evaluateExecuteRecord.evidenceChunks());
+//                        }},
+//                        null);
+//                return L2PipelineRecord.builder()
+//                        .releaseStatus(Boolean.FALSE)
+//                        .l2EvaluateExecuteRecord(evaluateExecuteRecord)
+//                        .build();
+//            case VIOLATION:
+//                // 违规上限，直接击毙，记录违规节点日志，不再进行后续评测
+//                // 安全放心，记录放行节点日志，不再进行后续评测
+//                resultDetailDO.setIsSafe(EvalSafeStatusEnums.VIOLATION.getCode());
+//                resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
+//
+//                evalPipelineNodeRecorder.finishNode(l2NodeRecordId,
+//                        PipelineNodeStatusEnums.BLOCKED,
+//                        new LinkedHashMap<String, Object>() {{
+//                            put("安全状态", evaluateExecuteRecord.status().getDesc());
+//                            put("样本分数", evaluateExecuteRecord.score());
+//                            put("检测样本", resultDetailDO.getModelOutput());
+//                            put("召回样本", evaluateExecuteRecord.evidenceChunks());
+//                        }},
+//                        new LinkedHashMap<String, Object>() {{
+//                            put("安全状态", evaluateExecuteRecord.status().getDesc());
+//                            put("样本分数", evaluateExecuteRecord.score());
+//                            put("检测样本", resultDetailDO.getModelOutput());
+//                            put("召回样本", evaluateExecuteRecord.evidenceChunks());
+//                        }},
+//                        null);
+//                return L2PipelineRecord.builder()
+//                        .releaseStatus(Boolean.FALSE)
+//                        .l2EvaluateExecuteRecord(evaluateExecuteRecord)
+//                        .build();
+//            case BLURRY:
+//                // 模糊，记录模糊节点日志，投递到L3进行评测
+//                evalPipelineNodeRecorder.finishNode(l2NodeRecordId,
+//                        PipelineNodeStatusEnums.PASSED,
+//                        new LinkedHashMap<String, Object>() {{
+//                            put("安全状态", evaluateExecuteRecord.status().getDesc());
+//                            put("样本分数", evaluateExecuteRecord.score());
+//                            put("检测样本", resultDetailDO.getModelOutput());
+//                            put("召回样本", evaluateExecuteRecord.evidenceChunks());
+//                        }},
+//                        new LinkedHashMap<String, Object>() {{
+//                            put("安全状态", evaluateExecuteRecord.status().getDesc());
+//                            put("样本分数", evaluateExecuteRecord.score());
+//                            put("检测样本", resultDetailDO.getModelOutput());
+//                            put("召回样本", evaluateExecuteRecord.evidenceChunks());
+//                        }},
+//                        null);
+//                return L2PipelineRecord.builder()
+//                        .releaseStatus(Boolean.TRUE)
+//                        .l2EvaluateExecuteRecord(evaluateExecuteRecord)
+//                        .build();
+//            case EMPTY_RECALL:
+//                // 空召回，记录放行节点日志
+//                // 安全放行，记录放行节点日志，不再进行后续评测
+//                resultDetailDO.setIsSafe(EvalSafeStatusEnums.UNJUDGED.getCode());
+//                resultDetailDO.setStatus(EvalResultStatusEnums.FINISHED.getCode());
+//
+//                evalPipelineNodeRecorder.finishNode(l2NodeRecordId,
+//                        PipelineNodeStatusEnums.PASSED,
+//                        new LinkedHashMap<String, Object>() {{
+//                            put("安全状态", evaluateExecuteRecord.status().getDesc());
+//                            put("检测样本", resultDetailDO.getModelOutput());
+//                            put("召回样本", "{}");
+//                        }},
+//                        new LinkedHashMap<String, Object>() {{
+//                            put("安全状态", evaluateExecuteRecord.status().getDesc());
+//                            put("检测样本", resultDetailDO.getModelOutput());
+//                            put("召回样本", "{}");
+//                        }},
+//                        null);
+//                break;
             default:
                 // 其他状态，记录放行节点日志
                 break;
@@ -460,7 +460,6 @@ public class SafetyEvaluateExecuteService {
                             null);
                     break;
                 case BLURRY:
-                case UNKNOWN:
                 default:
                     resultDetailDO.setIsSafe(EvalSafeStatusEnums.UNJUDGED.getCode());
                     resultDetailDO.setStatus(EvalResultStatusEnums.MANUAL_REVIEWED.getCode());

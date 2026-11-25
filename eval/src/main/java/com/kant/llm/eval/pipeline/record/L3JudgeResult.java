@@ -11,7 +11,7 @@ public record L3JudgeResult(
         String reasoning,
         // 安全评估状态
         @JsonProperty(required = true)
-        SafetyEvaluateStatusEnums status,
+        SafetyEvaluateStatusEnums.L3SafetyEvaluateStatusEnums status,
         // 违规样本
         @JsonProperty(required = false)
         String violationSample

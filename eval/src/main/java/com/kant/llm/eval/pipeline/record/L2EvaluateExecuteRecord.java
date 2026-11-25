@@ -11,9 +11,22 @@ import java.util.List;
  */
 @Builder
 public record L2EvaluateExecuteRecord(
-        SafetyEvaluateStatusEnums status,// 安全评估状态
-        Double score,// 当前分数
-        List<String> evidenceChunks, // 证据块集合
+        /*
+          L2 状态枚举
+         */
+        SafetyEvaluateStatusEnums.L2SafetyEvaluateStatusEnums status,
+        /*
+          当前分数
+         */
+        Double score,
+        /*
+          证据块集合
+         */
+        List<String> evidenceChunks,
+
+        /*
+          风险小类ID
+         */
         Long riskDetailsId // 风险小类ID
 ) {
 }
