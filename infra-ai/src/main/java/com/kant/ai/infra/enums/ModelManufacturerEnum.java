@@ -13,5 +13,6 @@ public enum ModelManufacturerEnum {
     KIMI,
     GPT,
     MOCK,
-    OLLAMA
+    OLLAMA,
+    GROK,
 }

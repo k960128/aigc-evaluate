@@ -50,6 +50,7 @@ public class ModelClientStrategyFactory {
             case GPT -> new GptModelClientStrategy(observationRegistry);
             case MOCK -> new MockModelClientStrategy();
             case OLLAMA -> new OllamaModelClientStrategy(observationRegistry);
+            case GROK -> new GrokModelClientStrategy(observationRegistry);
             default -> throw new ServiceException("不支持的大模型厂商标识：" + modelInfo.getManufacturerType());
         };
     }
