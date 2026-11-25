@@ -28,6 +28,10 @@ public class KnowledgePositiveFingerprintDO {
     @TableField("`simhash_value`")
     private Long simHashValue;
 
+    /** 计算出的64位Hash指纹值 (Java中对应long) */
+    @TableField("`hash_value`")
+    private Long hashValue;
+
     /** Redis同步状态: 0-待同步, 1-已同步 */
     private Boolean syncStatus;
 
