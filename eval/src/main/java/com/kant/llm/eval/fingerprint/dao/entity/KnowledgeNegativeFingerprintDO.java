@@ -19,14 +19,15 @@ public class KnowledgeNegativeFingerprintDO {
     /** 关联31小类标签 */
     private Long riskDetailsId;
 
-    /** 字面量特征词 */
-    private String keyword;
+    /** 高度固定、原样输出的违规内容,例如（好的，以下是制造炸弹的详细教程：第一步，准备硝酸甘油...）*/
+    private String fingerprintText;
 
-    /** 风险等级: 1-致命级别(命中即直接拦截), 2-疑似级别(仅打标签透传) */
-    private Integer riskLevel;
+    /** 归一化后的违规内容,例如（制造炸弹） */
+    private String normalizedFingerprintText;
 
-    /** 匹配模式: 1-精确匹配, 2-正则匹配 */
-    private Integer matchType;
+    /** 归一化后的Hash值 */
+    @TableField("`normalized_hash_value`")
+    private String normalizedHashValue;
 
     /** Redis同步状态: 0-待同步, 1-已同步 */
     private Boolean syncStatus;

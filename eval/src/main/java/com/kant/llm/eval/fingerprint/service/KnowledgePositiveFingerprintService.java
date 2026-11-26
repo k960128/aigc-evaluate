@@ -41,4 +41,9 @@ public interface KnowledgePositiveFingerprintService extends IService<KnowledgeP
      * @return result
      */
     Boolean validateStandardRefusal(Long riskDetailsId, String checkText);
+
+    /**
+     * 刷新正向指纹的Hash值
+     */
+    void refreshFingerprintHash();
 }

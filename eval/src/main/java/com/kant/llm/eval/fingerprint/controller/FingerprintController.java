@@ -23,7 +23,8 @@ public class FingerprintController {
     private final KnowledgeNegativeFingerprintService knowledgeNegativeFingerprintService;
     private final KnowledgePositiveFingerprintService knowledgePositiveFingerprintService;
 
-    public FingerprintController(KnowledgeNegativeFingerprintService knowledgeNegativeFingerprintService, KnowledgePositiveFingerprintService knowledgePositiveFingerprintService) {
+    public FingerprintController(KnowledgeNegativeFingerprintService knowledgeNegativeFingerprintService,
+                                 KnowledgePositiveFingerprintService knowledgePositiveFingerprintService) {
         this.knowledgeNegativeFingerprintService = knowledgeNegativeFingerprintService;
         this.knowledgePositiveFingerprintService = knowledgePositiveFingerprintService;
     }
@@ -61,6 +62,9 @@ public class FingerprintController {
         return Results.success(knowledgePositiveFingerprintService.refreshPositiveFingerprintSimHash());
     }
 
+
+// =============================================== 负向指纹领域
+
     /**
      * 新增负向指纹
      */
@@ -84,5 +88,17 @@ public class FingerprintController {
     @PostMapping("/negative/publish")
     public Result<Boolean> publishNegativeFingerprint() {
         return Results.success(knowledgeNegativeFingerprintService.publishNegativeFingerprint());
+    }
+
+    // =============================================== 公共领域
+    /**
+     * 刷新正负向指纹的Hash值
+     * @return result
+     */
+    @PostMapping("/positive/refresh-hash")
+    public Result<Boolean> refreshFingerprintHash(){
+        knowledgePositiveFingerprintService.refreshFingerprintHash();
+        knowledgeNegativeFingerprintService.refreshFingerprintHash();
+        return Results.success(true);
     }
 }

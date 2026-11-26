@@ -27,4 +27,9 @@ public interface KnowledgeNegativeFingerprintService extends IService<KnowledgeN
      * @return result
      */
     Boolean publishNegativeFingerprint();
+
+    /**
+     * 刷新负向指纹的Hash值
+     */
+    void refreshFingerprintHash();
 }
