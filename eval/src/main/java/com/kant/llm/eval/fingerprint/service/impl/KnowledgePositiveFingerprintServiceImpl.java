@@ -19,6 +19,10 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.text.Normalizer;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.StructuredTaskScope;
@@ -52,7 +56,8 @@ public class KnowledgePositiveFingerprintServiceImpl
         fingerprintDO.setId(IdUtil.getSnowflakeNextId());
         fingerprintDO.setFingerprintText(request.getFingerprintText());
         fingerprintDO.setRiskDetailsId(request.getRiskDetailsId());
-        fingerprintDO.setSimHashValue(simHashEngine.compute(request.getFingerprintText()));
+        fingerprintDO.setNormalizedFingerprintText(normalizeText(request.getFingerprintText()));
+        fingerprintDO.setNormalizedHashValue(generateHash(normalizeText(request.getFingerprintText())));
         fingerprintDO.setCreator("admin");
         fingerprintDO.setCreator("admin");
         fingerprintDO.setCreateTime(LocalDateTime.now());
@@ -83,44 +88,44 @@ public class KnowledgePositiveFingerprintServiceImpl
 
     @Override
     public Boolean publishPositiveFingerprint() {
-        Map<Long, List<KnowledgePositiveFingerprintDO>> fingerprintMap = list()
-                .stream()
-                .collect(Collectors.groupingBy(KnowledgePositiveFingerprintDO::getRiskDetailsId));
-        log.info("开始同步正向指纹到Redis，共{}条", fingerprintMap.size());
-        fingerprintMap.forEach((riskDetailsId, fingerprints) -> {
-            if (CollectionUtil.isNotEmpty(fingerprints)) {
-                fingerprints.forEach(fingerprint -> {
-                    short[] blocks = splitToBlocks(fingerprint.getSimHashValue());
-                    // 使用 SessionCallback 替代底层的 RedisCallback，完美规避 sAdd 弃用问题
-                    redisTemplate.executePipelined(new org.springframework.data.redis.core.SessionCallback<Object>() {
-                        @Override
-                        public <K, V> Object execute(org.springframework.data.redis.core.RedisOperations<K, V> operations) {
-                            // 强转为 StringRedisTemplate 的操作接口
-                            @SuppressWarnings("unchecked")
-                            var stringOperations = (org.springframework.data.redis.core.RedisOperations<String, String>) operations;
-
-                            for (int i = 0; i < 4; i++) {
-                                String key = String.format(REDIS_KEY_PREFIX, riskDetailsId, i, blocks[i]);
-                                // 直接使用高层 API，底层会自动通过 Pipeline 批量打包发送
-                                stringOperations.opsForSet().add(key, fingerprint.getSimHashValue().toString());
-                            }
-                            return null;
-                        }
-                    });
-                });
-            }
-        });
-        log.info("同步正向指纹到Redis完成");
+//        Map<Long, List<KnowledgePositiveFingerprintDO>> fingerprintMap = list()
+//                .stream()
+//                .collect(Collectors.groupingBy(KnowledgePositiveFingerprintDO::getRiskDetailsId));
+//        log.info("开始同步正向指纹到Redis，共{}条", fingerprintMap.size());
+//        fingerprintMap.forEach((riskDetailsId, fingerprints) -> {
+//            if (CollectionUtil.isNotEmpty(fingerprints)) {
+//                fingerprints.forEach(fingerprint -> {
+//                    short[] blocks = splitToBlocks(fingerprint.getSimHashValue());
+//                    // 使用 SessionCallback 替代底层的 RedisCallback，完美规避 sAdd 弃用问题
+//                    redisTemplate.executePipelined(new org.springframework.data.redis.core.SessionCallback<Object>() {
+//                        @Override
+//                        public <K, V> Object execute(org.springframework.data.redis.core.RedisOperations<K, V> operations) {
+//                            // 强转为 StringRedisTemplate 的操作接口
+//                            @SuppressWarnings("unchecked")
+//                            var stringOperations = (org.springframework.data.redis.core.RedisOperations<String, String>) operations;
+//
+//                            for (int i = 0; i < 4; i++) {
+//                                String key = String.format(REDIS_KEY_PREFIX, riskDetailsId, i, blocks[i]);
+//                                // 直接使用高层 API，底层会自动通过 Pipeline 批量打包发送
+//                                stringOperations.opsForSet().add(key, fingerprint.getSimHashValue().toString());
+//                            }
+//                            return null;
+//                        }
+//                    });
+//                });
+//            }
+//        });
+//        log.info("同步正向指纹到Redis完成");
         return true;
     }
 
     @Override
     public Boolean refreshPositiveFingerprintSimHash() {
         // 1. 获取所有正向指纹
-        List<KnowledgePositiveFingerprintDO> list = list();
-        list.forEach(fingerprint -> fingerprint.setSimHashValue(simHashEngine.compute(fingerprint.getFingerprintText())));
-        // 2. 批量更新数据库
-        updateBatchById(list);
+//        List<KnowledgePositiveFingerprintDO> list = list();
+//        list.forEach(fingerprint -> fingerprint.setSimHashValue(simHashEngine.compute(fingerprint.getFingerprintText())));
+//        // 2. 批量更新数据库
+//        updateBatchById(list);
         return true;
     }
 
@@ -165,6 +170,19 @@ public class KnowledgePositiveFingerprintServiceImpl
         return false;
     }
 
+    @Override
+    public void refreshFingerprintHash() {
+        log.info("开始刷新正向指纹的Hash值和归一化");
+        // 1. 获取所有正向指纹
+        List<KnowledgePositiveFingerprintDO> list = list();
+        list.forEach(fingerprint -> {
+            fingerprint.setNormalizedFingerprintText(normalizeText(fingerprint.getFingerprintText()));
+            fingerprint.setNormalizedHashValue(generateHash(fingerprint.getNormalizedFingerprintText()));
+        });
+        // 2. 批量更新数据库
+        updateBatchById(list);
+        log.info("刷新正向指纹的Hash值和归一化完成");
+    }
 
     /**
      * 生成对应 riskId 的 4 个 Block 检索子任务
@@ -214,5 +232,64 @@ public class KnowledgePositiveFingerprintServiceImpl
         blocks[2] = (short) ((hash >>> 16) & 0xFFFF);
         blocks[3] = (short) (hash & 0xFFFF);
         return blocks;
+    }
+
+    /**
+     * 对违规内容进行归一化处理。
+     * @param featureText 待归一化的字符串
+     * @return 归一化后的字符串
+     */
+    private String normalizeText(String featureText) {
+        String canonicalText = Normalizer.normalize(featureText, Normalizer.Form.NFKC)
+                .toLowerCase(Locale.ROOT);
+        StringBuilder normalizedText = new StringBuilder(canonicalText.length());
+        boolean pendingSpace = false;
+        for (int offset = 0; offset < canonicalText.length(); ) {
+            int codePoint = canonicalText.codePointAt(offset);
+            offset += Character.charCount(codePoint);
+
+            if (isWhitespace(codePoint)) {
+                pendingSpace = normalizedText.length() > 0;
+                continue;
+            }
+            int characterType = Character.getType(codePoint);
+            if (characterType == Character.FORMAT || Character.isISOControl(codePoint)) {
+                continue;
+            }
+            if (pendingSpace) {
+                normalizedText.append(' ');
+                pendingSpace = false;
+            }
+            normalizedText.appendCodePoint(codePoint);
+        }
+        return normalizedText.toString();
+    }
+
+    private boolean isWhitespace(int codePoint) {
+        int characterType = Character.getType(codePoint);
+        return Character.isWhitespace(codePoint)
+                || characterType == Character.SPACE_SEPARATOR
+                || characterType == Character.LINE_SEPARATOR
+                || characterType == Character.PARAGRAPH_SEPARATOR;
+    }
+
+    /**
+     * 对字符串进行 SHA-256 加密。
+     *
+     * @param value 待加密的字符串
+     * @return 加密后的字符串
+     */
+    private String generateHash(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(hash.length * 2);
+            for (byte item : hash) {
+                hex.append(String.format("%02x", item));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("当前 JDK 不支持 SHA-256 摘要算法", ex);
+        }
     }
 }

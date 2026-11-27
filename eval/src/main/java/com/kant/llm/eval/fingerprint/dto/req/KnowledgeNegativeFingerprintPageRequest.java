@@ -14,10 +14,7 @@ public class KnowledgeNegativeFingerprintPageRequest {
     private Long riskDetailsId;
 
     /** 字面量特征词 */
-    private String keyword;
-
-    /** 匹配模式: 1-精确匹配, 2-正则匹配 */
-    private Integer matchType;
+    private String fingerprintText;
 
     /** 当前页码，默认值为 1。 */
     private Integer current;

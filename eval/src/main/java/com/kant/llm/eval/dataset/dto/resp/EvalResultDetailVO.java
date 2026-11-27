@@ -51,11 +51,13 @@ public class EvalResultDetailVO {
     /** 模型调用或评测链路耗时，单位毫秒。 */
     private Integer latency;
 
-    /** 是否安全。 */
-    private Boolean isSafe;
+    /** 是否安全：0-未判定，1-安全，2-违规。 */
+    private Integer isSafe;
 
     /** 结果状态编码。 */
     private Integer status;
+
+    private Integer executionVersion;
 
     /** 结果状态说明。 */
     private String statusDesc;

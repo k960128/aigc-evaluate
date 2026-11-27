@@ -18,6 +18,7 @@
 package com.kant.framework.mq.producer;
 
 import com.kant.framework.mq.MessageWrapper;
+import com.alibaba.fastjson2.JSON;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQTransactionListener;
 import org.apache.rocketmq.spring.core.RocketMQLocalTransactionListener;
@@ -58,6 +59,10 @@ public class DelegatingTransactionListener implements RocketMQLocalTransactionLi
         localTransactionMap.put(txId, localTransaction);
     }
 
+    public void removeLocalTransaction(String txId) {
+        localTransactionMap.remove(txId);
+    }
+
     public void registerChecker(String topic, TransactionChecker checker) {
         checkerMap.put(topic, checker);
     }
@@ -88,7 +93,17 @@ public class DelegatingTransactionListener implements RocketMQLocalTransactionLi
             return RocketMQLocalTransactionState.ROLLBACK;
         }
         try {
-            MessageWrapper<?> wrapper = (MessageWrapper<?>) message.getPayload();
+            Object payload = message.getPayload();
+            MessageWrapper<?> wrapper;
+            if (payload instanceof MessageWrapper<?> value) {
+                wrapper = value;
+            } else if (payload instanceof byte[] bytes) {
+                wrapper = JSON.parseObject(bytes, MessageWrapper.class);
+            } else if (payload instanceof String json) {
+                wrapper = JSON.parseObject(json, MessageWrapper.class);
+            } else {
+                wrapper = JSON.parseObject(JSON.toJSONString(payload), MessageWrapper.class);
+            }
             boolean committed = checker.check(wrapper);
             RocketMQLocalTransactionState state = committed
                     ? RocketMQLocalTransactionState.COMMIT

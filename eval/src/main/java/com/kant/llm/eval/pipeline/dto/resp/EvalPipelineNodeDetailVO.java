@@ -32,6 +32,8 @@ public class EvalPipelineNodeDetailVO {
     /** 评测结果明细 ID，对应 eval_result_detail.id。 */
     private Long resultDetailId;
 
+    private Integer executionVersion;
+
     /** 数据集样本 ID，对应 dataset_sample.id。 */
     private Long sampleId;
 

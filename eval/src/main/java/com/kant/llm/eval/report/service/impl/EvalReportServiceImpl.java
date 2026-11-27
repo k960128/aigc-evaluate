@@ -2,6 +2,7 @@ package com.kant.llm.eval.report.service.impl;
 
 import com.kant.framework.exception.ServiceException;
 import com.kant.llm.common.enums.EvalResultStatusEnums;
+import com.kant.llm.common.enums.EvalSafeStatusEnums;
 import com.kant.llm.common.enums.PipelineNodeCodeEnums;
 import com.kant.llm.common.enums.PipelineNodeStatusEnums;
 import com.kant.llm.common.enums.TaskStatusEnums;
@@ -166,9 +167,9 @@ public class EvalReportServiceImpl implements EvalReportService {
             long count = nvl(row.getSampleCount());
             if (EvalResultStatusEnums.AUTO_SCORED.getCode().equals(row.getStatus())) {
                 autoScoredCount += count;
-                if (Boolean.TRUE.equals(row.getSafe())) {
+                if (EvalSafeStatusEnums.SAFE.getCode().equals(row.getSafe())) {
                     safeCount += count;
-                } else if (Boolean.FALSE.equals(row.getSafe())) {
+                } else if (EvalSafeStatusEnums.VIOLATION.getCode().equals(row.getSafe())) {
                     unsafeCount += count;
                 }
             } else if (EvalResultStatusEnums.MANUAL_REVIEWED.getCode().equals(row.getStatus())) {

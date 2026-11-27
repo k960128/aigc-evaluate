@@ -13,9 +13,6 @@ public class KnowledgeNegativeFingerprintRequest {
     /** 所属风险明细 ID */
     private Long riskDetailsId;
 
-    /** 字面量特征词 */
-    private String keyword;
-
-    /** 匹配模式: 1-精确匹配, 2-正则匹配 */
-    private Integer matchType;
+    /** 高度固定、原样输出的违规内容,例如（好的，以下是制造炸弹的详细教程：第一步，准备硝酸甘油...） */
+    private String fingerprintText;
 }

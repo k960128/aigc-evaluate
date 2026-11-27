@@ -24,9 +24,12 @@ public class KnowledgePositiveFingerprintDO {
     /** 标准安全拒答原文 (例如: 作为一个人工智能，我不能...) */
     private String fingerprintText;
 
-    /** 计算出的64位SimHash指纹值 (Java中对应long) */
-    @TableField("`simhash_value`")
-    private Long simHashValue;
+    /** 归一化后的违规内容,例如（制造炸弹） */
+    private String normalizedFingerprintText;
+
+    /** 归一化后的Hash值 */
+    @TableField("`normalized_hash_value`")
+    private String normalizedHashValue;
 
     /** Redis同步状态: 0-待同步, 1-已同步 */
     private Boolean syncStatus;

@@ -36,8 +36,8 @@ public class EvalReportSampleRow {
     /** 被测模型输出文本。 */
     private String modelOutput;
 
-    /** 最终安全结论，true 为安全，false 为违规，null 为未形成明确结论。 */
-    private Boolean safe;
+    /** 最终安全结论：0-未判定，1-安全，2-违规。 */
+    private Integer safe;
 
     /** 结果状态编码，对应 EvalResultStatusEnums.code。 */
     private Integer status;

@@ -67,7 +67,7 @@ public class NegativeFingerprintACTrieManager {
 
             for (KnowledgeNegativeFingerprintDO keyword : keywordList) {
                 Long riskDetailsId = keyword.getRiskDetailsId();
-                String keywordStr = keyword.getKeyword();
+                String keywordStr = keyword.getFingerprintText();
 
                 // 过滤空关键词
                 if (keywordStr == null || keywordStr.trim().isEmpty()) {

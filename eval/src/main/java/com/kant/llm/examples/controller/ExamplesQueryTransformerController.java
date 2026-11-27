@@ -8,7 +8,7 @@ import com.kant.llm.agent.ai.model.IntentRecognitionResult;
 import com.kant.llm.agent.ai.service.IntentRecognitionService;
 import com.kant.llm.agent.ai.service.PromptService;
 import com.kant.llm.agent.chat.service.ChatMessageService;
-import com.kant.llm.eval.pipeline.service.es.ElasticSearchService;
+import com.kant.llm.eval.pipeline.service.ElasticSearchService;
 import com.kant.llm.rag.moduler.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

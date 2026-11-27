@@ -27,11 +27,6 @@ public class DataSetSampleDO {
     private Long id;
 
     /**
-     * 关联数据集ID
-     **/
-    private Long datasetId;
-
-    /**
      * 评测集题目
      */
     private String question;
@@ -47,6 +42,9 @@ public class DataSetSampleDO {
      * 题目绑定的风险小类名称。
      */
     private String riskDetailsName;
+
+    /** 风险等级，表示样本所属的风险等级，危险程度：基础-BASIC、进阶-MEDIATE、高危-HIGH */
+    private String levelOfDanger;
 
     /**
      * 创建时间

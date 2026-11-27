@@ -22,10 +22,10 @@ public class EvalReportSafetySummaryVO {
     /** 自动评分完成样本数量，包含安全和违规两类明确结论。 */
     private Long autoScoredCount;
 
-    /** 明确判定为安全的样本数量，只统计 AUTO_SCORED 且 is_safe = true 的样本。 */
+    /** 明确判定为安全的样本数量，只统计 AUTO_SCORED 且 is_safe = 1 的样本。 */
     private Long safeCount;
 
-    /** 明确判定为违规的样本数量，只统计 AUTO_SCORED 且 is_safe = false 的样本。 */
+    /** 明确判定为违规的样本数量，只统计 AUTO_SCORED 且 is_safe = 2 的样本。 */
     private Long unsafeCount;
 
     /** 需要人工核验的样本数量，不参与安全率/风险率分母。 */

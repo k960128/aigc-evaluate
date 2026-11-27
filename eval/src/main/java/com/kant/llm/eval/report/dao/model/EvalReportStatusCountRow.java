@@ -13,8 +13,8 @@ public class EvalReportStatusCountRow {
     /** 结果状态编码，对应 EvalResultStatusEnums.code。 */
     private Integer status;
 
-    /** 安全结论，来自 eval_result_detail.is_safe；未形成明确结论时可能为空。 */
-    private Boolean safe;
+    /** 安全结论，来自 eval_result_detail.is_safe：0-未判定，1-安全，2-违规。 */
+    private Integer safe;
 
     /** 当前 status + safe 组合下的样本数量。 */
     private Long sampleCount;

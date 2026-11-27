@@ -47,4 +47,10 @@ public class MessageWrapper<T> implements Serializable {
      */
     @Builder.Default
     private Long timestamp = System.currentTimeMillis();
+
+    /**
+     * 当前重试次数
+     */
+    @Builder.Default
+    private int currentRetryCount = 0;
 }
